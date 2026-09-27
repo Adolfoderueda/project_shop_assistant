@@ -73,6 +73,22 @@ class Repository:
                 )
             ]
 
+    def pending_notices(self) -> list[tuple[str, int, str]]:
+        with self._connection() as db:
+            return [
+                (row["id"], row["chat_id"], Reply.model_validate_json(row["reply_json"]).text)
+                for row in db.execute(
+                    "SELECT id,chat_id,reply_json FROM outbox WHERE sent_at IS NULL ORDER BY rowid"
+                )
+            ]
+
+    def mark_notice_sent(self, id: str) -> None:
+        with self._connection(write=True) as db:
+            db.execute(
+                "UPDATE outbox SET sent_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') "
+                "WHERE id=? AND sent_at IS NULL", (id,),
+            )
+
     @staticmethod
     def _lines(db) -> list[ListLine]:
         return [
