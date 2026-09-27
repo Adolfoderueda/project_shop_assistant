@@ -16,6 +16,40 @@ _lock = RLock()
 
 
 class CheckoutRepository:
+    @staticmethod
+    def _owns_reservations(db, order_id):
+        execution = db.execute("SELECT legacy_quarantined FROM execution WHERE order_id=?",
+                               (order_id,)).fetchone()
+        if execution is None or execution[0]:
+            return False
+        subs = db.execute("SELECT state,quote_json FROM suborders WHERE order_id=?", (order_id,)).fetchall()
+        for snapshot in db.execute("SELECT line_json FROM order_lines WHERE order_id=?", (order_id,)):
+            line = json.loads(snapshot[0])
+            # A local conflict resolution must not reassign a previously fulfilled
+            # snapshot, even if its old reservation has already been released.
+            fulfilled_elsewhere = db.execute(
+                "SELECT 1 FROM order_lines l JOIN suborders s ON s.order_id=l.order_id "
+                "JOIN json_each(s.quote_json,'$.items') i "
+                "WHERE s.order_id!=? AND s.state='confirmado' "
+                "AND json_extract(l.line_json,'$.id')=? AND json_extract(l.line_json,'$.revision')=? "
+                "AND json_extract(i.value,'$.line_id')=? LIMIT 1",
+                (order_id, line["id"], line["revision"], line["id"])).fetchone()
+            if fulfilled_elsewhere:
+                return False
+            allocations = [s for s in subs if s["quote_json"] and any(
+                i.line_id == line["id"] for i in Quote.model_validate_json(s["quote_json"]).items)]
+            if allocations and all(s["state"] == "confirmado" for s in allocations):
+                continue
+            owner = db.execute("SELECT order_id FROM reservations WHERE line_id=?", (line["id"],)).fetchone()
+            if owner is None or owner[0] != order_id:
+                return False
+        return True
+
+    def require_checkout_reservations(self, order_id):
+        with self._connection() as db:
+            if not self._owns_reservations(db, order_id):
+                raise ValueError("Snapshot quarantined, fulfilled elsewhere or not reserved by this order")
+
     def product_rule(self, product_id):
         with self._connection() as db:
             row = db.execute("SELECT rule_json FROM products WHERE id=?", (product_id,)).fetchone()
@@ -23,14 +57,17 @@ class CheckoutRepository:
 
     def pending_orders(self) -> list[str]:
         with self._connection() as db:
-            return [r[0] for r in db.execute(
+            candidates = [r[0] for r in db.execute(
                 "SELECT order_id FROM execution WHERE state IN ('pendiente','preparado') "
-                "AND claimed=0 ORDER BY rowid")]
+                "AND claimed=0 AND legacy_quarantined=0 AND NOT EXISTS "
+                "(SELECT 1 FROM suborders s WHERE s.order_id=execution.order_id AND s.awaiting_resume=1) "
+                "ORDER BY rowid")]
+            return [oid for oid in candidates if self._owns_reservations(db, oid)]
 
     def resumable_orders(self) -> list[str]:
         with self._connection() as db:
             return [r[0] for r in db.execute(
-                "SELECT order_id FROM execution WHERE resume_requested=1 AND claimed=0")]
+                "SELECT order_id FROM execution WHERE resume_requested=1 AND claimed=0 AND legacy_quarantined=0")]
 
     def order_status(self, order_id: str) -> str:
         with self._connection() as db:
@@ -81,6 +118,8 @@ class CheckoutRepository:
             if req.rule != self.product_rule(line.product_id):
                 raise ValueError("Rule must match the local catalog")
         with self._connection(write=True) as db:
+            if not self._owns_reservations(db, order_id):
+                raise ValueError("Snapshot is not executable")
             row = db.execute("SELECT state,claimed FROM execution WHERE order_id=?", (order_id,)).fetchone()
             if row[1] or db.execute("SELECT 1 FROM suborders WHERE order_id=?", (order_id,)).fetchone():
                 raise ValueError("Checkout already started")
@@ -95,6 +134,8 @@ class CheckoutRepository:
 
     def save_assignment(self, order_id, quotes: list[Quote], *, simulated=False):
         with self._connection(write=True) as db:
+            if not self._owns_reservations(db, order_id):
+                raise ValueError("Snapshot is not executable")
             if db.execute("SELECT 1 FROM suborders WHERE order_id=?", (order_id,)).fetchone():
                 raise ValueError("Allocation already persisted")
             for q in quotes:
@@ -124,9 +165,12 @@ class CheckoutRepository:
 
     def save_attempt(self, order_id: str, store_id: str, cart: PreparedCart) -> str:
         with self._connection(write=True) as db:
+            if not self._owns_reservations(db, order_id):
+                raise ValueError("Snapshot is not executable")
             row = db.execute("SELECT * FROM suborders WHERE order_id=? AND store_id=?",
                              (order_id, store_id)).fetchone()
-            if row is None or row["state"] != "preparado" or row["result"] is not None:
+            if (row is None or row["state"] != "preparado" or row["result"] is not None
+                    or row["awaiting_resume"]):
                 raise ValueError("Suborder not ready")
             if (cart.fingerprint != cart_fingerprint(cart.quote)
                     or cart.fingerprint != cart_fingerprint(Quote.model_validate_json(row["quote_json"]))):
@@ -198,14 +242,18 @@ class CheckoutRepository:
                              "ON s.id=a.suborder_id WHERE a.id=? AND a.settled=0", (attempt_id,)).fetchone()
             if row:
                 db.execute("UPDATE attempts SET settled=1 WHERE id=?", (attempt_id,))
-                db.execute("UPDATE suborders SET state='preparado' WHERE id=?", (row[0],))
+                db.execute("UPDATE suborders SET state='requiere_intervencion',awaiting_resume=1 WHERE id=?", (row[0],))
+                db.execute("UPDATE execution SET state='requiere_intervencion' WHERE order_id=?", (row[1],))
                 self._notice(db, row[1], "Verificado: no se envió la compra. Solicita reanudar para cotizar de nuevo.")
 
     def finish_resume(self, order_id):
         with self._connection(write=True) as db:
             pending = db.execute("SELECT 1 FROM attempts a JOIN suborders s ON s.id=a.suborder_id "
                                  "WHERE s.order_id=? AND a.settled=0", (order_id,)).fetchone()
-            if not pending:
+            requested = db.execute("SELECT resume_requested FROM execution WHERE order_id=?", (order_id,)).fetchone()
+            if not pending and requested[0] and self._owns_reservations(db, order_id):
+                db.execute("UPDATE suborders SET awaiting_resume=0,state='preparado' "
+                           "WHERE order_id=? AND awaiting_resume=1", (order_id,))
                 db.execute("UPDATE execution SET state='pendiente' WHERE order_id=? "
                            "AND resume_requested=1 AND state NOT IN ('confirmado','simulado')", (order_id,))
             db.execute("UPDATE execution SET resume_requested=0 WHERE order_id=?", (order_id,))

@@ -247,3 +247,102 @@ async def test_repository_rejects_attempt_not_matching_durable_allocation(repo):
     with pytest.raises(ValueError):
         repo.save_attempt(oid, "a", cart)
     assert not repo.uncertain_attempts()
+
+
+@async_test
+async def test_overlapping_legacy_orders_stay_quarantined_on_resume(tmp_path):
+    import sqlite3
+    from pathlib import Path
+
+    from catalog import PRODUCT_RULES
+    from domain import ListLine
+    from offers import PurchaseRequest
+    from recovery import Recovery
+
+    path = tmp_path / "overlap.sqlite"
+    line = ListLine(id="legacy-line", product_id="dog-food", description="pienso", quantity=2, revision=1)
+    with sqlite3.connect(path) as db:
+        for migration in ("001.sql", "002.sql"):
+            db.executescript((Path("migrations") / migration).read_text())
+        db.execute("INSERT INTO products VALUES (?,?)", (PRODUCT_RULES[0].id, PRODUCT_RULES[0].model_dump_json()))
+        for update, oid in enumerate(("legacy-a", "legacy-b"), 1):
+            db.execute("INSERT INTO inbox(update_id,user_id,chat_id,text) VALUES (?,1,2,'buy')", (update,))
+            db.execute("INSERT INTO orders(id,mode,source_update_id) VALUES (?,'live',?)", (oid, update))
+            db.execute("INSERT INTO order_lines VALUES (?,0,?)", (oid, line.model_dump_json()))
+        db.execute("INSERT INTO list_lines VALUES (?,?,?,?,1,1)", (line.id, line.product_id, line.description, 2))
+        db.execute("UPDATE meta SET value=3 WHERE key='telegram_offset'")
+    repo = Repository(path)
+    repo.migrate()
+    store = FakeStore("a", [offer()])
+    for oid in ("legacy-a", "legacy-b", "legacy-a"):
+        reply = apply(repo, "resume", order_id=oid)
+        await Recovery(repo, {"a": store}).recover()
+        await CheckoutService(repo, {"a": store}, DESTINATION).run(oid)
+        assert repo.order_status(oid) == "requiere_intervencion"
+        assert "cuarentena" in reply.text.lower()
+    assert store.submit_calls == store.prepare_calls == 0
+    assert repo.pending_orders() == []
+    assert repo.list_lines() == [line]
+    assert not repo.uncertain_attempts()
+    with pytest.raises(ValueError, match="not executable"):
+        repo.set_purchase_requests("legacy-a", [PurchaseRequest(
+            line_id=line.id, rule=PRODUCT_RULES[0], quantity=2)])
+
+
+@async_test
+async def test_missing_reservation_blocks_remote_checkout_even_after_resume(repo):
+    from recovery import Recovery
+
+    oid = order(repo)
+    with repo._connection(write=True) as db:
+        db.execute("DELETE FROM reservations WHERE order_id=?", (oid,))
+    store = FakeStore("a", [offer()])
+    for _ in range(2):
+        apply(repo, "resume", order_id=oid)
+        await Recovery(repo, {"a": store}).recover()
+        await CheckoutService(repo, {"a": store}, DESTINATION).run(oid)
+    assert store.prepare_calls == store.submit_calls == 0
+    assert repo.list_lines()
+
+
+@async_test
+async def test_reassigning_reservation_cannot_rebuy_fulfilled_snapshot(repo):
+    oid = order(repo)
+    snapshot = repo.get_order(oid).lines[0]
+    store = FakeStore("a", [offer()])
+    await CheckoutService(repo, {"a": store}, DESTINATION).run(oid)
+    assert repo.order_status(oid) == "confirmado"
+    update = repo.telegram_offset()
+    repo.ingest_batch([IncomingMessage(update_id=update, user_id=1, chat_id=2, text="local review")], update + 1)
+    # Simulate a mistaken local conflict resolution: another order now owns the
+    # old line reservation. Immutable confirmed snapshots must still block it.
+    with repo._connection(write=True) as db:
+        db.execute("INSERT INTO orders(id,mode,source_update_id) VALUES ('reassigned','live',?)", (update,))
+        db.execute("INSERT INTO order_lines VALUES ('reassigned',0,?)", (snapshot.model_dump_json(),))
+        db.execute("INSERT INTO execution(order_id) VALUES ('reassigned')")
+        db.execute("INSERT INTO reservations VALUES (?,'reassigned')", (snapshot.id,))
+    assert repo.pending_orders() == []
+    await CheckoutService(repo, {"a": store}, DESTINATION).run("reassigned")
+    assert store.prepare_calls == store.submit_calls == 1
+    assert repo.order_status("reassigned") == "requiere_intervencion"
+
+
+def test_v3_upgrade_preserves_durable_quarantine_across_reopen(tmp_path):
+    import sqlite3
+    from pathlib import Path
+
+    path = tmp_path / "v3.sqlite"
+    with sqlite3.connect(path) as db:
+        for migration in ("001.sql", "002.sql", "003.sql"):
+            db.executescript((Path("migrations") / migration).read_text())
+        db.execute("INSERT INTO inbox(update_id,user_id,chat_id,text) VALUES (1,1,2,'buy')")
+        db.execute("INSERT INTO orders(id,mode,source_update_id) VALUES ('v3','live',1)")
+        db.execute("INSERT INTO execution(order_id) VALUES ('v3')")
+        db.execute("UPDATE meta SET value=2 WHERE key='telegram_offset'")
+    repo = Repository(path)
+    repo.migrate()
+    reopened = Repository(path)
+    reopened.migrate()
+    assert "cuarentena" in apply(reopened, "resume", order_id="v3").text
+    assert reopened.pending_orders() == reopened.resumable_orders() == []
+    assert reopened.order_status("v3") == "requiere_intervencion"

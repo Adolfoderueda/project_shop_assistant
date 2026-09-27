@@ -141,3 +141,48 @@ async def test_repeated_unknown_reconciliation_does_not_flood_outbox(repo):
     count = len(repo.pending_notices())
     await Recovery(repo, {"a": store}).recover()
     assert len(repo.pending_notices()) == count
+
+
+@async_test
+@pytest.mark.parametrize("negative_first", [True, False])
+async def test_sibling_confirmation_cannot_unlock_negative_without_resume(repo, negative_first):
+    from catalog import PRODUCT_RULES
+    from domain import Reconciliation, Submission
+    from offers import PurchaseRequest
+
+    oid = order(repo, description="dodot", quantity=100)
+    line = repo.get_order(oid).lines[0]
+    repo.set_purchase_requests(oid, [PurchaseRequest(line_id=line.id, rule=PRODUCT_RULES[1],
+                                                   quantity=100, quantity_unit="pieces")])
+    a, b = FakeStore("a", [offer("a", "diapers", 40)]), FakeStore("b", [offer("b", "diapers", 60)])
+    a.intervention = b.intervention = True
+    await CheckoutService(repo, {"a": a, "b": b}, DESTINATION).run(oid)
+    attempts = repo.uncertain_attempts()
+    negative_id, negative_cart = attempts[0 if negative_first else 1]
+    confirmed_id, confirmed_cart = attempts[1 if negative_first else 0]
+    stores = {"a": a, "b": b}
+    negative_store = stores[negative_cart.quote.store_id]
+    confirmed_store = stores[confirmed_cart.quote.store_id]
+
+    async def negative(attempt_id, cart):
+        assert attempt_id == negative_id
+        return Reconciliation(status="definitely_not_submitted")
+    negative_store.reconcile = negative
+    confirmed_store.ledger[confirmed_id] = Submission(
+        status="confirmed", external_id="external-confirmed", total_cents=confirmed_cart.quote.total_cents,
+        delivery="tomorrow")
+    await Recovery(Repository(repo.path), stores).recover()
+    assert repo.pending_orders() == []
+    assert repo.order_status(oid) == "requiere_intervencion"
+    await CheckoutService(repo, stores, DESTINATION).run(oid)
+    assert a.submit_calls == b.submit_calls == 1
+    assert repo.list_lines()
+    apply(repo, "resume", order_id=oid)
+    await Recovery(repo, stores).recover()
+    assert repo.pending_orders() == [oid]
+    negative_store.intervention = False
+    await CheckoutService(repo, stores, DESTINATION).run(oid)
+    assert negative_store.submit_calls == 2
+    assert confirmed_store.submit_calls == 1
+    assert repo.order_status(oid) == "confirmado"
+    assert not repo.list_lines()

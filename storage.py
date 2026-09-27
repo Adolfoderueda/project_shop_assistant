@@ -36,7 +36,7 @@ class Repository(CheckoutRepository):
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 3:
+            if version > 4:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
@@ -44,6 +44,8 @@ class Repository(CheckoutRepository):
                 db.executescript((Path(__file__).parent / "migrations/002.sql").read_text())
             if version < 3:
                 db.executescript((Path(__file__).parent / "migrations/003.sql").read_text())
+            if version < 4:
+                db.executescript((Path(__file__).parent / "migrations/004.sql").read_text())
             db.executemany(
                 "INSERT OR IGNORE INTO products VALUES (?, ?)",
                 [(r.id, r.model_dump_json()) for r in PRODUCT_RULES],
@@ -242,10 +244,13 @@ class Repository(CheckoutRepository):
                            [(l.id, order_id) for l in lines])
             return Reply(text="Orden registrada; todavía no se ha comprado.", order_id=order_id)
         if intent.action in ("status", "resume"):
-            row = db.execute("SELECT state FROM execution WHERE order_id=?",
+            row = db.execute("SELECT state,legacy_quarantined FROM execution WHERE order_id=?",
                              (intent.order_id,)).fetchone()
             if row is None:
                 return Reply(text="Indica una orden existente.")
+            if intent.action == "resume" and row["legacy_quarantined"]:
+                return Reply(text="Orden antigua en cuarentena: reanudar no autoriza ejecutar esta instantánea. "
+                             "Se requiere revisar los conflictos y las compras anteriores.", order_id=intent.order_id)
             if intent.action == "resume" and row[0] not in ("confirmado", "simulado"):
                 db.execute("UPDATE execution SET resume_requested=1 WHERE order_id=?",
                            (intent.order_id,))

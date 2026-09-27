@@ -45,6 +45,7 @@ class CheckoutService:
         try:
             if self.repo.order_status(order_id) not in ("pendiente", "preparado"):
                 return
+            self.repo.require_checkout_reservations(order_id)
             order = self.repo.get_order(order_id)
             requests = self._requests(order)
             if self.destination.postcode != "28023" or not self.destination.address.strip():
@@ -81,7 +82,7 @@ class CheckoutService:
                                               "Comparación incompleta; no se afirma que sea la más barata.")
                 subs = self.repo.suborders(order_id)
             for sub in subs:
-                if sub["state"] != "preparado" or sub["result"] is not None:
+                if sub["state"] != "preparado" or sub["result"] is not None or sub["awaiting_resume"]:
                     continue
                 store = self.stores[sub["store_id"]]
                 caps = store.capabilities()
@@ -95,6 +96,7 @@ class CheckoutService:
                     return
                 if cart_fingerprint(fresh) != cart_fingerprint(expected) or fresh.delivery != expected.delivery:
                     self.repo.refresh_quote(order_id, fresh)
+                self.repo.require_checkout_reservations(order_id)
                 cart = await store.prepare(fresh.model_copy(deep=True))
                 if (not self._valid_quote(cart.quote, requests) or cart.destination != self.destination
                         or cart.quote.delivery != fresh.delivery
