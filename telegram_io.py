@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import timedelta
 
-from telegram import Bot, LinkPreviewOptions
+from telegram import Bot, LinkPreviewOptions, MessageEntity
 from telegram.error import BadRequest, NetworkError, RetryAfter, TelegramError
 
 from domain import IncomingMessage
@@ -47,9 +47,21 @@ class TelegramIO:
                 message is not None
                 and message.from_user is not None
                 and message.from_user.id == self.allowed_user_id
+                and not message.from_user.is_bot
                 and message.chat.type == "private"
                 and message.chat.id == self.allowed_user_id
                 and message.text is not None
+                # IncomingMessage carries no provenance: reject relayed/quoted
+                # content before reducing it to potentially executable plain text.
+                and message.forward_origin is None
+                and not message.is_automatic_forward
+                and message.quote is None
+                and message.via_bot is None
+                and message.sender_business_bot is None
+                and message.sender_chat is None
+                and not any(entity.type in (
+                    MessageEntity.BLOCKQUOTE, MessageEntity.EXPANDABLE_BLOCKQUOTE,
+                ) for entity in message.entities)
             ):
                 messages.append(IncomingMessage(
                     update_id=update.update_id,

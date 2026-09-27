@@ -15,12 +15,13 @@ from storage import Repository
 from telegram_io import TelegramIO
 
 
-def update(number, *, user=7, chat=7, kind="private", text="compra", field="message"):
+def update(number, *, user=7, chat=7, kind="private", text="compra", field="message", **metadata):
     payload = {"message_id": number, "date": 1, "chat": {"id": chat, "type": kind}}
     if user is not None:
         payload["from"] = {"id": user, "is_bot": False, "first_name": "Test"}
     if text is not None:
         payload["text"] = text
+    payload.update(metadata)
     return Update.de_json({"update_id": number, field: payload}, None)
 
 
@@ -252,6 +253,60 @@ def test_poll_timeout_preserves_committed_offset_and_pending_messages(repo, bot)
         asyncio.run(io.poll_once())
     assert repo.telegram_offset() == 2
     assert [m.update_id for m in repo.pending_messages()] == [1]
+
+
+@pytest.mark.parametrize("metadata", [
+    {"forward_origin": {"type": "user", "date": 1, "sender_user": {
+        "id": 99, "is_bot": True, "first_name": "Relay"}}},
+    {"forward_origin": {"type": "hidden_user", "date": 1, "sender_user_name": "Hidden"}},
+    {"quote": {"text": "/comprar", "position": 0, "is_manual": True}},
+    {"entities": [{"type": "blockquote", "offset": 0, "length": 8}]},
+    {"entities": [{"type": "expandable_blockquote", "offset": 0, "length": 8}]},
+    {"via_bot": {"id": 99, "is_bot": True, "first_name": "Relay"}},
+    {"sender_business_bot": {"id": 99, "is_bot": True, "first_name": "Relay"}},
+    {"from": {"id": 7, "is_bot": True, "first_name": "Bot"}},
+    {"is_automatic_forward": True},
+    {"sender_chat": {"id": -99, "type": "channel", "title": "Relay"}},
+], ids=["forwarded-bot", "hidden-forward", "quote", "blockquote", "expandable-blockquote",
+        "via-bot", "business-bot", "bot-sender", "automatic-forward", "sender-chat"])
+def test_relayed_or_quoted_commands_are_not_executable(repo, bot, metadata):
+    bot.get_updates.return_value = (update(1, text="/comprar", **metadata),)
+    asyncio.run(TelegramIO(bot, repo, 7).poll_once())
+    reopened = Repository(repo.path)
+    assert reopened.pending_messages() == []
+    assert reopened.telegram_offset() == 2
+    with sqlite3.connect(repo.path) as db:
+        assert db.execute("SELECT count(*) FROM inbox").fetchone()[0] == 0
+    bot.get_updates.return_value = ()
+    asyncio.run(TelegramIO(bot, reopened, 7).poll_once())
+    assert bot.get_updates.call_args.kwargs["offset"] == 2
+
+
+def test_direct_command_and_rejected_quote_share_atomic_offset(repo, bot):
+    direct = update(1, text="/comprar", entities=[{
+        "type": "bot_command", "offset": 0, "length": 8}])
+    quoted = update(2, text="/comprar", entities=[{
+        "type": "blockquote", "offset": 0, "length": 8}])
+    bot.get_updates.return_value = (direct, quoted)
+    with sqlite3.connect(repo.path) as db:
+        db.executescript("""CREATE TRIGGER fail_offset BEFORE UPDATE ON meta
+            BEGIN SELECT RAISE(ABORT, 'injected'); END;""")
+    io = TelegramIO(bot, repo, 7)
+    with pytest.raises(sqlite3.IntegrityError, match="injected"):
+        asyncio.run(io.poll_once())
+    assert repo.pending_messages() == []
+    assert repo.telegram_offset() == 0
+    with sqlite3.connect(repo.path) as db:
+        db.execute("DROP TRIGGER fail_offset")
+    asyncio.run(io.poll_once())
+    assert [c.kwargs["offset"] for c in bot.get_updates.call_args_list] == [0, 0]
+    reopened = Repository(repo.path)
+    assert reopened.pending_messages() == [
+        IncomingMessage(update_id=1, user_id=7, chat_id=7, text="/comprar")]
+    assert reopened.telegram_offset() == 3
+    bot.get_updates.return_value = ()
+    asyncio.run(TelegramIO(bot, reopened, 7).poll_once())
+    assert bot.get_updates.call_args.kwargs["offset"] == 3
 
 
 def test_real_bot_serializes_plain_text_and_durable_poll_offset(repo):
