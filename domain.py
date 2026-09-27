@@ -138,6 +138,8 @@ class PreparedCart(Model):
     id: str
     quote: Quote
     fingerprint: str
+    # Extracted checkout destination, not merely the requested address.
+    destination: Destination | None = Field(default=None, repr=False)
 
 
 class Submission(Model):

@@ -6,10 +6,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from catalog import PRODUCT_RULES, resolve_product
+from checkout_storage import CheckoutRepository
 from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
 
 
-class Repository:
+class Repository(CheckoutRepository):
     def __init__(self, path: Path):
         self.path = Path(path)
 
@@ -35,12 +36,14 @@ class Repository:
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 2:
+            if version > 3:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
             if version < 2:
                 db.executescript((Path(__file__).parent / "migrations/002.sql").read_text())
+            if version < 3:
+                db.executescript((Path(__file__).parent / "migrations/003.sql").read_text())
             db.executemany(
                 "INSERT OR IGNORE INTO products VALUES (?, ?)",
                 [(r.id, r.model_dump_json()) for r in PRODUCT_RULES],
@@ -222,6 +225,9 @@ class Repository:
                     return Reply(text="Actualiza las cantidades de la lista antes de comprar.")
             if not lines or any(line.quantity is None for line in lines):
                 return Reply(text="Indica productos y cantidades antes de comprar.")
+            if any(db.execute("SELECT 1 FROM reservations WHERE line_id=?", (l.id,)).fetchone()
+                   for l in lines):
+                return Reply(text="Hay líneas reservadas por una orden pendiente; consulta su estado.")
             order_id = str(uuid4())
             db.execute(
                 "INSERT INTO orders(id,mode,source_update_id) VALUES (?,?,?)",
@@ -231,7 +237,21 @@ class Repository:
                 "INSERT INTO order_lines VALUES (?,?,?)",
                 [(order_id, i, line.model_dump_json()) for i, line in enumerate(lines)],
             )
+            db.execute("INSERT INTO execution(order_id) VALUES (?)", (order_id,))
+            db.executemany("INSERT INTO reservations VALUES (?,?)",
+                           [(l.id, order_id) for l in lines])
             return Reply(text="Orden registrada; todavía no se ha comprado.", order_id=order_id)
+        if intent.action in ("status", "resume"):
+            row = db.execute("SELECT state FROM execution WHERE order_id=?",
+                             (intent.order_id,)).fetchone()
+            if row is None:
+                return Reply(text="Indica una orden existente.")
+            if intent.action == "resume" and row[0] not in ("confirmado", "simulado"):
+                db.execute("UPDATE execution SET resume_requested=1 WHERE order_id=?",
+                           (intent.order_id,))
+                return Reply(text="Reanudación solicitada; primero se reconciliará, sin repetir la compra.",
+                             order_id=intent.order_id)
+            return Reply(text=f"Estado: {row[0]}", order_id=intent.order_id)
         if intent.action == "list":
             return Reply(
                 text="\n".join(

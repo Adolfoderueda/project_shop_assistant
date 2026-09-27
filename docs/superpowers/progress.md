@@ -42,4 +42,19 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
   redirect-chain regressions (2 failures). GREEN: 39 focused tests; full suite 147 passed.
 - Playwright 1.63.0 / Chromium 153 installed and exercised locally. Cross-host and
   non-GET/HEAD redirects require intervention; manually fetched same-host redirects
-  retain the original browser URL. Concrete adapters must inspect this limitation.
+   retain the original browser URL. Concrete adapters must inspect this limitation.
+
+## 2026-09-27 — Task 5: durable checkout and reconciliation
+
+- Added transactional line reservations, persistent store allocations, exclusive worker
+  claims, pre-submit attempts, reconciliation and status/resume handling. Confirmations
+  remove only the original revision, only after every allocation for that line confirms.
+- Dry-run uses search/quote only and reports `simulado`; live checkout requires verified
+  capabilities, exact contents, complete prices/delivery and extracted destination evidence.
+- Added a focused persistence mixin behind the existing Repository API and schema v3.
+  Runtime worker selectors and existing transactional outbox are exposed for task 7.
+- RED: missing modules; subsequent regressions exposed price refresh, prepared-worker
+  selection, stale product verification, legacy migration, notification duplication and
+  mismatched durable allocation. GREEN: 27 focused tests, full suite 190 passed; Ruff clean.
+- Used SQLite fault injection and fake external purchase ledgers only. No real purchases,
+  credentials, stores or live capability claims. Runtime must enforce its OS process lock.
