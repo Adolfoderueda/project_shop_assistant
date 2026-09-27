@@ -121,22 +121,43 @@ class BrowserManager:
                 self._contexts[store_id] = context
                 self._locks[store_id] = lock
                 return context
-            except BaseException:
-                if context is not None:
-                    await context.close()
-                lock.close()
+            except BaseException as original:
+                try:
+                    if context is not None:
+                        await context.close()
+                except BaseException as cleanup:  # noqa: BLE001 -- preserve original failure
+                    original.add_note(f"Context cleanup also failed: {type(cleanup).__name__}")
+                finally:
+                    try:
+                        lock.close()
+                    except BaseException as cleanup:  # noqa: BLE001 -- preserve original failure
+                        original.add_note(f"Profile lock cleanup also failed: {type(cleanup).__name__}")
                 raise
 
     async def close(self) -> None:
         async with self._guard:
+            errors = []
+            contexts, locks, playwright = self._contexts, self._locks, self._playwright
+            self._contexts, self._locks, self._playwright = {}, {}, None
             try:
-                for context in self._contexts.values():
-                    await context.close()
+                for context in contexts.values():
+                    try:
+                        await context.close()
+                    except BaseException as error:  # noqa: BLE001 -- defer until all resources close
+                        errors.append(error)
             finally:
-                if self._playwright is not None:
-                    await self._playwright.stop()
-                    self._playwright = None
-                self._contexts.clear()
-                for lock in self._locks.values():
-                    lock.close()
-                self._locks.clear()
+                try:
+                    if playwright is not None:
+                        await playwright.stop()
+                except BaseException as error:  # noqa: BLE001 -- release locks before re-raising
+                    errors.append(error)
+                finally:
+                    for lock in locks.values():
+                        try:
+                            lock.close()
+                        except BaseException as error:  # noqa: BLE001 -- attempt remaining locks
+                            errors.append(error)
+            if errors:
+                for error in errors[1:]:
+                    errors[0].add_note(f"Additional cleanup failure: {type(error).__name__}")
+                raise errors[0]

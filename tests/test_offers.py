@@ -31,6 +31,92 @@ def test_shipping_changes_cheapest():
     assert rank_quotes([a, b]) == [b, a]
 
 
+def test_mixed_pack_sizes_cover_exact_requested_pieces():
+    small = offer(units_per_pack=40, url="https://a.example/40")
+    large = offer(units_per_pack=60, url="https://a.example/60")
+    result = select([request(quantity=100)], {"line": [small, large]}, {"a": Store("a")})
+    assert result.coverage_complete
+    assert len(result.assignments) == 1
+    mixed = result.assignments[0].quotes[0]
+    assert sorted(i.offer.units_per_pack for i in mixed.items) == [40, 60]
+    assert sum(i.packs * i.offer.units_per_pack for i in mixed.items) == 100
+    equivalent = quote(offer(units_per_pack=100), packs=1)
+    assert len(rank_quotes([mixed, equivalent])) == 2
+
+
+def test_split_store_allocation_is_cheapest_after_shipping():
+    class TieredStore(Store):
+        async def quote(self, items, destination):
+            q = await super().quote(items, destination)
+            # Synthetic observed basket shipping: large parcels cost more.
+            shipping = 100 if sum(i.packs for i in items) == 1 else 1000
+            return q.model_copy(update={"shipping_cents": shipping,
+                "total_cents": sum(i.packs * i.offer.price_cents for i in items) + shipping})
+
+    result = select([request(quantity=80)],
+                    {"line": [offer("a", 1000), offer("b", 1100)]},
+                    {"a": TieredStore("a"), "b": TieredStore("b")})
+    assert result.coverage_complete
+    assert len(result.assignments) == 3
+    assert result.assignments[0].total_cents == 2300
+    assert len(result.assignments[0].quotes) == 2
+    assert sum(i.packs for q in result.assignments[0].quotes for i in q.items) == 2
+
+
+def test_capped_search_explicitly_reports_incomplete_coverage():
+    result = asyncio.run(select_assignments(
+        [request(quantity=1000000)], {"line": [offer(), offer("b")]},
+        {"a": Store("a"), "b": Store("b")}, Destination(postcode="28023", address="PRIVATE"),
+        max_search_states=5))
+    assert not result.coverage_complete
+    assert any("search limit" in issue for issue in result.issues)
+
+
+def test_capped_search_with_results_does_not_claim_cheapest():
+    result = asyncio.run(select_assignments(
+        [request(quantity=80)], {"line": [offer(), offer("b")]},
+        {"a": Store("a"), "b": Store("b")}, Destination(postcode="28023", address="PRIVATE"),
+        max_search_states=7))
+    assert len(result.assignments) == 1
+    assert not result.coverage_complete
+    assert any("cheapest is not established" in issue for issue in result.issues)
+
+
+@pytest.mark.parametrize("quantity", [40, 60, 80, 100, 120, 140, 160, 180])
+def test_exact_allocations_match_small_exhaustive_counts(quantity):
+    small = offer("a", units_per_pack=40)
+    large = offer("b", units_per_pack=60)
+    result = select([request(quantity=quantity)], {"line": [small, large]},
+                    {"a": Store("a"), "b": Store("b")})
+    actual = set()
+    for assignment in result.assignments:
+        counts = {q.store_id: sum(i.packs for i in q.items) for q in assignment.quotes}
+        actual.add((counts.get("a", 0), counts.get("b", 0)))
+    expected = {(a, b) for a in range(quantity // 40 + 1) for b in range(quantity // 60 + 1)
+                if a * 40 + b * 60 == quantity}
+    assert actual == expected
+    assert result.coverage_complete
+
+
+def test_selected_pack_quantity_can_split_without_changing_pack_format():
+    result = select([request(quantity=2, quantity_unit="packs", pack_units=40)],
+                    {"line": [offer("a"), offer("b")]},
+                    {"a": Store("a"), "b": Store("b")})
+    assert len(result.assignments) == 3 and result.coverage_complete
+    assert all(sum(i.packs for q in a.quotes for i in q.items) == 2 for a in result.assignments)
+
+
+def test_multiple_same_line_items_quote_integrity_is_order_independent():
+    class ReversedStore(Store):
+        async def quote(self, items, destination):
+            return await super().quote(list(reversed(items)), destination)
+
+    result = select([request(quantity=100)], {"line": [
+        offer(units_per_pack=40, url="https://a.example/40"),
+        offer(units_per_pack=60, url="https://a.example/60")]}, {"a": ReversedStore("a")})
+    assert result.coverage_complete and len(result.assignments) == 1
+
+
 def test_unknown_shipping_is_not_ranked_as_free():
     assert rank_quotes([quote(shipping=None), quote()]) == [quote()]
 

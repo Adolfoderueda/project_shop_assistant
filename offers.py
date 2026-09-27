@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Mapping
+from dataclasses import dataclass
 from decimal import Decimal
 from itertools import product
 from typing import Literal
@@ -18,7 +19,7 @@ from stores.base import StoreAdapter
 class PurchaseRequest(Model):
     """Explicit quantity semantics supplied by checkout after clarification.
 
-    Diaper packs require confirmed pack_units; pieces must divide exactly.
+    Diaper packs require confirmed pack_units; allocated pieces must sum exactly.
     Formula/food packs refer to the rule's confirmed gram format (one container
     per pack unless pack_units was explicitly confirmed).
     """
@@ -55,7 +56,7 @@ def quote_is_complete(quote: Quote) -> bool:
     """
     return bool(
         quote.items
-        and len({i.line_id for i in quote.items}) == len(quote.items)
+        and len({(i.line_id, i.offer.model_dump_json()) for i in quote.items}) == len(quote.items)
         and quote.shipping_cents is not None
         and quote.total_cents is not None
         and all(i.offer.store_id == quote.store_id and i.offer.in_stock
@@ -66,13 +67,14 @@ def quote_is_complete(quote: Quote) -> bool:
 
 
 def _contents(quote: Quote) -> tuple:
-    return tuple(sorted((i.line_id, i.offer.product_id, i.offer.brand,
-                         i.offer.size, i.offer.stage, i.offer.grams,
-                         None if i.offer.product_id in ("diapers", "dog-food")
-                         else i.offer.variant,
-                         # Diaper range/GTIN can vary when pieces and size match.
-                         None if i.offer.product_id == "diapers" else i.offer.gtin,
-                         i.packs * i.offer.units_per_pack) for i in quote.items))
+    contents = defaultdict(int)
+    for i in quote.items:
+        identity = (i.line_id, i.offer.product_id, i.offer.brand, i.offer.size,
+                    i.offer.stage, i.offer.grams,
+                    None if i.offer.product_id in ("diapers", "dog-food") else i.offer.variant,
+                    None if i.offer.product_id == "diapers" else i.offer.gtin)
+        contents[json.dumps(identity)] += i.packs * i.offer.units_per_pack
+    return tuple(sorted(contents.items()))
 
 
 def rank_quotes(quotes: list[Quote]) -> list[Quote]:
@@ -96,7 +98,8 @@ def cart_fingerprint(quote: Quote) -> str:
     return hashlib.sha256(json.dumps(payload, ensure_ascii=True).encode()).hexdigest()
 
 
-def _packs(request: PurchaseRequest, offer: Offer) -> int | None:
+def _allocation_units(request: PurchaseRequest, offer: Offer) -> int | None:
+    """Amount of the requested quantity represented by one compatible pack."""
     if offer.product_id != request.rule.id or validate_product(request.rule, offer):
         return None
     if offer.conditions:
@@ -104,46 +107,100 @@ def _packs(request: PurchaseRequest, offer: Offer) -> int | None:
     if request.rule.id != "diapers" and request.rule.grams is None:
         return None
     if request.quantity_unit == "pieces":
-        if request.rule.id != "diapers" or request.quantity % offer.units_per_pack:
-            return None
-        return request.quantity // offer.units_per_pack
+        return offer.units_per_pack if request.rule.id == "diapers" else None
     units = request.pack_units
     if units is None:
         if request.rule.id == "diapers":
             return None
         units = 1
-    return request.quantity if units == offer.units_per_pack else None
+    return 1 if units == offer.units_per_pack else None
+
+
+@dataclass
+class _SearchBudget:
+    remaining: int
+    exceeded: bool = False
+
+    def consume(self) -> bool:
+        if not self.remaining:
+            self.exceeded = True
+            return False
+        self.remaining -= 1
+        return True
+
+
+def _allocations(request: PurchaseRequest, offers: list[tuple[Offer, int]],
+                 budget: _SearchBudget) -> list[list[QuotedLine]]:
+    """Bounded iterative DFS over nonnegative pack counts, without rounding.
+
+    Sibling counts are scheduled lazily: huge requested quantities do not build
+    huge ranges/stacks. No recursion limit and no greedy price/shipping pruning.
+    """
+    if not offers:
+        return []
+    results = []
+    stack = [(0, request.quantity, [], 0)]
+    while stack:
+        if not budget.consume():
+            break
+        index, remaining, chosen, count = stack.pop()
+        offer, units = offers[index]
+        if index == len(offers) - 1:
+            if remaining % units == 0:
+                count = remaining // units
+                tail = [QuotedLine(line_id=request.line_id, offer=offer, packs=count)] if count else []
+                results.append(chosen + tail)
+            continue
+        if (count + 1) * units <= remaining:
+            stack.append((index, remaining, chosen, count + 1))
+        tail = [QuotedLine(line_id=request.line_id, offer=offer, packs=count)] if count else []
+        stack.append((index + 1, remaining - count * units, chosen + tail, 0))
+    return results
 
 
 async def select_assignments(
     requests: list[PurchaseRequest], candidates: Mapping[str, list[Offer]],
     stores: Mapping[str, StoreAdapter], destination: Destination,
+    *, max_search_states: int = 10000,
 ) -> SelectionResult:
-    """Enumerate every whole-line offer/store assignment; quote grouped baskets.
+    """Enumerate exact pack allocations across compatible offers and stores.
 
-    Coverage refers to supplied candidates, not the entire market. No mutation,
-    implicit pack rounding, or hidden cap on the search space. Callers must keep
-    candidate sets small. All requested lines must be covered in every result.
+    Coverage refers to supplied candidates, not the entire market. Allocation
+    nodes and complete basket combinations share an explicit search budget.
+    Hitting it reports incomplete coverage, never a globally cheapest claim.
+    All returned baskets cover every requested line exactly, without mutation.
     """
     if not requests or len({r.line_id for r in requests}) != len(requests):
         raise ValueError("A nonempty request with unique line IDs is required")
+    if type(max_search_states) is not int or max_search_states <= 0:
+        raise ValueError("max_search_states must be a positive integer")
+    budget = _SearchBudget(max_search_states)
     options, issues = [], []
     for req in requests:
-        choices = []
+        compatible, seen = [], set()
         for offer in candidates.get(req.line_id, []):
-            packs = _packs(req, offer)
-            if packs is not None and offer.store_id in stores:
-                choices.append(QuotedLine(line_id=req.line_id, offer=offer, packs=packs))
+            units = _allocation_units(req, offer)
+            identity = offer.model_dump_json()
+            if units is not None and offer.store_id in stores and identity not in seen:
+                compatible.append((offer, units))
+                seen.add(identity)
+        choices = _allocations(req, compatible, budget)
         options.append(choices)
         if not choices:
             issues.append(f"{req.line_id}: no compatible exact-quantity offer; clarify or verify")
-    if issues:
+    if budget.exceeded:
+        issues.append("search limit reached; coverage incomplete; cheapest is not established")
+    if any(not choices for choices in options):
         return SelectionResult(assignments=[], coverage_complete=False, issues=issues)
     assignments = []
     for combination in product(*options):
+        if not budget.consume():
+            issues.append("search limit reached; coverage incomplete; cheapest is not established")
+            break
         grouped = defaultdict(list)
-        for item in combination:
-            grouped[item.offer.store_id].append(item)
+        for allocation in combination:
+            for item in allocation:
+                grouped[item.offer.store_id].append(item)
         quotes = []
         for store_id, items in grouped.items():
             try:
@@ -151,8 +208,8 @@ async def select_assignments(
                 quoted = await stores[store_id].quote(
                     [i.model_copy(deep=True) for i in items], destination)
                 if (quoted.store_id != store_id or not quote_is_complete(quoted)
-                        or sorted(quoted.items, key=lambda i: i.line_id)
-                        != sorted(items, key=lambda i: i.line_id)):
+                        or sorted(i.model_dump_json() for i in quoted.items)
+                        != sorted(i.model_dump_json() for i in items)):
                     raise ValueError("Unverifiable quote")
             except Exception:  # noqa: BLE001 -- adapter failure excludes only this combination
                 # No raw browser exception: it may contain credentials/address.

@@ -177,3 +177,46 @@ def test_launch_failure_releases_profile(tmp_path, monkeypatch):
         finally:
             await manager.close()
     asyncio.run(scenario())
+
+
+def test_failed_initialization_releases_lock_when_context_close_fails(tmp_path):
+    async def scenario():
+        manager = BrowserManager(tmp_path, StoreRegistry([registration()]))
+        context = SimpleNamespace(route=AsyncMock(side_effect=RuntimeError("routing failed")),
+                                  close=AsyncMock(side_effect=RuntimeError("close failed")))
+        manager._playwright = SimpleNamespace(chromium=SimpleNamespace(
+            launch_persistent_context=AsyncMock(return_value=context)), stop=AsyncMock())
+        try:
+            with pytest.raises(BaseException) as caught:
+                await manager.open("shop")
+            assert "routing failed" in str(caught.value)
+            context.route.side_effect = None
+            context.route_web_socket = AsyncMock()
+            context.close.side_effect = None
+            # Same process must be able to acquire the released OS lock.
+            await manager.open("shop")
+        finally:
+            await manager.close()
+    asyncio.run(scenario())
+
+
+def test_close_attempts_every_resource_and_clears_state_after_failures(tmp_path):
+    async def scenario():
+        manager = BrowserManager(tmp_path, StoreRegistry([registration()]))
+        first = SimpleNamespace(close=AsyncMock(side_effect=RuntimeError("first close failed")))
+        second = SimpleNamespace(close=AsyncMock())
+        stop = AsyncMock(side_effect=RuntimeError("stop failed"))
+        manager._contexts = {"first": first, "second": second}
+        # Owned by the manager under test, not a test context manager.
+        locks = [(tmp_path / name).open("w") for name in ("first", "second")]
+        manager._locks = dict(zip(("first", "second"), locks, strict=True))
+        manager._playwright = SimpleNamespace(stop=stop)
+        with pytest.raises(BaseException) as caught:
+            await manager.close()
+        second.close.assert_awaited_once()
+        stop.assert_awaited_once()
+        assert all(lock.closed for lock in locks)
+        assert manager._contexts == {} and manager._locks == {} and manager._playwright is None
+        assert "first close failed" in str(caught.value)
+        await manager.close()
+    asyncio.run(scenario())
