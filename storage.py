@@ -5,8 +5,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from catalog import PRODUCT_RULES
-from domain import IncomingMessage, Intent, ListLine, Order, Reply
+from catalog import PRODUCT_RULES, resolve_product
+from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
 
 
 class Repository:
@@ -35,10 +35,12 @@ class Repository:
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 1:
+            if version > 2:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
+            if version < 2:
+                db.executescript((Path(__file__).parent / "migrations/002.sql").read_text())
             db.executemany(
                 "INSERT OR IGNORE INTO products VALUES (?, ?)",
                 [(r.id, r.model_dump_json()) for r in PRODUCT_RULES],
@@ -98,7 +100,26 @@ class Repository:
             ]
             return Order(**dict(row), lines=lines)
 
-    def apply_intent(self, update_id: int, intent: Intent, mode: str) -> Reply:
+    def message_result(self, update_id: int) -> tuple[IncomingMessage, Reply | None]:
+        with self._connection() as db:
+            row = db.execute("SELECT * FROM inbox WHERE update_id=?", (update_id,)).fetchone()
+            if row is None:
+                raise KeyError(update_id)
+            return (
+                IncomingMessage(**{k: row[k] for k in ("update_id", "user_id", "chat_id", "text")}),
+                Reply.model_validate_json(row["reply_json"]) if row["completed"] else None,
+            )
+
+    def pending_clarification(self, user_id: int) -> Intent | None:
+        with self._connection() as db:
+            row = db.execute(
+                "SELECT intent_json FROM clarifications WHERE user_id=?", (user_id,)
+            ).fetchone()
+            return Intent.model_validate_json(row[0]) if row else None
+
+    def apply_intent(
+        self, update_id: int, intent: Intent, mode: str, *, conversation=False
+    ) -> Reply:
         if mode not in ("dry_run", "live"):
             raise ValueError("Invalid mode")
         with self._connection(write=True) as db:
@@ -108,6 +129,27 @@ class Repository:
             if source["completed"]:
                 return Reply.model_validate_json(source["reply_json"])
             reply = self._apply(db, update_id, intent, mode)
+            if conversation and intent.action in ("add", "buy", "set_quantity", "remove"):
+                db.execute("DELETE FROM clarifications WHERE user_id=?", (source["user_id"],))
+                missing = [l for l in self._lines(db) if l.quantity is None]
+                if missing:
+                    target = missing[0]
+                    pending = Intent(action="set_quantity", lines=[IntentLine(line_id=target.id)])
+                    db.execute(
+                        "INSERT INTO clarifications VALUES (?,?)",
+                        (source["user_id"], pending.model_dump_json()),
+                    )
+                    reply = Reply(
+                        text=reply.text + f" Indica la cantidad de envases para "
+                        f"{target.description} ({target.id}).",
+                        order_id=reply.order_id,
+                    )
+            if conversation and intent.action == "clarify" and intent.lines:
+                pending = Intent(action="remove", lines=intent.lines)
+                db.execute(
+                    "INSERT OR REPLACE INTO clarifications VALUES (?,?)",
+                    (source["user_id"], pending.model_dump_json()),
+                )
             payload = reply.model_dump_json()
             db.execute(
                 "UPDATE inbox SET completed=1,reply_json=? WHERE update_id=?", (payload, update_id)
@@ -124,8 +166,14 @@ class Repository:
                 return Reply(text="Indica qué producto quieres añadir.")
             for line in intent.lines:
                 db.execute(
-                    "INSERT INTO list_lines VALUES (?,NULL,?,?,1,?)",
-                    (str(uuid4()), line.description, line.quantity, update_id),
+                    "INSERT INTO list_lines VALUES (?,?,?,?,1,?)",
+                    (
+                        str(uuid4()),
+                        resolve_product(line.description),
+                        line.description,
+                        line.quantity,
+                        update_id,
+                    ),
                 )
             return Reply(text="Añadido a la lista.")
         if intent.action in ("remove", "set_quantity"):
@@ -171,7 +219,8 @@ class Repository:
         if intent.action == "list":
             return Reply(
                 text="\n".join(
-                    f"{l.description}: {l.quantity if l.quantity else '?'}" for l in self._lines(db)
+                    f"{l.id} — {l.description}: {l.quantity if l.quantity else '?'}"
+                    for l in self._lines(db)
                 )
                 or "La lista está vacía."
             )
