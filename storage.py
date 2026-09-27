@@ -147,6 +147,8 @@ class Repository:
             lines = self._lines(db)
             if intent.lines:
                 selected = {line.line_id for line in intent.lines}
+                if len(selected) != len(intent.lines):
+                    return Reply(text="Selecciona cada línea una sola vez antes de comprar.")
                 if None in selected or not selected.issubset({line.id for line in lines}):
                     return Reply(text="Selecciona líneas existentes antes de comprar.")
                 lines = [line for line in lines if line.id in selected]

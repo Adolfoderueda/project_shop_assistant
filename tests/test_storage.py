@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from catalog import PRODUCT_RULES
 from config import Settings
-from domain import IntentLine
+from domain import Intent, IntentLine
 from restrictions import validate_product
 from storage import Repository
 from tests.factories import intent, message, offer
@@ -123,3 +123,21 @@ def test_order_snapshot_is_immutable_in_database(repo):
             db.execute("UPDATE orders SET mode='live' WHERE id=?", (reply.order_id,))
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
             db.execute("DELETE FROM order_lines WHERE order_id=?", (reply.order_id,))
+
+
+@pytest.mark.parametrize("quantities", [(5, 2), (2, 5), (5, None)])
+def test_buy_rejects_duplicate_selections_without_mutating_list(repo, quantities):
+    apply(repo, 1, "add", description="arroz", quantity=2)
+    snapshot = repo.list_lines()
+    repo.ingest_batch([message(2)], 3)
+    selection = Intent(
+        action="buy",
+        lines=[IntentLine(line_id=snapshot[0].id, quantity=q) for q in quantities],
+    )
+    reply = repo.apply_intent(2, selection, "dry_run")
+    assert reply.order_id is None
+    assert "una sola vez" in reply.text
+    assert repo.list_lines() == snapshot
+    with sqlite3.connect(repo.path) as db:
+        assert db.execute("SELECT count(*) FROM orders").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM order_lines").fetchone()[0] == 0
