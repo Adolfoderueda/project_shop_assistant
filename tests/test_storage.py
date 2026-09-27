@@ -141,3 +141,15 @@ def test_buy_rejects_duplicate_selections_without_mutating_list(repo, quantities
     with sqlite3.connect(repo.path) as db:
         assert db.execute("SELECT count(*) FROM orders").fetchone()[0] == 0
         assert db.execute("SELECT count(*) FROM order_lines").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    "description", ["pienso de pollo", "Blemil etapa dos", "pañales de otra marca"]
+)
+def test_product_resolution_preserves_conflicting_qualifiers(repo, description):
+    apply(repo, 1, "add", description=description)
+    reopened = Repository(repo.path)
+    line = reopened.list_lines()[0]
+    assert line.description == description
+    assert line.product_id is None
+    assert line.quantity is None

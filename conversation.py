@@ -6,6 +6,8 @@ from domain import IncomingMessage, Intent, IntentLine, Reply
 from interpreter import (
     Interpreter,
     clarify,
+    diaper_reference,
+    explicit_diaper_packs,
     normalized,
     parse_command,
     purchase_authorized,
@@ -35,12 +37,24 @@ class Conversation:
             and pending.action == "set_quantity"
             and quantity(message.text) is not None
         ):
-            intent = Intent(
-                action="set_quantity",
-                lines=[
-                    IntentLine(line_id=pending.lines[0].line_id, quantity=quantity(message.text))
-                ],
-            )
+            target = next((l for l in lines if l.id == pending.lines[0].line_id), None)
+            if (
+                target
+                and diaper_reference(target.description)
+                and not explicit_diaper_packs(message.text)
+            ):
+                intent = clarify(
+                    "Indica paquetes de pañales explícitamente, no piezas ni unidades."
+                )
+            else:
+                intent = Intent(
+                    action="set_quantity",
+                    lines=[
+                        IntentLine(
+                            line_id=pending.lines[0].line_id, quantity=quantity(message.text)
+                        )
+                    ],
+                )
         if (
             intent is None
             and pending
@@ -78,11 +92,17 @@ class Conversation:
             clean = normalized(text)
             if re.search(r'\b(no|nunca|si)\b|["«»“”>]|\n', clean):
                 return clarify()
-            if not intent.lines:
+            if len(intent.lines) != 1:
                 return clarify()
+            # Remove only a closed set of request prefixes, never product qualifiers.
+            # Substring matching lets a model turn 'pienso de pollo' into the fish alias.
+            requested = re.sub(r"^(?:necesito|quiero|me hace falta|me hacen falta)\s+", "", clean)
             for line in intent.lines:
-                if not line.description or normalized(line.description) not in clean:
-                    return clarify()
+                if not line.description or normalized(line.description) != requested:
+                    return clarify(
+                        "No puedo omitir características del producto. "
+                        "Usa /anadir con la descripción completa."
+                    )
                 # A model cannot manufacture, omit or reinterpret explicit quantities.
                 if line.quantity is not None or re.search(r"\d", clean):
                     return clarify(

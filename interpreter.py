@@ -6,7 +6,7 @@ import re
 import unicodedata
 from typing import TYPE_CHECKING, Protocol
 
-from catalog import DOG_URL
+from catalog import DOG_URL, resolve_product
 from domain import Intent, IntentLine, ListLine
 
 if TYPE_CHECKING:
@@ -65,6 +65,16 @@ def quantity(text: str) -> int | None:
     return int(match[1]) if match else None
 
 
+def diaper_reference(description: str) -> bool:
+    return resolve_product(description) == "diapers" or bool(
+        re.search(r"\b(?:panales?|dodot)\b", normalized(description))
+    )
+
+
+def explicit_diaper_packs(text: str) -> bool:
+    return bool(re.fullmatch(r"[1-9]\d*\s+(?:paquetes?|envases?)", number_words(normalized(text))))
+
+
 def parse_command(text: str, lines: list[ListLine]) -> Intent | None:
     raw = text.strip()
     clean = normalized(raw)
@@ -98,9 +108,14 @@ def parse_command(text: str, lines: list[ListLine]) -> Intent | None:
         description = match[1].strip()
         amount = None
         leading = re.match(r"([+-]?\d+)\s+(.+)$", number_words(description))
-        if re.match(r"[+-]?\d+[.,]\d", description) or re.search(
-            r"\b\d+\s+(?:paquetes?|botes?|sacos?|envases?)\b",
-            normalized(leading[2] if leading else description),
+        if (
+            re.match(r"[+-]?\d+[.,]\d", description)
+            or re.search(
+                r"\b(?:\d+|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)"
+                r"\s+(?:paquetes?|botes?|sacos?|envases?|unidades?)\b",
+                normalized(leading[2] if leading else description),
+            )
+            or re.search(r"(?:\by\b|[,;])\s+\S+", description)
         ):
             return clarify("Indica un producto por mensaje y una cantidad entera al principio.")
         if leading:
@@ -108,8 +123,8 @@ def parse_command(text: str, lines: list[ListLine]) -> Intent | None:
             description = leading[2]
             if amount <= 0:
                 return clarify("Indica una cantidad positiva de envases.")
-            if "panal" in normalized(description) and not re.search(
-                r"\b(paquetes?|envases?)\b", normalized(description)
+            if diaper_reference(description) and not re.match(
+                r"^(paquetes?|envases?)\b", normalized(description)
             ):
                 return clarify("Indica paquetes de pañales; no redondearé piezas a paquetes.")
         return Intent(action="add", lines=[IntentLine(description=description, quantity=amount)])

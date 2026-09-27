@@ -338,3 +338,87 @@ def test_real_sdk_serializes_strict_schema_without_tools():
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == {"action", "lines", "order_id", "question"}
     assert json.loads(body["input"][1]["content"]) == {"text": "necesito algo", "lines": []}
+
+
+@pytest.mark.parametrize(
+    "text,description",
+    [
+        ("necesito pienso de pollo", "pienso"),
+        ("necesito Blemil etapa dos", "Blemil"),
+        ("necesito pañales de otra marca", "pañales"),
+    ],
+)
+def test_model_cannot_drop_product_qualifiers(repo, text, description):
+    reply = send(
+        repo,
+        text,
+        FakeInterpreter(Intent(action="add", lines=[IntentLine(description=description)])),
+    )
+    assert repo.list_lines() == []
+    assert reply.order_id is None
+    assert orders(repo) == 0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "/anadir 60 Dodot talla 3",
+        "/anadir 60 unidades de Dodot talla 3",
+        "/anadir 60 Dodot",
+        "/anadir 60 unidades de pañales",
+    ],
+)
+def test_diaper_aliases_require_explicit_pack_units(repo, text):
+    reply = send(repo, text)
+    assert repo.list_lines() == []
+    assert "paquetes" in reply.text
+
+
+@pytest.mark.parametrize("answer", ["60 unidades", "sesenta unidades", "60 pañales", "60"])
+def test_diaper_quantity_clarification_does_not_assume_packs(repo, answer):
+    send(repo, "/anadir Dodot talla 3")
+    before = repo.list_lines()
+    reopened = Repository(repo.path)
+    reopened.migrate()
+    send(reopened, answer)
+    assert reopened.list_lines() == before
+    send(reopened, "2 paquetes")
+    assert reopened.list_lines()[0].quantity == 2
+    assert orders(repo) == 0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "/anadir dos paquetes de pañales y tres sacos de pienso",
+        "/anadir 2 paquetes de pañales y tres sacos de pienso",
+        "/anadir dos paquetes de pañales y 3 sacos de pienso",
+        "/anadir dos paquetes de pañales, tres sacos de pienso",
+    ],
+)
+def test_multiple_quantity_clauses_never_collapse_to_one_line(repo, text):
+    send(repo, text)
+    assert repo.list_lines() == []
+    assert orders(repo) == 0
+
+
+def test_model_preserving_full_qualifiers_keeps_product_unresolved(repo):
+    send(
+        repo,
+        "necesito pienso de pollo",
+        FakeInterpreter(Intent(action="add", lines=[IntentLine(description="pienso de pollo")])),
+    )
+    line = repo.list_lines()[0]
+    assert line.description == "pienso de pollo"
+    assert line.product_id is None
+    assert line.quantity is None
+
+
+@pytest.mark.parametrize(
+    "text", ["/anadir 2 paquetes de Dodot talla 3", "/anadir dos envases de Dodot talla 3"]
+)
+def test_diaper_alias_explicit_packs_remain_supported(repo, text):
+    send(repo, text)
+    line = repo.list_lines()[0]
+    assert line.product_id == "diapers"
+    assert line.quantity == 2
