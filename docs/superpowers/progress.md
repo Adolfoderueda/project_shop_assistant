@@ -27,3 +27,19 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
   before adding order-level guards. Final verification recorded in task report.
 - Repository is source/editable-install oriented. Later tasks own conversation, transport,
   orchestration, browser, store operations, and durable suborder transitions.
+
+## 2026-09-27 — Task 4: offers and browser contracts
+
+- Added explicit store registry/protocol, equal-content quote ranking and exhaustive
+  whole-line candidate assignments with grouped shipping quotes and incomplete coverage.
+- Unknown shipping, conditional prices, incompatible references and implicit diaper
+  pack rounding cannot become executable ranked offers. Formula still needs verification
+  and a confirmed weight. Strengthened the previously masked formula-stage regression.
+- Added headed Chromium with dedicated per-store profiles and cross-process exclusion,
+  exact HTTPS navigation/resource policies, public DNS checks and guarded redirects.
+  No real store adapter, login, credentials or purchase was used.
+- RED: missing modules (3 collection errors), then explicit formula-range and browser
+  redirect-chain regressions (2 failures). GREEN: 39 focused tests; full suite 147 passed.
+- Playwright 1.63.0 / Chromium 153 installed and exercised locally. Cross-host and
+  non-GET/HEAD redirects require intervention; manually fetched same-host redirects
+  retain the original browser URL. Concrete adapters must inspect this limitation.

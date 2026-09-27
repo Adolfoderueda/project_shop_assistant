@@ -73,7 +73,13 @@ def test_restrictions_reject_near_matches():
     rules = {r.id: r for r in PRODUCT_RULES}
     assert validate_product(rules["dog-food"], offer(gtin="0000000000000"))
     assert validate_product(rules["diapers"], offer(brand="Dodot", size=4))
-    assert validate_product(rules["formula"], offer(brand="Blemil", variant="Evolution", stage=2))
+    verified_formula = rules["formula"].model_copy(update={"verified": True})
+    assert validate_product(verified_formula, offer(brand="Blemil", variant="Evolution", stage=2)) == [
+        "Identidad incompatible: stage"
+    ]
+    assert not validate_product(
+        verified_formula, offer(brand="Blemil", variant="Evolution", stage=1)
+    )
     assert not validate_product(rules["dog-food"], offer())
     assert not validate_product(rules["dog-food"], offer(variant="Wild Fish"))
     assert not validate_product(rules["diapers"], offer(brand="Dodot", size=3))
