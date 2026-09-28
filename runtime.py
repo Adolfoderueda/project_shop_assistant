@@ -92,6 +92,7 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
     with ProcessLock(settings.database_path.parent / "worker.lock"):
         repo = repo or Repository(settings.database_path)
         repo.migrate()
+        repo.assert_authorized_owner(settings.authorized_user_id)
         manager = None
         try:
             if recovery is None or checkout is None:
@@ -125,7 +126,11 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
             await recovery.recover()  # Abandoned attempts must be reconciled before new work.
             logger.info("Recovery finished; worker ready")
             while True:
+                repo.assert_authorized_owner(settings.authorized_user_id)
                 for message in repo.pending_messages():
+                    if (message.user_id != settings.authorized_user_id
+                            or message.chat_id != settings.authorized_user_id):
+                        raise PermissionError("Stored message belongs to another owner")
                     await conversation.handle(message, settings.mode)
                 if repo.resumable_orders():
                     await recovery.recover()

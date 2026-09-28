@@ -22,6 +22,12 @@ se interpretan comandos explícitos (`/lista`, `/anadir`, `/cantidad`, `/quitar`
 `dry_run`. `private/settings.json`, SQLite, perfiles y logs permanecen excluidos de Git;
 el archivo se escribe con ACL del usuario local (o permisos de propietario en Unix).
 Guardar una copia segura de `private/` si se necesita recuperación tras pérdida de disco.
+La configuración no permite vincular el mismo directorio de datos a otro usuario:
+si se intenta cambiar de propietario, se bloquea antes de sobrescribirla. El worker
+también rechaza historiales, pedidos o avisos conservados de otro usuario antes de
+reconciliar o procesar órdenes; requieren revisión manual y un directorio privado nuevo.
+Los archivos existentes bajo `private/` (SQLite, perfiles, logs y rotaciones) se
+aseguran con ACL exclusiva y comprobación posterior; un fallo de ACL bloquea el arranque.
 
 `doctor` no compra ni abre tienda: revisa SQLite, API Telegram, instalación de Chromium,
 capacidades declaradas. Para abrir sesión manual visible en perfil dedicado:

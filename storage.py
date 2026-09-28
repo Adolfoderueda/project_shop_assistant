@@ -51,6 +51,22 @@ class Repository(CheckoutRepository):
                 [(r.id, r.model_dump_json()) for r in PRODUCT_RULES],
             )
 
+    def assert_authorized_owner(self, user_id: int) -> None:
+        """Fail closed on retained work from another identity before recovery or dispatch."""
+        if type(user_id) is not int or user_id <= 0:
+            raise PermissionError("Invalid owner identity")
+        with self._connection() as db:
+            foreign_inbox = db.execute(
+                "SELECT 1 FROM inbox WHERE user_id!=? OR chat_id!=? LIMIT 1",
+                (user_id, user_id)).fetchone()
+            foreign_notices = db.execute(
+                "SELECT 1 FROM outbox WHERE chat_id!=? LIMIT 1", (user_id,)).fetchone()
+            missing_source = db.execute(
+                "SELECT 1 FROM orders o LEFT JOIN inbox i ON i.update_id=o.source_update_id "
+                "WHERE i.update_id IS NULL LIMIT 1").fetchone()
+            if foreign_inbox or foreign_notices or missing_source:
+                raise PermissionError("Stored work belongs to another owner; manual review required")
+
     def verify_formula(self, gtin: str) -> None:
         """Persist a manually cross-checked reference, without changing the baked-in catalog."""
         from domain import ProductRule

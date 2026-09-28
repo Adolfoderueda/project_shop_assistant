@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import subprocess
 import sys
 
@@ -52,6 +53,7 @@ def test_restart_recovers_before_new_checkout(tmp_path):
 
     class Repo:
         def migrate(self): events.append("migrate")
+        def assert_authorized_owner(self, uid): events.append("owner_checked")
         def pending_messages(self): return []
         def pending_orders(self): return ["new"]
         def resumable_orders(self): return []
@@ -156,3 +158,112 @@ def test_binding_ignores_old_and_foreign_chats():
     bot = Bot()
     assert asyncio.run(bind_user(bot, "nonce")) == (123, 8)
     assert bot.offsets == [None, 6]
+
+
+def test_windows_acl_rejects_foreign_explicit_grant(tmp_path, monkeypatch):
+    import config
+
+    file = tmp_path / "settings.json"
+    file.write_text("secret", encoding="utf-8")
+    commands = []
+
+    def invoke(args, **_):
+        commands.append(args)
+        if args[0] == "whoami":
+            return subprocess.CompletedProcess(args, 0, '"user","S-1-5-21-123"\n', "")
+        if len(commands) == 2:
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return subprocess.CompletedProcess(args, 0, '{"protected":true,"owner":"S-1-5-21-123",'
+                                            '"rules":[{"sid":"S-1-5-21-123","allow":true,'
+                                            '"rights":2032127},{"sid":"S-1-5-21-999",'
+                                            '"allow":true,"rights":2032127}]}', "")
+
+    monkeypatch.setattr(config.subprocess, "run", invoke)
+    with pytest.raises(PermissionError, match="ACL"):
+        config._windows_private(file)
+    assert len(commands) == 3  # Do not trust a successful mutation command without readback.
+
+
+def test_windows_acl_command_failure_fails_closed(tmp_path, monkeypatch):
+    import config
+
+    def invoke(args, **_):
+        if args[0] == "whoami":
+            return subprocess.CompletedProcess(args, 0, '"user","S-1-5-21-123"\n', "")
+        raise subprocess.CalledProcessError(1, args, output="secret: access denied")
+
+    monkeypatch.setattr(config.subprocess, "run", invoke)
+    with pytest.raises(subprocess.CalledProcessError):
+        config._windows_private(tmp_path)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows ACL integration")
+def test_windows_acl_removes_real_foreign_grant(tmp_path):
+    from config import _READ_ACL, _windows_private
+
+    file = tmp_path / "secret.json"
+    file.write_text("dummy", encoding="utf-8")
+    subprocess.run(["icacls", str(file), "/grant", "*S-1-1-0:R"],
+                   capture_output=True, check=True)
+    read = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _READ_ACL]
+    env = {**os.environ, "SHOP_ASSISTANT_ACL_PATH": str(file)}
+    import json
+
+    before = json.loads(subprocess.run(read, env=env, capture_output=True,
+                                       text=True, check=True).stdout)
+    assert "S-1-1-0" in {r["sid"] for r in before["rules"]}
+    _windows_private(file)
+    after = json.loads(subprocess.run(read, env=env, capture_output=True,
+                                      text=True, check=True).stdout)
+    assert len(after["rules"]) == 1
+    assert after["rules"][0]["sid"] != "S-1-1-0"
+
+
+def test_rebinding_existing_owner_is_refused_before_writing(tmp_path):
+    from config import save_settings
+
+    first = settings(tmp_path).model_copy(update={"database_path": tmp_path / "private" / "db"})
+    save_settings(tmp_path, first)
+    with pytest.raises(ValueError, match="rebind"):
+        save_settings(tmp_path, first.model_copy(update={"authorized_user_id": 456}))
+    assert load_settings(tmp_path).authorized_user_id == 123
+
+
+def test_old_owner_pending_order_blocks_recovery_and_checkout(tmp_path):
+    from domain import IncomingMessage, Intent, IntentLine
+    from storage import Repository
+
+    repo = Repository(tmp_path / "assistant.db")
+    repo.migrate()
+    repo.ingest_batch([IncomingMessage(update_id=1, user_id=123, chat_id=123,
+                                       text="/anadir 1 pienso")], 2)
+    repo.apply_intent(1, Intent(action="add", lines=[IntentLine(description="pienso", quantity=1)]),
+                      "dry_run")
+    repo.ingest_batch([IncomingMessage(update_id=2, user_id=123, chat_id=123,
+                                       text="/comprar")], 3)
+    reply = repo.apply_intent(2, Intent(action="buy"), "dry_run")
+    assert reply.order_id in repo.pending_orders()
+    # A pending message and durable order from a former owner must never run under a new one.
+    repo.ingest_batch([IncomingMessage(update_id=3, user_id=123, chat_id=123,
+                                       text="/lista")], 4)
+    events = []
+
+    class Recovery:
+        async def recover(self): events.append("recovery")
+
+    class Checkout:
+        async def run(self, order_id): events.append("checkout")
+
+    class IO:
+        async def poll_once(self): events.append("poll")
+        async def send_pending(self): events.append("notice")
+
+    class Conversation:
+        async def handle(self, message, mode): events.append("dispatch")
+
+    changed = settings(tmp_path).model_copy(update={"authorized_user_id": 456})
+    with pytest.raises(PermissionError, match="owner"):
+        asyncio.run(run(changed, repo=repo, recovery=Recovery(), checkout=Checkout(),
+                        transport=IO(), conversation=Conversation()))
+    assert events == []
+    assert [m.update_id for m in repo.pending_messages()] == [3]
