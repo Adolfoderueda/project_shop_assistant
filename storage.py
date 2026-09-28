@@ -51,6 +51,19 @@ class Repository(CheckoutRepository):
                 [(r.id, r.model_dump_json()) for r in PRODUCT_RULES],
             )
 
+    def verify_formula(self, gtin: str) -> None:
+        """Persist a manually cross-checked reference, without changing the baked-in catalog."""
+        from domain import ProductRule
+        with self._connection(write=True) as db:
+            row = db.execute("SELECT rule_json FROM products WHERE id='formula'").fetchone()
+            if row is None:
+                raise ValueError("Formula rule missing")
+            rule = ProductRule.model_validate_json(row[0])
+            if (rule.brand, rule.variant, rule.stage) != ("Blemil", "Evolution", 1):
+                raise ValueError("Formula restriction changed; manual review required")
+            db.execute("UPDATE products SET rule_json=? WHERE id='formula'",
+                       (rule.model_copy(update={"gtin": gtin, "verified": True}).model_dump_json(),))
+
     def ingest_batch(self, messages: list[IncomingMessage], next_offset: int) -> None:
         if type(next_offset) is not int or next_offset < 0:
             raise ValueError("Invalid offset")

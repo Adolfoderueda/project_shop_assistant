@@ -12,8 +12,8 @@ dependencies = ["pydantic>=2.10,<3", "openai>=2.8,<3", "python-telegram-bot>=22.
 dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
 
 [tool.setuptools]
-py-modules = ["config", "domain", "storage", "catalog", "restrictions", "conversation", "interpreter", "telegram_io", "offers"]
-packages = ["stores"]
+py-modules = ["config", "domain", "storage", "catalog", "restrictions", "conversation", "interpreter", "telegram_io", "offers", "checkout", "checkout_storage", "recovery", "runtime", "cli"]
+packages = ["stores", "shop_assistant"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
