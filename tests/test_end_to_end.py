@@ -79,11 +79,26 @@ def test_confirmed_order_is_not_repeated_after_crash(tmp_path):
     path = tmp_path / "assistant.db"
     bot = FakeBot()
     store = FakeStore("test", [offer()])
-    store.lose_response = True  # External ledger commits before response disappears.
-    repo, _ = start_order(path, bot, store, "live")
+    repo, _ = start_order(path, bot, store, "live", defer_purchase=True)
+    interrupted = []
+
+    def crash_after_external_commit(attempt_id):
+        assert attempt_id in store.ledger
+        interrupted.append(attempt_id)
+        # CancelledError is BaseException, not caught by checkout's Exception
+        # handler: model a worker dying before recording any local response.
+        raise asyncio.CancelledError
+
+    store.after_commit = crash_after_external_commit
+    cycles(components(path, bot, store, "live"), 2)
+    assert len(interrupted) == 1
     assert store.submit_calls == 1
     assert len(store.ledger) == 1
     order_id = repo.message_result(3)[1].order_id
+    assert repo.order_status(order_id) != "confirmado"
+    assert [attempt for attempt, _ in repo.uncertain_attempts()] == interrupted
+    assert repo.list_lines()[0].quantity == 2
+    store.after_commit = None
     cycles(components(path, bot, store, "live"), 2)
     assert store.submit_calls == 1
     assert repo.order_status(order_id) == "confirmado"

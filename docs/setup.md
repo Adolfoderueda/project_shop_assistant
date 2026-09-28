@@ -41,7 +41,13 @@ no se equipara automáticamente. El cotejo local no verifica precio, tienda ni c
 
 Con el chat privado vinculado, probar `/anadir 2 sacos de pienso`, `/lista`,
 `/cantidad <id> 3`, `/comprar` (solo en `dry_run`), reiniciar el servicio y consultar
-`/estado <id>`; comprobar el aviso **simulado**, nunca confundirlo con un recibo real.
+`/estado <id>`. Con los adaptadores actuales, **no esperar necesariamente un aviso
+simulado**: las cotizaciones carecen de envío/total/entrega completos y la identidad
+GTIN independiente puede faltar, por lo que la orden puede quedar
+`requiere_intervencion` con aviso de bloqueo. Si hay una cotización completa y
+compatible, el resultado `simulado` tampoco es un recibo real. La recepción de
+aviso simulado después del reinicio solo se demostró en el test offline con tienda
+falsa de cotización completa.
 No se han ejecutado estas pruebas con el Telegram del usuario ni se ha probado el
 inicio de sesión de Windows. Los tests offline usan Bot, intérprete y tienda falsos.
 

@@ -45,3 +45,28 @@ lista intacta y envía aviso simulado después del reinicio, no recibo real.
 Archivos: `tests/test_end_to_end.py`, `tests/fakes.py`, `README.md`,
 `docs/setup.md`, `docs/store-capabilities.md`, `docs/superpowers/progress.md`,
 `docs/superpowers/task-8-report.md`. Sin cambios en módulos de producción.
+
+## Revisión round 1 — límite exacto de caída
+
+- El RED inicial anterior (`IndexError`) era exclusivamente de preparación del test,
+  **no** era un test conductual que fallase por un defecto de producto. La prueba
+  original de respuesta perdida recorría el `except Exception` normal de checkout,
+  que registraba `uncertain`: no cubría la caída tras el commit externo y antes de
+  registrar la respuesta en SQLite.
+- RED conductual nuevo: `python -m pytest
+  tests/test_end_to_end.py::test_confirmed_order_is_not_repeated_after_crash -q`
+  → `1 failed`: `assert len(interrupted) == 1`, observado `0`. El fake aún no llamaba
+  al hook tras escribir su ledger. La prueba prepara la orden con inbox durable,
+  cancela el worker **después** del commit externo mediante `CancelledError` (no
+  capturado por `except Exception`), verifica que SQLite conserve intento incierto
+  sin confirmación ni eliminación de línea y reabre componentes con la misma BD.
+- GREEN focal: `.\.venv\Scripts\python.exe -m pytest tests/test_end_to_end.py -q`
+  → `3 passed in 0.95s`. Se añadió al fake solo el hook después del ledger;
+  recovery confirma un pedido externo tras reinicio y deja `submit_calls == 1`.
+- Documentación local corregida: los adaptadores reales pueden quedar
+  `requiere_intervencion` por cotizaciones incompletas; el aviso `simulado` del test
+  no es promesa de recibo real ni de simulación completada para tiendas reales.
+- Verificación final tras documentación: `.\.venv\Scripts\python.exe -m pytest
+  tests/test_end_to_end.py -q` → `3 passed in 1.22s`;
+  `.\.venv\Scripts\python.exe -m pytest -q` → `251 passed in 62.09s`;
+  `.\.venv\Scripts\python.exe -m ruff check .` → `All checks passed!`.

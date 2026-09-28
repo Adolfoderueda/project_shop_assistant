@@ -27,6 +27,7 @@ class FakeStore:
         self.intervention = False
         self.change_cart = False
         self.before_submit = None
+        self.after_commit = None
         self.destination = None
 
     def capabilities(self):
@@ -60,6 +61,8 @@ class FakeStore:
         result = Submission(status="confirmed", external_id="external-" + attempt_id,
                             total_cents=cart.quote.total_cents, delivery=cart.quote.delivery)
         self.ledger[attempt_id] = result
+        if self.after_commit:
+            self.after_commit(attempt_id)
         if self.lose_response:
             raise TimeoutError("response lost after purchase")
         return result
