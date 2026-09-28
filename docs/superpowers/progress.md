@@ -58,3 +58,20 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
   mismatched durable allocation. GREEN: 27 focused tests, full suite 190 passed; Ruff clean.
 - Used SQLite fault injection and fake external purchase ledgers only. No real purchases,
   credentials, stores or live capability claims. Runtime must enforce its OS process lock.
+
+## 2026-09-28 — Task 6: public store observations (DONE_WITH_CONCERNS)
+
+- Added four opt-in root `stores/` adapters, public discovery/product extraction and
+  partial quote refreshes through the dedicated BrowserManager; no frozen live prices.
+- Captured minimal anonymized real public fixtures September 27; repeated final public
+  search/read/quote operations September 28, including Mercadona's strict 28023 region.
+- Shipping/total/delivery unknown; no complete price comparison or minimum guarantee.
+  GTIN independent evidence absent; formula reference remains disabled in the catalog.
+- Prepare/submit/reconcile/live verification all disabled. Actual blockers include
+  absent user sessions/destination, Amascotados unsolicited cart gift, Charro shipping
+  discrepancy and unexplained Nappy add-to-cart failure. No purchases or account creation.
+- Initial RED 15 failed/23 passed; safety regression RED 5 failed/41 passed and
+  discovery RED 1 failed/46 passed. Final GREEN 47 store tests, 220 full-suite tests;
+  Ruff clean. Detailed matrix: `docs/store-capabilities.md`.
+- Controller confirmed flat layout; no migration. Old anonymous probe carts are ignored
+  diagnostics, never reusable as prepared carts. Autonomous checkout remains blocked.
