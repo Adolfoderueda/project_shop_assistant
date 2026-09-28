@@ -75,3 +75,17 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
   Ruff clean. Detailed matrix: `docs/store-capabilities.md`.
 - Controller confirmed flat layout; no migration. Old anonymous probe carts are ignored
   diagnostics, never reusable as prepared carts. Autonomous checkout remains blocked.
+
+## 2026-09-28 — Task 8: integración offline y entrega (DONE_WITH_CONCERNS)
+
+- Bot/TelegramIO, intérprete, SQLite, conversación, worker, tienda falsa, checkout y
+  recuperación probados juntos: compra simulada tras reinicio, confirmación externa
+  tras perder respuesta y reconciliación desconocida sin repetir submit.
+- RED inicial del escenario diferido: 1 falló (`IndexError`, arnés de test hacía un
+  ciclo menos y no procesaba el alta), 2 pasaron. GREEN: test integrado 3 passed;
+  suite completa `251 passed`; `ruff check .`: All checks passed.
+- `python -m shop_assistant doctor` devuelve 1: falta configuración privada; pide
+  `configure` localmente. No se solicitaron credenciales aquí ni se creó tarea Windows.
+  Telegram del usuario, arranque al iniciar sesión y pagos reales siguen sin comprobar.
+  Las capacidades live de las cuatro tiendas permanecen inhabilitadas.
+- Evidencia y bloqueos: `docs/superpowers/task-8-report.md`.

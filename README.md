@@ -3,3 +3,11 @@
 Bot de Telegram de un solo usuario en Windows; por defecto **dry_run** (sin compras).
 Configuración privada y consentimiento para tarea programada: [docs/setup.md](docs/setup.md).
 Capacidades reales y bloqueos de las tiendas: [docs/store-capabilities.md](docs/store-capabilities.md).
+
+En PowerShell desde la raíz: `py -3.12 -m venv .venv`,
+`.\.venv\Scripts\python.exe -m pip install -e '.[dev]'`,
+`.\.venv\Scripts\python.exe -m playwright install chromium` y
+`.\.venv\Scripts\python.exe -m shop_assistant configure` **solo en consola local**.
+Ejecutar `doctor` antes de `run`. No enviar tokens, direcciones ni datos bancarios
+por chat. Sin configuración privada, `doctor` falla. Los tests end-to-end son
+offline con fakes: no producen recibos reales ni verifican pagos.

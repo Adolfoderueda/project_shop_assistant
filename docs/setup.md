@@ -31,13 +31,19 @@ aseguran con ACL exclusiva y comprobación posterior; un fallo de ACL bloquea el
 
 `doctor` no compra ni abre tienda: revisa SQLite, API Telegram, instalación de Chromium,
 capacidades declaradas. Para abrir sesión manual visible en perfil dedicado:
-`python -m shop_assistant login --store mercadona` (también `amascotados`, `charro`,
+`.\.venv\Scripts\python.exe -m shop_assistant login --store mercadona` (también `amascotados`, `charro`,
 `nappy`). Introducir credenciales solo en la web visible, nunca en mensajes o CLI.
 Si el perfil está ocupado por el worker, detenerlo primero; luego cerrar login y
 reanudar el worker. Para la fórmula, cotejar físicamente etiqueta de **Blemil Evolution 1**
 y referencia independiente del fabricante antes de ejecutar
-`python -m shop_assistant verify-product --id formula`; un producto «Optimum Evolution»
+`.\.venv\Scripts\python.exe -m shop_assistant verify-product --id formula`; un producto «Optimum Evolution»
 no se equipara automáticamente. El cotejo local no verifica precio, tienda ni compra.
+
+Con el chat privado vinculado, probar `/anadir 2 sacos de pienso`, `/lista`,
+`/cantidad <id> 3`, `/comprar` (solo en `dry_run`), reiniciar el servicio y consultar
+`/estado <id>`; comprobar el aviso **simulado**, nunca confundirlo con un recibo real.
+No se han ejecutado estas pruebas con el Telegram del usuario ni se ha probado el
+inicio de sesión de Windows. Los tests offline usan Bot, intérprete y tienda falsos.
 
 ## Arranque automático opcional (NO instalado por este repositorio)
 
@@ -59,6 +65,13 @@ un bloqueo de proceso, recupera intentos pendientes antes de procesar pedidos nu
 y conserva inbox/outbox ante interrupción. La tarea **no arranca antes del inicio de
 sesión**, no activa autologin ni cambia suspensión; no garantiza servicio 24/7 si el
 usuario cierra sesión, apaga/suspende Windows o no tiene red.
+
+Para arrancar manualmente: `.\scripts\Start-ShopAssistant.ps1`; parar manualmente
+con Ctrl+C. Si se instaló la tarea con consentimiento, iniciarla con
+`Start-ScheduledTask -TaskName ShopAssistantLocal`, detenerla con
+`.\scripts\Stop-ShopAssistant.ps1` y desinstalarla con
+`.\scripts\Uninstall-ShopAssistant.ps1 -Consent`. Estos comandos son instrucciones,
+**no** indican que la tarea haya sido registrada ni probada en este equipo.
 
 ## Bloqueos de compra autónoma
 

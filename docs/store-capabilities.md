@@ -10,6 +10,15 @@ altas de cuenta, dirección personal, pagos ni pedidos.
 `reconcile=False`, `live_verified=False`. Preparar exige intervención; submit no actúa;
 reconciliar devuelve `unknown`. La ausencia de pedidos o de botones no prueba nada.
 
+Las pruebas de integración de Task 8 usan una tienda **falsa** con un registro externo
+en memoria para ejercitar recuperación `confirmed` y `unknown`; sus capacidades
+simuladas no corresponden a ninguno de los cuatro adaptadores reales. Ningún aviso
+`simulado` es un comprobante de pago. Si una futura conexión requiere aprobación
+bancaria (p. ej. 3DS), detener la automatización en `requiere_intervencion`, abrir
+el navegador visible del perfil de tienda y completar la autenticación personalmente
+en la web bancaria; consultar historial/reconciliación antes de reanudar, jamás repetir
+el submit ciegamente. Hoy no existe un flujo live verificado para hacerlo.
+
 | Tienda | Producto / descubrimiento público | Cotización completa | Preparar / pagar | Historial |
 |---|---|---|---|---|
 | Amascotados | probada_sin_pago: producto y búsqueda pública | bloqueada: envío/destino y descuentos del carrito sin verificar | bloqueada: datos personales ausentes; regalo automático ajeno | bloqueada: muestra acceso |

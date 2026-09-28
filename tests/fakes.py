@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 from functools import wraps
 from types import SimpleNamespace
 
+from telegram import Update
+
 from domain import Capabilities, PreparedCart, Quote, Reconciliation, Submission
 from offers import cart_fingerprint
 
@@ -74,6 +76,29 @@ class FakeInterpreter:
 
     async def parse(self, text, lines):
         return self.result
+
+
+class FakeBot:
+    """In-memory Telegram boundary; real Update parsing and durable offset remain in use."""
+
+    def __init__(self):
+        self.updates = []
+        self.sent = []
+
+    def receive(self, number, text, user_id=7):
+        self.updates.append(Update.de_json({
+            "update_id": number,
+            "message": {"message_id": number, "date": 1,
+                        "chat": {"id": user_id, "type": "private"},
+                        "from": {"id": user_id, "is_bot": False, "first_name": "Test"},
+                        "text": text},
+        }, None))
+
+    async def get_updates(self, *, offset, **kwargs):
+        return [u for u in self.updates if u.update_id >= offset]
+
+    async def send_message(self, *, chat_id, text, **kwargs):
+        self.sent.append((chat_id, text))
 
 
 class FakeOpenAI:
