@@ -26,9 +26,27 @@ async def product_data(page) -> dict:
 
 
 def diaper_identity(title: str, units_text: str | None = None) -> dict:
-    if ('dodot' not in title.lower() or '+' in title or
-            re.search(r'toallitas|crema|norit|weleda', title, re.IGNORECASE)):
-        raise ValueError('Not a diaper-only Dodot pack')
+    # Positive, whole-title grammars of inspected standalone diaper formats.
+    # Unknown wording or extra bundle contents must not pass a keyword blacklist.
+    title = ' '.join(title.split())
+    weight = r'\(\s*(?:De\s+)?\d+\s*(?:-|–|a)\s*\d+\s*kg\.?\s*\)'
+    if units_text is not None:
+        standalone = re.fullmatch(
+            r'Pañales bebé talla \d+ Dodot(?: Sensitive)? de \d+-\d+ kg',
+            title, re.IGNORECASE)
+        format_match = re.fullmatch(
+            r'Paquete (\d+) Unidades(?: \| \d+,\d+ €/ud)?', units_text.strip(), re.IGNORECASE)
+        if not standalone or not format_match:
+            raise ValueError('Unverified standalone diaper pack')
+    else:
+        patterns = (
+            rf'Pañales talla \d+ con \d+uds bebé-seco {weight} Dodot',
+            rf'Pañales Dodot Sensitive(?: Extra)? Talla \d+ {weight}\s*[–-]\s*\d+ uds',
+            r'Pack Dodot \d+ cajas talla \d+ bebe seco (?:con )?\d+uds\.?',
+            rf'Paquete \d+uds\. Talla \d+ Bebé-Seco Dodot {weight}',
+        )
+        if not any(re.fullmatch(pattern, title, re.IGNORECASE) for pattern in patterns):
+            raise ValueError('Unverified standalone diaper pack')
     size = re.search(r'\btalla\s*(\d+)\b', title, re.IGNORECASE)
     units = re.search(r'\b(\d+)\s*(?:uds\.?|unidades)\b', units_text or title, re.IGNORECASE)
     if not size or not units:

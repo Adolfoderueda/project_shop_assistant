@@ -15,5 +15,9 @@ class Nappy(PublicStore):
             raise ValueError('Unknown availability')
         if data.get('customization_required'):
             raise ValueError('Pack requires selection')
+        quantity = data.get('quantity')
+        in_stock = (data['availability'] == 'in_stock' and
+                    data.get('available_for_order') == '1' and
+                    type(quantity) is int and quantity > 0)
         return self.offer(product_id, url, data['name'], data['price_amount'],
-                          data['availability'] == 'in_stock', conditions=price_conditions(data), **identity)
+                          in_stock, conditions=price_conditions(data), **identity)
