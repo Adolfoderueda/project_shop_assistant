@@ -108,6 +108,32 @@ async def test_partial_success_preserves_remaining_lines(repo):
 
 
 @async_test
+async def test_status_after_partial_success_restart_lists_store_evidence_and_unresolved(repo):
+    from catalog import PRODUCT_RULES
+    from offers import PurchaseRequest
+
+    oid = order(repo, description="dodot", quantity=100)
+    line = repo.get_order(oid).lines[0]
+    repo.set_purchase_requests(oid, [PurchaseRequest(line_id=line.id, rule=PRODUCT_RULES[1],
+                                                      quantity=100, quantity_unit="pieces")])
+    a = FakeStore("a", [offer("a", "diapers", 40)])
+    b = FakeStore("b", [offer("b", "diapers", 60)])
+    b.intervention = True
+    await CheckoutService(repo, {"a": a, "b": b}, DESTINATION).run(oid)
+    reopened = Repository(repo.path)
+    reopened.migrate()
+    status = apply(reopened, "status", order_id=oid).text
+    assert "requiere_intervencion" in status
+    assert "a: confirmado" in status
+    assert "b: requiere_intervencion" in status
+    confirmed = next(s for s in reopened.suborders(oid) if s["store_id"] == "a")
+    assert confirmed["external_id"] in status
+    assert str(confirmed["total_cents"]) in status
+    assert line.id in status and "sin resolver" in status
+    assert DESTINATION.address not in status
+
+
+@async_test
 async def test_unverified_product_does_not_block_unrelated_list_operations(repo):
     apply(repo, "add", [IntentLine(description="formula", quantity=1)])
     oid = order(repo)

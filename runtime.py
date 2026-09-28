@@ -6,6 +6,8 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from telegram.error import NetworkError, RetryAfter
+
 from config import Settings
 
 logger = logging.getLogger(__name__)
@@ -125,6 +127,7 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                 conversation = Conversation(repo, interpreter)
             await recovery.recover()  # Abandoned attempts must be reconciled before new work.
             logger.info("Recovery finished; worker ready")
+            retry_delay = 1
             while True:
                 repo.assert_authorized_owner(settings.authorized_user_id)
                 for message in repo.pending_messages():
@@ -136,8 +139,18 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                     await recovery.recover()
                 for order_id in repo.pending_orders():
                     await checkout.run(order_id)
-                await transport.send_pending()
-                await transport.poll_once()
+                try:
+                    await transport.send_pending()
+                    await transport.poll_once()
+                except (NetworkError, RetryAfter):
+                    # Only transient transport failures are retried. No SQLite
+                    # offset or notice marker is advanced here; the next cycle
+                    # reloads durable state. Other failures fail closed.
+                    logger.warning("Telegram transport temporarily unavailable")
+                    await sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, 30)
+                    continue
+                retry_delay = 1
                 await sleep(0)
         finally:
             if manager is not None:

@@ -160,6 +160,131 @@ def test_binding_ignores_old_and_foreign_chats():
     assert bot.offsets == [None, 6]
 
 
+def test_reconfigure_preserves_offline_pending_offset(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import cli
+    from config import save_settings
+    from storage import Repository
+
+    existing = settings(tmp_path).model_copy(update={
+        "database_path": tmp_path / "private" / "assistant.db", "telegram_bot_id": 999})
+    save_settings(tmp_path, existing)
+    repo = Repository(existing.database_path)
+    repo.migrate()
+    repo.ingest_batch([], 5)
+
+    class Bot:
+        def __init__(self, token): pass
+        async def get_me(self): return SimpleNamespace(id=999, username="same")
+        async def get_updates(self, **kwargs):
+            pytest.fail("reconfigure must not consume pending Telegram updates")
+
+    monkeypatch.setattr("telegram.Bot", Bot)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: "secret-token")
+    answers = iter(["new destination", "", "", "dry_run"])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+    asyncio.run(cli.configure(tmp_path))
+    assert repo.telegram_offset() == 5
+    assert load_settings(tmp_path).address == "new destination"
+
+
+def test_reconfigure_rejects_different_bot_before_consuming_updates(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import cli
+    from config import save_settings
+    from storage import Repository
+
+    existing = settings(tmp_path).model_copy(update={
+        "database_path": tmp_path / "private" / "assistant.db", "telegram_bot_id": 999})
+    save_settings(tmp_path, existing)
+    repo = Repository(existing.database_path)
+    repo.migrate()
+    repo.ingest_batch([], 5)
+
+    class Bot:
+        def __init__(self, token): pass
+        async def get_me(self): return SimpleNamespace(id=888, username="other")
+        async def get_updates(self, **kwargs): pytest.fail("foreign bot polled")
+
+    monkeypatch.setattr("telegram.Bot", Bot)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: "swapped-token")
+    with pytest.raises(ValueError, match="bot"):
+        asyncio.run(cli.configure(tmp_path))
+    assert repo.telegram_offset() == 5
+    assert load_settings(tmp_path).telegram_token.get_secret_value() == "secret-token"
+
+
+def test_transient_poll_failure_recovers_without_losing_pending_notice(tmp_path):
+    from telegram.error import NetworkError
+
+    from domain import IncomingMessage, Intent
+    from storage import Repository
+
+    repo = Repository(tmp_path / "assistant.db")
+    repo.migrate()
+    repo.ingest_batch([IncomingMessage(update_id=1, user_id=123, chat_id=123, text="/lista")], 2)
+    repo.apply_intent(1, Intent(action="list"), "dry_run")
+    events = []
+
+    class Recovery:
+        async def recover(self): events.append("recover")
+
+    class Checkout:
+        async def run(self, order_id): pytest.fail("unexpected order")
+
+    class IO:
+        async def send_pending(self): events.append("send")
+        async def poll_once(self):
+            events.append("poll")
+            if events.count("poll") == 1:
+                raise NetworkError("offline")
+            raise asyncio.CancelledError
+
+    async def sleep(delay): events.append(("sleep", delay))
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run(settings(tmp_path), repo=repo, recovery=Recovery(),
+                        checkout=Checkout(), transport=IO(), sleep=sleep))
+    assert events == ["recover", "send", "poll", ("sleep", 1), "send", "poll"]
+    assert len(repo.pending_notices()) == 1
+    assert repo.telegram_offset() == 2
+
+
+def test_transient_send_failure_recovers(tmp_path):
+    from telegram.error import NetworkError
+
+    from storage import Repository
+
+    repo = Repository(tmp_path / "assistant.db")
+    repo.migrate()
+    events = []
+
+    class Recovery:
+        async def recover(self): pass
+
+    class Checkout:
+        async def run(self, order_id): pytest.fail("unexpected order")
+
+    class IO:
+        async def send_pending(self):
+            events.append("send")
+            if events.count("send") == 1:
+                raise NetworkError("offline")
+        async def poll_once(self): events.append("poll")
+
+    async def sleep(delay):
+        events.append(("sleep", delay))
+        if delay == 0:
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run(settings(tmp_path), repo=repo, recovery=Recovery(),
+                        checkout=Checkout(), transport=IO(), sleep=sleep))
+    assert events == ["send", ("sleep", 1), "send", "poll", ("sleep", 0)]
+
+
 def test_windows_acl_rejects_foreign_explicit_grant(tmp_path, monkeypatch):
     import config
 

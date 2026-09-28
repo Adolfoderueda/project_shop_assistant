@@ -1,5 +1,6 @@
 """Short SQLite transactions. No network or browser operations belong here."""
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -285,7 +286,30 @@ class Repository(CheckoutRepository):
                            (intent.order_id,))
                 return Reply(text="Reanudación solicitada; primero se reconciliará, sin repetir la compra.",
                              order_id=intent.order_id)
-            return Reply(text=f"Estado: {row[0]}", order_id=intent.order_id)
+            subs = db.execute(
+                "SELECT store_id,state,result,external_id,total_cents,quote_json "
+                "FROM suborders WHERE order_id=? ORDER BY rowid", (intent.order_id,)
+            ).fetchall()
+            details = []
+            allocations = {}
+            for sub in subs:
+                quote = json.loads(sub["quote_json"]) if sub["quote_json"] else {}
+                state = "simulado" if sub["result"] == "simulado" else sub["state"]
+                detail = f"{sub['store_id']}: {state}"
+                if state == "confirmado":
+                    detail += f"; referencia {sub['external_id']}; total {sub['total_cents']} centimos"
+                for item in quote.get("items", []):
+                    allocations.setdefault(item["line_id"], []).append((state, item))
+                details.append(detail)
+            snapshots = [json.loads(r[0]) for r in db.execute(
+                "SELECT line_json FROM order_lines WHERE order_id=? ORDER BY position",
+                (intent.order_id,))]
+            unresolved = [line for line in snapshots if not allocations.get(line["id"])
+                          or any(state != "confirmado" for state, _ in allocations[line["id"]])]
+            if unresolved:
+                details.append("Lineas sin resolver: " + ", ".join(
+                    line["id"] for line in unresolved))
+            return Reply(text="\n".join([f"Estado: {row[0]}", *details]), order_id=intent.order_id)
         if intent.action == "list":
             return Reply(
                 text="\n".join(

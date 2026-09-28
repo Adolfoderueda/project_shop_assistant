@@ -14,6 +14,7 @@ from domain import Mode, Model
 
 class Settings(Model):
     telegram_token: SecretStr = Field(repr=False)
+    telegram_bot_id: int | None = None
     authorized_user_id: int
     address: str = Field(repr=False)
     postcode: str = "28023"
@@ -124,10 +125,16 @@ def save_settings(root: Path, settings: Settings) -> None:
         previous = load_settings(root)
         if previous.authorized_user_id != settings.authorized_user_id:
             raise ValueError("Cannot rebind an existing owner's data; manual review and fresh private data required")
+        if (previous.telegram_bot_id is not None and previous.telegram_bot_id != settings.telegram_bot_id):
+            raise ValueError("Cannot switch bot with existing offset; manual review and fresh private data required")
     fd, name = tempfile.mkstemp(prefix=".settings-", dir=directory)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(settings.model_dump(mode="json"), stream)
+            payload = settings.model_dump(mode="json")
+            payload["telegram_token"] = settings.telegram_token.get_secret_value()
+            if settings.openai_api_key:
+                payload["openai_api_key"] = settings.openai_api_key.get_secret_value()
+            json.dump(payload, stream)
             stream.flush()
             os.fsync(stream.fileno())
         _private(Path(name))

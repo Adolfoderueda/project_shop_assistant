@@ -35,9 +35,22 @@ async def configure(root: Path) -> None:
         raise ValueError("Token required")
     bot = Bot(token)
     info = await bot.get_me()  # No settings persisted before API verification and binding.
-    nonce = secrets.token_urlsafe(24)
-    print(f"Open private chat with @{info.username}; send /start {nonce}. Ctrl+C to cancel.")
-    user_id, offset = await bind_user(bot, nonce)
+    target = root / "private" / "settings.json"
+    if target.exists():
+        previous = load_settings(root)
+        if previous.telegram_bot_id is None:
+            # Legacy settings did not retain verified bot identity. The existing
+            # token is the only safe proof until this configuration is upgraded.
+            if previous.telegram_token.get_secret_value() != token:
+                raise ValueError("Existing bot identity unknown; token change requires manual review")
+        elif previous.telegram_bot_id != info.id:
+            raise ValueError("Different bot; existing Telegram offset requires manual review")
+        user_id = previous.authorized_user_id
+        offset = None  # Never poll/acknowledge an existing owner's offline updates.
+    else:
+        nonce = secrets.token_urlsafe(24)
+        print(f"Open private chat with @{info.username}; send /start {nonce}. Ctrl+C to cancel.")
+        user_id, offset = await bind_user(bot, nonce)
     print("Private user bound. Enter destination in this console only.")
     address = input("Full delivery address (private local file): ").strip()
     if not address:
@@ -54,14 +67,16 @@ async def configure(root: Path) -> None:
     choice = input("Type dry_run to confirm local configuration: ").strip()
     if choice != "dry_run":
         raise ValueError("Configuration cancelled; no schedule or live mode enabled")
-    save_settings(root, Settings(telegram_token=token, authorized_user_id=user_id,
+    save_settings(root, Settings(telegram_token=token, telegram_bot_id=info.id,
+                                  authorized_user_id=user_id,
                                   address=address, postcode=postcode, mode="dry_run",
                                   database_path=Path("private/assistant.db"),
                                   openai_model=model, openai_api_key=key))
     from storage import Repository
     repo = Repository(root / "private" / "assistant.db")
     repo.migrate()
-    repo.ingest_batch([], offset)
+    if offset is not None:
+        repo.ingest_batch([], offset)
     print("Configuration stored privately. Run doctor before installing the scheduled task.")
 
 
