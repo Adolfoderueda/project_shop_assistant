@@ -38,11 +38,20 @@ está ocupado, la operación se rechaza. No vuelvas a ejecutar `configure` para 
 Ollama es una instalación **separada**, no realizada por este repositorio. Instálalo
 manualmente desde https://ollama.com/download/windows solo con consentimiento explícito,
 verifica que escucha **exclusivamente** en `127.0.0.1:11434` (no en la red local) y
-dispón de unos 7,2 GB para el modelo más el espacio del servicio. Tras aceptar la
-descarga, en la consola local ejecuta `ollama pull gemma4:e2b`; esta instrucción nunca
+dispón de unos 7,2 GB para los pesos, **más** espacio libre para descarga temporal,
+servicio y otros datos; los pesos no incluyen el consumo de contexto/servidor en VRAM.
+Tras aceptar la descarga, en la consola local ejecuta `ollama pull gemma4:e2b`; nunca
 se ejecuta automáticamente. La RTX 3060 de 12 GB, velocidad y VRAM reales están por
 verificar; el contexto de inferencia es 4096. Si no responde o no está descargado,
 `enable` falla sin modificar la configuración. No se necesita clave de OpenAI.
+
+**Estado observado (29-09-2026, solo comprobaciones offline):** `nvidia-smi` informó
+`NVIDIA GeForce RTX 3060, 12288 MiB`; `Get-Command ollama` no encontró ejecutable en
+`PATH` (no acredita ausencia de toda instalación). No se instaló Ollama, no se descargó
+`gemma4:e2b`, ni se midieron latencia, VRAM durante inferencia o calidad de respuestas.
+La instalación y la descarga requieren **consentimiento explícito adicional** por sus
+efectos fuera del repositorio. Mientras tanto conserva `commands_only` y los comandos
+de Telegram; no ejecutes `model-local enable` para esta comprobación.
 
 ```powershell
 .\.venv\Scripts\python.exe -m shop_assistant model-local status
@@ -54,10 +63,12 @@ Reinicia el worker tras `enable` o `disable` para aplicar el cambio. `disable` d
 solo comandos explícitos; si Ollama se cae tras habilitarlo, los comandos siguen
 funcionando y las frases libres piden aclaración, **sin fallback a OpenAI**. `doctor`
 indica si el modelo local responde, pero no impide arrancar por su ausencia. Para
-retirarlo, deshabilita el proveedor, detén Ollama desde su aplicación o servicio,
-ejecuta `ollama rm gemma4:e2b` solo si deseas borrar los pesos, y desinstala Ollama
-desde Aplicaciones instaladas de Windows si no lo necesitas. Ninguna de estas acciones
-borra la configuración privada ni los datos de Telegram.
+detenerlo, para el worker con `Ctrl+C` o `scripts/Stop-ShopAssistant.ps1`, ejecuta
+`model-local disable` con el comando anterior y detén Ollama desde su aplicación o
+servicio. Si decides retirarlo, ejecuta `ollama rm gemma4:e2b` solo si deseas borrar
+los pesos, y desinstala Ollama desde Aplicaciones instaladas de Windows si no lo
+necesitas. Son instrucciones para una instalación futura, **no acciones realizadas**.
+Ninguna de estas acciones borra la configuración privada ni los datos de Telegram.
 
 `doctor` no compra ni abre tienda: revisa SQLite, API Telegram, instalación de Chromium,
 capacidades declaradas. Para abrir sesión manual visible en perfil dedicado:
