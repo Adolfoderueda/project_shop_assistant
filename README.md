@@ -11,3 +11,8 @@ En PowerShell desde la raíz: `py -3.12 -m venv .venv`,
 Ejecutar `doctor` antes de `run`. No enviar tokens, direcciones ni datos bancarios
 por chat. Sin configuración privada, `doctor` falla. Los tests end-to-end son
 offline con fakes: no producen recibos reales ni verifican pagos.
+
+Para añadir interpretación local opcional con Ollama `gemma4:e2b` sin revincular Telegram,
+consulta [instalación y selección del modelo](docs/setup.md#interpretación-local-opcional-ollama).
+`model-local enable|disable|status` opera sobre la configuración existente; no instala
+ni descarga Ollama automáticamente y no reemplaza los comandos cuando falla el modelo.

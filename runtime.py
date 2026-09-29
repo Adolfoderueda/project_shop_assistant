@@ -96,6 +96,7 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
         repo.migrate()
         repo.assert_authorized_owner(settings.authorized_user_id)
         manager = None
+        openai_client = None
         try:
             if recovery is None or checkout is None:
                 from stores.browser import BrowserManager
@@ -115,15 +116,21 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                                        repo, settings.authorized_user_id)
             if conversation is None:
                 interpreter = _CommandsOnly()
-                if settings.openai_api_key and settings.openai_model:
+                if settings.model_provider == "ollama":
+                    from ollama_interpreter import OllamaInterpreter
+                    interpreter = OllamaInterpreter(settings.ollama_model)
+                elif (settings.model_provider == "openai" and settings.openai_api_key
+                      and settings.openai_model):
                     from openai import AsyncOpenAI
 
                     from interpreter import OpenAIInterpreter
+                    openai_client = AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value())
                     interpreter = OpenAIInterpreter(
-                        AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value()),
-                        settings.openai_model)
-                else:
+                        openai_client, settings.openai_model)
+                elif settings.model_provider == "commands_only":
                     logger.warning("Model not configured: commands-only mode; use /lista or /anadir")
+                else:
+                    logger.warning("OpenAI model incomplete: commands-only mode")
                 conversation = Conversation(repo, interpreter)
             await recovery.recover()  # Abandoned attempts must be reconciled before new work.
             logger.info("Recovery finished; worker ready")
@@ -153,5 +160,9 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                 retry_delay = 1
                 await sleep(0)
         finally:
-            if manager is not None:
-                await manager.close()
+            try:
+                if openai_client is not None:
+                    await openai_client.close()
+            finally:
+                if manager is not None:
+                    await manager.close()

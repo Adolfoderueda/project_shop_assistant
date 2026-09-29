@@ -29,6 +29,36 @@ reconciliar o procesar órdenes; requieren revisión manual y un directorio priv
 Los archivos existentes bajo `private/` (SQLite, perfiles, logs y rotaciones) se
 aseguran con ACL exclusiva y comprobación posterior; un fallo de ACL bloquea el arranque.
 
+## Interpretación local opcional (Ollama)
+
+La selección del intérprete no vuelve a pedir el token ni revincula Telegram: conserva
+el bot, usuario autorizado, lista, órdenes y offset existentes. Antes de cambiar de
+proveedor, detén el worker (`Ctrl+C` o `scripts/Stop-ShopAssistant.ps1`); si su bloqueo
+está ocupado, la operación se rechaza. No vuelvas a ejecutar `configure` para esto.
+Ollama es una instalación **separada**, no realizada por este repositorio. Instálalo
+manualmente desde https://ollama.com/download/windows solo con consentimiento explícito,
+verifica que escucha **exclusivamente** en `127.0.0.1:11434` (no en la red local) y
+dispón de unos 7,2 GB para el modelo más el espacio del servicio. Tras aceptar la
+descarga, en la consola local ejecuta `ollama pull gemma4:e2b`; esta instrucción nunca
+se ejecuta automáticamente. La RTX 3060 de 12 GB, velocidad y VRAM reales están por
+verificar; el contexto de inferencia es 4096. Si no responde o no está descargado,
+`enable` falla sin modificar la configuración. No se necesita clave de OpenAI.
+
+```powershell
+.\.venv\Scripts\python.exe -m shop_assistant model-local status
+.\.venv\Scripts\python.exe -m shop_assistant model-local enable
+.\.venv\Scripts\python.exe -m shop_assistant model-local disable
+```
+
+Reinicia el worker tras `enable` o `disable` para aplicar el cambio. `disable` deja
+solo comandos explícitos; si Ollama se cae tras habilitarlo, los comandos siguen
+funcionando y las frases libres piden aclaración, **sin fallback a OpenAI**. `doctor`
+indica si el modelo local responde, pero no impide arrancar por su ausencia. Para
+retirarlo, deshabilita el proveedor, detén Ollama desde su aplicación o servicio,
+ejecuta `ollama rm gemma4:e2b` solo si deseas borrar los pesos, y desinstala Ollama
+desde Aplicaciones instaladas de Windows si no lo necesitas. Ninguna de estas acciones
+borra la configuración privada ni los datos de Telegram.
+
 `doctor` no compra ni abre tienda: revisa SQLite, API Telegram, instalación de Chromium,
 capacidades declaradas. Para abrir sesión manual visible en perfil dedicado:
 `.\.venv\Scripts\python.exe -m shop_assistant login --store mercadona` (también `amascotados`, `charro`,

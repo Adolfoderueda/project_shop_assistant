@@ -6,8 +6,9 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 
 from domain import Mode, Model
 
@@ -22,8 +23,18 @@ class Settings(Model):
     database_path: Path = Path("private/assistant.db")
     openai_api_key: SecretStr | None = Field(default=None, repr=False)
     openai_model: str | None = None
+    model_provider: Literal["commands_only", "openai", "ollama"] = "commands_only"
+    ollama_model: Literal["gemma4:e2b"] = "gemma4:e2b"
     profiles_path: Path = Path("private/profiles")
     logs_path: Path = Path("private/logs")
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_provider(cls, data):
+        if isinstance(data, dict) and "model_provider" not in data:
+            return {**data, "model_provider": ("openai" if data.get("openai_api_key")
+                                                 and data.get("openai_model") else "commands_only")}
+        return data
 
 
 _SET_ACL = r"""
