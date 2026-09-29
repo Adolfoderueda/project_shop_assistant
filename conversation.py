@@ -66,10 +66,13 @@ class Conversation:
             # Snapshot relevant observations only on the free-text route; do not
             # trust model-selected names as a database query without validation.
             requested = self._product_name(message.text)
-            if requested is not None:
-                self.repo.find_products(requested)
+            products = self.repo.find_products(requested) if requested is not None else []
             try:
-                intent = await self.interpreter.parse(message.text, lines)
+                contextual = getattr(self.interpreter, "parse_with_context", None)
+                if callable(contextual):
+                    intent = await contextual(message.text, lines, products)
+                else:
+                    intent = await self.interpreter.parse(message.text, lines)
                 intent = Intent.model_validate(intent.model_dump())
             except Exception:  # noqa: BLE001 -- untrusted interpreter boundary, fail closed
                 intent = clarify()

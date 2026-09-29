@@ -1,5 +1,19 @@
 # Progreso del asistente de compras
 
+## 2026-09-29 — Intérprete local contextual (Task 3)
+
+- Gemma 4 E2B recibe texto, instantánea mínima de lista y hasta cinco fichas pertinentes
+  fechadas, sin URL de fichas ni identificadores internos; comandos deterministas eluden
+  Ollama. `Conversation` mantiene la validación y responde desde SQLite.
+- TDD RED 5 fallos de contexto/dispatch; otro RED de prioridad `necesito` tras la primera
+  prueba real. GREEN enfocados 94 passed; suite 329 passed; Ruff limpio.
+- Ollama real con DB aislada y textos inventados: primera carga 11,34 s; caliente
+  0,39–0,67 s. Tras reforzar prioridad, dos peticiones independientes «necesito arroz»
+  añadieron una línea sin cantidad cada una; consultas de lista, pañales y ficha ausente
+  respondieron desde SQLite y «no compres» no creó órdenes. GPU RTX 3060: 3708/12288 MiB
+  observados tras carga; modelo 1,7 GB, 100 % GPU en `ollama ps`. No Telegram, ajustes
+  privados, compras ni habilitación del proveedor. Ver informe Task 3 del SDD.
+
 ## Diseño arquitectónico
 - [x] Explorar el proyecto: carpeta vacía, sin repositorio Git.
 - [x] Aclarar objetivo, productos restringidos y alojamiento en Windows.

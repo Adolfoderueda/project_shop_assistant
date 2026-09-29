@@ -6,9 +6,10 @@ import pytest
 
 from domain import Intent, ListLine
 from ollama_interpreter import OllamaInterpreter
+from product_memory import ObservedProduct
 
 
-def run(text, response, *, lines=None):
+def run(text, response, *, lines=None, products=None, contextual=False):
     requests = []
 
     async def transport(request):
@@ -16,7 +17,10 @@ def run(text, response, *, lines=None):
         return response(request) if callable(response) else response
 
     interpreter = OllamaInterpreter(transport=httpx.MockTransport(transport))
-    result = asyncio.run(interpreter.parse(text, lines or []))
+    result = asyncio.run(
+        interpreter.parse_with_context(text, lines or [], products or [])
+        if contextual else interpreter.parse(text, lines or [])
+    )
     return result, requests
 
 
@@ -30,7 +34,7 @@ def test_commands_do_not_contact_server():
     assert requests == []
 
 
-def test_natural_language_posts_only_current_text_without_list_to_loopback():
+def test_natural_language_posts_minimal_list_to_loopback():
     line = ListLine(id="line-1", description="pan", quantity=2, revision=3, product_id="secret")
     result, requests = run(
         "necesito arroz",
@@ -51,10 +55,56 @@ def test_natural_language_posts_only_current_text_without_list_to_loopback():
     assert len(body["messages"]) == 2
     assert body["messages"][0]["role"] == "system"
     assert json.loads(body["messages"][1]["content"]) == {
-        "text": "necesito arroz",
+        "text": "necesito arroz", "lines": [{"id": "line-1", "description": "pan", "quantity": 2}],
+        "products": [],
     }
     assert "secret" not in request.content.decode()
-    assert "pan" not in request.content.decode()
+    assert "revision" not in request.content.decode()
+    assert '"action":"add"' in body["messages"][0]["content"]
+    assert "sin cantidad" in request.content.decode().lower()
+    assert "necesito" in body["messages"][0]["content"]
+    assert "NUNCA product_query" in body["messages"][0]["content"]
+
+
+def test_list_query_receives_minimal_lines_and_returns_list():
+    line = ListLine(id="line-42", description="arroz", quantity=None, revision=7)
+    result, requests = run("¿qué hay en mi lista?", ollama('{"action":"list"}'), lines=[line])
+    assert result.action == "list"
+    content = json.loads(json.loads(requests[0].content)["messages"][1]["content"])
+    assert content["lines"] == [{"id": "line-42", "description": "arroz", "quantity": None}]
+    assert "lista" in json.loads(requests[0].content)["messages"][0]["content"].lower()
+
+
+def test_context_caps_observations_and_omits_urls_private_fields_and_html():
+    products = [
+        ObservedProduct(
+            id=f"id-{i}", store_id="nappy", product_id="diapers",
+            title="<b>Dodot</b> pañales", url="https://example.org/token-SECRET",
+            observed_on="2026-09-27", price_cents=1200, availability=None,
+            format_note="<script>bad</script> 56 unidades",
+        ) for i in range(8)
+    ]
+    result, requests = run(
+        "¿qué pañales vimos?",
+        ollama('{"action":"product_query","lines":[{"description":"pañales"}]}'),
+        products=products, contextual=True,
+    )
+    assert result.action == "product_query"
+    payload = requests[0].content.decode()
+    data = json.loads(json.loads(requests[0].content)["messages"][1]["content"])
+    assert len(data["products"]) == 5
+    assert data["products"][0]["observed_on"] == "2026-09-27"
+    assert "token-SECRET" not in payload
+    assert "<" not in json.dumps(data) and ">" not in json.dumps(data)
+    assert "historial" not in json.dumps(data, ensure_ascii=False).lower()
+
+
+@pytest.mark.parametrize("action", ["buy", "remove"])
+def test_model_destructive_actions_rejected_by_conversation(action):
+    from conversation import Conversation
+
+    result, _ = run("no compres", ollama(json.dumps({"action": action})))
+    assert Conversation._validate_model("no compres", result, []).action == "clarify"
 
 
 @pytest.mark.parametrize(

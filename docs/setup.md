@@ -21,6 +21,17 @@ se interpretan comandos explícitos (`/lista`, `/anadir`, `/cantidad`, `/quitar`
 `/comprar`, `/estado`, `/continuar`); `doctor` lo indica. El modo inicial es siempre
 `dry_run`. `private/settings.json`, SQLite, perfiles y logs permanecen excluidos de Git;
 el archivo se escribe con ACL del usuario local (o permisos de propietario en Unix).
+
+Para frases libres en español, el intérprete opcional Ollama usa exclusivamente el modelo
+local `gemma4:e2b` en `127.0.0.1:11434` (sin proxies ni redirecciones), con límite de
+60 segundos. Recibe solo texto, hasta 20 líneas mínimas de la lista y hasta cinco fichas
+observadas pertinentes; no recibe ajustes privados ni historial y no navega ni compra.
+Los comandos siguen funcionando sin modelo. Las preguntas por lista se contestan desde
+SQLite; las fichas son observaciones **fechadas**, no precios ni stock actuales. Sin ficha
+para un producto identificable, se guarda solo el nombre para investigación futura, sin
+iniciar scraping. La activación del bot vinculado no se realiza en esta tarea: usar
+`model-local status` y, solo tras la aceptación del entorno privado, `model-local enable`
+con el worker detenido. El perfil permanece en comandos explícitos hasta esa decisión.
 Guardar una copia segura de `private/` si se necesita recuperación tras pérdida de disco.
 La configuración no permite vincular el mismo directorio de datos a otro usuario:
 si se intenta cambiar de propietario, se bloquea antes de sobrescribirla. El worker

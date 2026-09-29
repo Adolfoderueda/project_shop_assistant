@@ -164,6 +164,42 @@ def test_openai_contract_and_errors():
         assert client.calls[0]["timeout"] > 0
 
 
+def test_contextual_interpreter_receives_only_relevant_observations(repo):
+    class ContextInterpreter:
+        def __init__(self):
+            self.calls = []
+
+        async def parse(self, text, lines):
+            raise AssertionError("context route required")
+
+        async def parse_with_context(self, text, lines, products):
+            self.calls.append((text, lines, products))
+            return Intent(action="product_query", lines=[IntentLine(description="pañales")])
+
+    interpreter = ContextInterpreter()
+    reply = send(repo, "¿qué pañales vimos?", interpreter)
+    assert "2026-09-" in reply.text
+    assert len(interpreter.calls) == 1
+    text, lines, products = interpreter.calls[0]
+    assert text == "¿qué pañales vimos?"
+    assert lines == []
+    assert 1 <= len(products) <= 5
+    assert all(product.product_id == "diapers" for product in products)
+    assert all(product.observed_on.startswith("2026-09-") for product in products)
+    assert repo.product_requests() == []
+
+
+def test_contextual_interpreter_gets_no_observations_on_unrecognized_query(repo):
+    class ContextInterpreter:
+        async def parse_with_context(self, text, lines, products):
+            assert products == []
+            return Intent(action="list")
+
+    assert "vacía" in send(repo, "¿qué hay en mi lista?", ContextInterpreter()).text
+    # Legacy fake and OpenAI still use their existing two-argument parse.
+    assert send(repo, "¿qué hay en mi lista?", FakeInterpreter(Intent(action="list"))).text
+
+
 def test_forged_ids_and_model_quantity_do_not_mutate(repo):
     send(
         repo,
