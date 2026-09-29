@@ -1,5 +1,28 @@
 # Progreso del asistente de compras
 
+## 2026-09-29 — Aceptación sin compras (Task 4; PENDIENTE EN TELEGRAM)
+
+- La prueba pequeña de Task 3 usó Ollama real y SQLite aislada, no la sesión Telegram
+  privada. La corrección permitió dos altas independientes de «necesito arroz» sin
+  cantidad; el resultado no acredita fiabilidad general, ni latencia/VRAM máximas.
+  El fallo anterior de «necesito arroz» ocurrió antes de esa corrección. `docs/setup.md`
+  distingue ambos resultados y describe un protocolo de aceptación condicionado.
+- No hay acceso autorizado a configuración privada, sesión Telegram ni activación del
+  bot; no se paró el worker ni se ejecutó `model-local enable`, `disable` o `status`
+  contra el bot privado. No hubo tiendas, scraping, `/comprar`, compras ni push.
+  La aceptación en Telegram, reinicio real, persistencia de inbox/outbox en esa sesión
+  y fallo de Ollama con el bot vinculado siguen **pendientes**. Hasta obtener autorización
+  y sesión disponible, conservar el proveedor sin cambios y usar comandos explícitos.
+- Cobertura offline existente: pruebas de flujo de backlog/reinicio/inbox/outbox y
+  pruebas de fallo Ollama sin fallback y continuidad de comandos; no sustituyen una
+  prueba integrada de Telegram privado. No se observó defecto que requiriese cambiar
+  código o añadir un RED artificial; Task 4 cambia solo documentación.
+- Verificación de esta rama: `.venv\Scripts\python.exe -m pytest -q` → **329 passed
+  in 134.53s**; `.venv\Scripts\python.exe -m ruff check .` → **All checks passed!**;
+  `git diff --check` → limpio (avisos de conversión LF→CRLF para ambos documentos);
+  `git status --short` antes del commit → `M docs/setup.md`, `M docs/superpowers/progress.md`.
+  Estas pruebas usan dobles para Telegram, no constituyen aceptación live.
+
 ## 2026-09-29 — Intérprete local contextual (Task 3)
 
 - Gemma 4 E2B recibe texto, instantánea mínima de lista y hasta cinco fichas pertinentes

@@ -58,11 +58,15 @@ se ejecuta automáticamente. El contexto de inferencia es 4096. Si no responde o
 **Estado observado (29-09-2026):** con autorización expresa se instaló Ollama 0.34.4
 para el usuario actual y se descargó `gemma4:e2b` (7,2 GB). En la RTX 3060 de 12 GB,
 `ollama ps` indicó 100 % GPU con contexto 4096; `nvidia-smi` mostró 3592 MiB usados
-con el modelo cargado (755 MiB antes). La primera petición agotó los 60 s del
-intérprete; después respondió en menos de un segundo, pero «necesito arroz» pidió
-aclaración repetidamente en vez de añadirlo. **No se ha habilitado el modelo en el bot
-ni se ha probado Telegram real**; no ejecutes `model-local enable` hasta corregir y
-verificar la interpretación. Más detalles: `docs/superpowers/progress.md`.
+con el modelo cargado (755 MiB antes). Antes de reforzar las instrucciones, la primera
+petición agotó los 60 s y «necesito arroz» pidió aclaración repetidamente en caliente.
+Después de la corrección, una pequeña prueba aislada con Ollama real y SQLite de prueba
+observó dos altas independientes de «necesito arroz» sin cantidad, consultas de lista,
+ficha y ausencia, y «no compres» sin órdenes. Arranque en frío: 11,34 s; peticiones
+calientes: 0,39–0,67 s; VRAM observada tras carga: 3708/12288 MiB. Estas medidas son
+instantáneas, no máximos bajo carga, y la muestra no demuestra fiabilidad en producción.
+**No se ha habilitado el modelo en el bot ni se ha probado Telegram real**; no ejecutes
+`model-local enable` solo por estos resultados. Más detalles: `docs/superpowers/progress.md`.
 
 ```powershell
 .\.venv\Scripts\python.exe -m shop_assistant model-local status
@@ -81,6 +85,19 @@ los pesos, y desinstala Ollama desde Aplicaciones instaladas de Windows si no lo
 necesitas. Son instrucciones de parada y retirada; no se ha ejecutado `disable`,
 `ollama rm` ni la desinstalación.
 Ninguna de estas acciones borra la configuración privada ni los datos de Telegram.
+
+**Aceptación pendiente (sin compras):** requiere autorización expresa y sesión privada
+disponible; no se realiza desde esta rama. Antes de habilitarlo, confirma la calidad del
+modelo con más pruebas representativas y conserva `commands_only` si no es suficiente.
+Con la sesión privada disponible, detén el worker y comprueba que su bloqueo esté libre;
+consulta `model-local status` y solo entonces considera `model-local enable`. Reinicia
+el worker y comprueba en el chat privado autorizado una sola alta «necesito arroz»,
+`/lista`, una ficha observada con fecha y solo atributos conocidos, un producto ausente
+registrado una vez como pendiente, y persistencia de lista e inbox/outbox tras reiniciar.
+Verifica que un fallo de Ollama no cambie lista ni backlog y que los comandos sigan
+disponibles. No envíes `/comprar`, no abras tiendas y no cambies el modo de compra. Ante
+fallos, detén el worker, ejecuta `model-local disable` y reinícialo. Ninguna de estas
+comprobaciones privadas se ha efectuado ni se autoriza aquí el acceso a `private/`.
 
 `doctor` no compra ni abre tienda: revisa SQLite, API Telegram, instalación de Chromium,
 capacidades declaradas. Para abrir sesión manual visible en perfil dedicado:
