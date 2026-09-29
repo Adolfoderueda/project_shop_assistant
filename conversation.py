@@ -63,6 +63,11 @@ class Conversation:
         ):
             intent = Intent(action="remove", lines=[IntentLine(line_id=message.text.strip())])
         if intent is None:
+            # Snapshot relevant observations only on the free-text route; do not
+            # trust model-selected names as a database query without validation.
+            requested = self._product_name(message.text)
+            if requested is not None:
+                self.repo.find_products(requested)
             try:
                 intent = await self.interpreter.parse(message.text, lines)
                 intent = Intent.model_validate(intent.model_dump())
@@ -82,6 +87,23 @@ class Conversation:
         if intent.action == "buy" and not purchase_authorized(message.text):
             intent = clarify("No se ha autorizado ninguna compra. Usa /comprar para la lista.")
         return self.repo.apply_intent(message.update_id, intent, mode, conversation=True)
+
+    @staticmethod
+    def _product_name(text: str) -> str | None:
+        clean = normalized(text).strip().removeprefix("¿").rstrip("? ")
+        match = re.fullmatch(
+            r"(?:que sabes de (.+)|que (.+) vimos|tenemos ficha de (.+))", clean
+        )
+        if not match:
+            return None
+        name = next(group for group in match.groups() if group is not None).strip()
+        if (
+            not name
+            or re.search(r'\b(?:no|nunca|si|o|u|y|cuando)\b|[,;:"«»“”<>/\\]|https?\b|\n', name)
+            or re.search(r"\b\d+\s+(?:paquetes?|botes?|sacos?|envases?|unidades?)\b", name)
+        ):
+            return None
+        return name
 
     @staticmethod
     def _validate_model(text, intent, lines):
@@ -111,6 +133,20 @@ class Conversation:
                     )
                 if line.url and line.url not in text:
                     return clarify()
+        if intent.action == "product_query":
+            requested = Conversation._product_name(text)
+            if (
+                requested is None
+                or len(intent.lines) != 1
+                or intent.order_id is not None
+                or intent.question is not None
+                or intent.lines[0].line_id is not None
+                or intent.lines[0].quantity is not None
+                or intent.lines[0].url is not None
+                or not intent.lines[0].description
+                or normalized(intent.lines[0].description).strip() != requested
+            ):
+                return clarify("Aclara el producto con una pregunta completa.")
         if intent.action == "clarify":
             # Only deterministic ambiguity resolution may persist candidate IDs.
             return clarify(intent.question or "Aclara el producto o usa un comando.")

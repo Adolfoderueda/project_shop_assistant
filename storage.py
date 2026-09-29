@@ -9,7 +9,7 @@ from uuid import uuid4
 from catalog import PRODUCT_RULES, resolve_product
 from checkout_storage import CheckoutRepository
 from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
-from product_memory import ObservedProduct, matches_observation
+from product_memory import ObservedProduct, _record_missing_product, matches_observation
 
 OBSERVED_PRODUCTS = (
     ("amascotados-alpha-spirit-wild-fish-12kg", "amascotados", "dog-food",
@@ -261,6 +261,40 @@ class Repository(CheckoutRepository):
             return reply
 
     def _apply(self, db, update_id, intent, mode):
+        if intent.action == "product_query":
+            if (len(intent.lines) != 1 or not intent.lines[0].description
+                    or intent.lines[0].line_id is not None
+                    or intent.lines[0].quantity is not None
+                    or intent.lines[0].url is not None):
+                return Reply(text="Aclara el producto que buscas.")
+            name = intent.lines[0].description
+            # Read from this same transaction, not an earlier model context snapshot.
+            products = []
+            for row in db.execute(
+                "SELECT id,store_id,product_id,title,url,observed_on,price_cents,"
+                "availability,format_note FROM observed_products ORDER BY id"
+            ):
+                values = dict(row)
+                if values["availability"] is not None:
+                    values["availability"] = bool(values["availability"])
+                product = ObservedProduct(**values)
+                if matches_observation(name, product):
+                    products.append(product)
+                    if len(products) == 5:
+                        break
+            if not products:
+                _record_missing_product(db, name)
+                return Reply(text=f"No tenemos ficha observada de {name}; lo he anotado para revisar.")
+            details = []
+            for product in products:
+                price = (f"{product.price_cents // 100},{product.price_cents % 100:02d} €"
+                         if product.price_cents is not None else "precio no observado")
+                details.append(
+                    f"{product.title} — fuente {product.store_id} ({product.url}); "
+                    f"observado {product.observed_on}; "
+                    f"precio observado {price}; {product.format_note or 'sin detalle de formato'}"
+                )
+            return Reply(text="\n".join(details) + "\nDatos históricos: precio y stock no actuales.")
         if intent.action == "add":
             if not intent.lines or any(not line.description for line in intent.lines):
                 return Reply(text="Indica qué producto quieres añadir.")
