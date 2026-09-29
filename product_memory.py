@@ -27,6 +27,16 @@ def _tokens(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", normalized))
 
 
+def identifiable_product_name(name: str) -> bool:
+    """A category/attribute alone is not a product to research."""
+    generic = {
+        "de", "del", "el", "la", "los", "las", "un", "una", "que",
+        "producto", "productos", "articulo", "articulos", "cosa", "cosas",
+        "ficha", "fichas", "precio", "precios", "stock", "disponibilidad",
+    }
+    return bool(_tokens(name) - generic)
+
+
 def _record_missing_product(db: sqlite3.Connection, name: str) -> None:
     """Record only a minimal product name inside the caller's transaction."""
     normalized = " ".join(name.casefold().split())

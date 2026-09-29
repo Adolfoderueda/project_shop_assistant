@@ -463,6 +463,30 @@ def test_model_destructive_intents_never_mutate_list_or_create_order(repo, actio
 
 @pytest.mark.parametrize(
     "text,description",
+    [
+        ("¿qué hay en mi lista?", "¿qué hay en mi lista?"),
+        ("¿qué sabes de arroz?", "¿qué sabes de arroz?"),
+        ("arroz", "arroz"),
+        ("hola arroz", "hola arroz"),
+        ("necesito arroz por favor", "arroz por favor"),
+        ("necesito arroz, ¿qué hay en mi lista?", "arroz, ¿qué hay en mi lista?"),
+    ],
+)
+def test_model_add_requires_explicit_affirmative_request(repo, text, description):
+    reply = send(repo, text, FakeInterpreter(Intent(action="add", lines=[IntentLine(description=description)])))
+    assert repo.list_lines() == []
+    assert reply.order_id is None
+    assert "añadido" not in reply.text.lower()
+
+
+@pytest.mark.parametrize("prefix", ["necesito", "quiero", "me hace falta", "me hacen falta"])
+def test_model_add_accepts_closed_affirmative_request(repo, prefix):
+    send(repo, f"{prefix} arroz integral", FakeInterpreter(Intent(action="add", lines=[IntentLine(description="arroz integral")])))
+    assert [line.description for line in repo.list_lines()] == ["arroz integral"]
+
+
+@pytest.mark.parametrize(
+    "text,description",
     [("no necesito arroz", "arroz"), ("necesito pienso de pollo", "pienso")],
 )
 def test_model_negation_or_dropped_product_qualifier_cannot_add(repo, text, description):

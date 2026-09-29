@@ -85,6 +85,34 @@ def test_generic_question_never_creates_product_backlog(repo):
     assert repo.product_requests() == []
 
 
+@pytest.mark.parametrize(
+    "text,name",
+    [
+        ("¿Qué productos vimos?", "productos"),
+        ("¿Qué sabes de precio?", "precio"),
+    ],
+)
+def test_non_identifiable_nouns_cannot_be_queued(repo, text, name):
+    reply = send(repo, text, query(name))
+    assert repo.product_requests() == []
+    assert "anotado" not in reply.text.lower()
+    assert "aclara" in reply.text.lower()
+
+
+def test_specific_unobserved_product_still_queues(repo):
+    reply = send(repo, "¿Qué sabes de arroz integral?", query("arroz integral"))
+    assert repo.product_requests() == ["arroz integral"]
+    assert "anotado" in reply.text.lower()
+
+
+def test_direct_product_query_does_not_queue_generic_name(repo):
+    message = IncomingMessage(update_id=1, user_id=7, chat_id=7, text="¿Qué productos vimos?")
+    repo.ingest_batch([message], 2)
+    reply = repo.apply_intent(1, query("productos"), "dry_run")
+    assert repo.product_requests() == []
+    assert "anotado" not in reply.text.lower()
+
+
 def test_internal_question_mark_does_not_enter_backlog(repo):
     reply = send(repo, "¿qué sabes de arroz? compra?", query("arroz? compra"))
     assert "aclara" in reply.text.lower() or "claro" in reply.text.lower()

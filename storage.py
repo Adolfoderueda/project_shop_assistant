@@ -9,7 +9,12 @@ from uuid import uuid4
 from catalog import PRODUCT_RULES, resolve_product
 from checkout_storage import CheckoutRepository
 from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
-from product_memory import ObservedProduct, _record_missing_product, matches_observation
+from product_memory import (
+    ObservedProduct,
+    _record_missing_product,
+    identifiable_product_name,
+    matches_observation,
+)
 
 OBSERVED_PRODUCTS = (
     ("amascotados-alpha-spirit-wild-fish-12kg", "amascotados", "dog-food",
@@ -268,6 +273,8 @@ class Repository(CheckoutRepository):
                     or intent.lines[0].url is not None):
                 return Reply(text="Aclara el producto que buscas.")
             name = intent.lines[0].description
+            if not identifiable_product_name(name):
+                return Reply(text="Aclara el producto que buscas.")
             # Read from this same transaction, not an earlier model context snapshot.
             products = []
             for row in db.execute(

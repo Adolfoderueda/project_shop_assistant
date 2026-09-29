@@ -13,6 +13,7 @@ from interpreter import (
     purchase_authorized,
     quantity,
 )
+from product_memory import identifiable_product_name
 from storage import Repository
 
 
@@ -101,7 +102,7 @@ class Conversation:
             return None
         name = next(group for group in match.groups() if group is not None).strip()
         if (
-            not name
+            not identifiable_product_name(name)
             or re.search(r'\b(?:no|nunca|si|o|u|y|cuando)\b|[?¿!¡.,;:"«»“”<>/\\]|https?\b|\n', name)
             or re.search(r"\b\d+\s+(?:paquetes?|botes?|sacos?|envases?|unidades?)\b", name)
         ):
@@ -115,13 +116,17 @@ class Conversation:
             return clarify("Usa /comprar, /continuar <id>, /quitar <id> o /cantidad <id> <n>.")
         if intent.action == "add":
             clean = normalized(text)
-            if re.search(r'\b(no|nunca|si|o|u|y|cuando)\b|\b(?:en caso de|a menos que)\b|["«»“”>]|\n', clean):
+            match = re.fullmatch(r"(?:necesito|quiero|me hace falta|me hacen falta)\s+(.+)", clean)
+            if not match or re.search(
+                r'\b(no|nunca|si|o|u|y|cuando|gracias)\b|\b(?:en caso de|a menos que|por favor)\b|[?¿!¡.,;:"«»“”<>\\]|https?\b|\n',
+                match[1],
+            ):
                 return clarify()
             if len(intent.lines) != 1:
                 return clarify()
             # Remove only a closed set of request prefixes, never product qualifiers.
             # Substring matching lets a model turn 'pienso de pollo' into the fish alias.
-            requested = re.sub(r"^(?:necesito|quiero|me hace falta|me hacen falta)\s+", "", clean)
+            requested = match[1]
             for line in intent.lines:
                 if not line.description or normalized(line.description) != requested:
                     return clarify(
