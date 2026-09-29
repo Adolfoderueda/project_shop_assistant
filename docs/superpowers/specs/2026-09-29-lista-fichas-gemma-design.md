@@ -1,6 +1,6 @@
 # Lista y fichas de productos con Gemma local
 
-Estado: diseño conversacional aprobado el 29 de septiembre de 2026; pendiente de revisión de este documento.
+Estado: diseño conversacional y documento aprobados por el usuario el 29 de septiembre de 2026.
 
 ## Objetivo y alcance
 
