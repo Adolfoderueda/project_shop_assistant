@@ -9,6 +9,25 @@ from uuid import uuid4
 from catalog import PRODUCT_RULES, resolve_product
 from checkout_storage import CheckoutRepository
 from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
+from product_memory import ObservedProduct, matches_observation
+
+OBSERVED_PRODUCTS = (
+    ("amascotados-alpha-spirit-wild-fish-12kg", "amascotados", "dog-food",
+     "Alpha Spirit Wild Fish 12 Kg",
+     "https://www.amascotados.com/alpha-spirit/2883-alpha-spirit-seco-only-fish-12-kg-8436586310295.html",
+     "2026-09-27", 6399, True, "12 kg; GTIN no verificado independientemente"),
+    ("charro-blemil-optimum-evolution-1-800g", "charro", "formula",
+     "Blemil Optimum Evolution 1 800 g",
+     "https://www.charrodesdecasa.com/leches/20209-blemil-optimum-evolution-1-800-gr-8426594127534.html",
+     "2026-09-27", 2515, None, "800 g; referencia no verificada"),
+    ("nappy-dodot-talla-3-186", "nappy", "diapers", "Dodot talla 3 186 unidades",
+     "https://nappy.es/dodot/6035-panales-talla-3-bebe-seco-dodot.html",
+     "2026-09-27", 4687, True, "186 unidades"),
+    ("mercadona-dodot-sensitive-talla-3-56", "mercadona", "diapers",
+     "Dodot Sensitive talla 3 paquete 56",
+     "https://tienda.mercadona.es/product/52879/panales-bebe-talla-3-6-10-kg-dodot-sensitive-paquete",
+     "2026-09-28", 1695, None, "56 unidades; CP 28023"),
+)
 
 
 class Repository(CheckoutRepository):
@@ -37,7 +56,7 @@ class Repository(CheckoutRepository):
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 4:
+            if version > 5:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
@@ -47,10 +66,33 @@ class Repository(CheckoutRepository):
                 db.executescript((Path(__file__).parent / "migrations/003.sql").read_text())
             if version < 4:
                 db.executescript((Path(__file__).parent / "migrations/004.sql").read_text())
+            if version < 5:
+                db.executescript((Path(__file__).parent / "migrations/005.sql").read_text())
+            db.executemany(
+                "INSERT OR IGNORE INTO observed_products "
+                "(id,store_id,product_id,title,url,observed_on,price_cents,availability,format_note) "
+                "VALUES (?,?,?,?,?,?,?,?,?)", OBSERVED_PRODUCTS,
+            )
             db.executemany(
                 "INSERT OR IGNORE INTO products VALUES (?, ?)",
                 [(r.id, r.model_dump_json()) for r in PRODUCT_RULES],
             )
+
+    def find_products(self, query: str, limit: int = 5) -> list[ObservedProduct]:
+        if limit <= 0:
+            return []
+        with self._connection() as db:
+            products = (
+                ObservedProduct(**dict(row)) for row in db.execute(
+                    "SELECT id,store_id,product_id,title,url,observed_on,price_cents,"
+                    "availability,format_note FROM observed_products ORDER BY id"
+                )
+            )
+            return [product for product in products if matches_observation(query, product)][:limit]
+
+    def product_requests(self) -> list[str]:
+        with self._connection() as db:
+            return [row[0] for row in db.execute("SELECT name FROM product_requests ORDER BY name")]
 
     def assert_authorized_owner(self, user_id: int) -> None:
         """Fail closed on retained work from another identity before recovery or dispatch."""
