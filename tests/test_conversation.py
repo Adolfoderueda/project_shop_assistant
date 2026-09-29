@@ -438,6 +438,32 @@ def test_model_negation_or_dropped_product_qualifier_cannot_add(repo, text, desc
 
 
 @pytest.mark.parametrize(
+    "text",
+    [
+        "necesito arroz o pasta",
+        "necesito arroz, o pasta",
+        "necesito arroz u otra pasta",
+        "necesito arroz y pasta",
+        "necesito arroz si hay oferta",
+        "si hay arroz necesito arroz",
+        "necesito arroz cuando llegue",
+        "necesito arroz en caso de que falte",
+        "necesito arroz a menos que sobre",
+    ],
+)
+def test_model_cannot_add_alternative_or_conditional_request(repo, text):
+    reply = send(repo, text, FakeInterpreter(Intent(action="add", lines=[IntentLine(description=text.removeprefix("necesito "))])))
+    assert repo.list_lines() == []
+    assert reply.order_id is None
+
+
+@pytest.mark.parametrize("product", ["Blemil tipo 1 Evolution", "Alpha Spirit Wild Fish / Only Fish", "arroz integral"])
+def test_model_keeps_unambiguous_product_descriptions(repo, product):
+    send(repo, f"necesito {product}", FakeInterpreter(Intent(action="add", lines=[IntentLine(description=product)])))
+    assert repo.list_lines()[0].description == product
+
+
+@pytest.mark.parametrize(
     "text", ["/anadir 2 paquetes de Dodot talla 3", "/anadir dos envases de Dodot talla 3"]
 )
 def test_diaper_alias_explicit_packs_remain_supported(repo, text):

@@ -90,7 +90,7 @@ class Conversation:
             return clarify("Usa /comprar, /continuar <id>, /quitar <id> o /cantidad <id> <n>.")
         if intent.action == "add":
             clean = normalized(text)
-            if re.search(r'\b(no|nunca|si)\b|["«»“”>]|\n', clean):
+            if re.search(r'\b(no|nunca|si|o|u|y|cuando)\b|\b(?:en caso de|a menos que)\b|["«»“”>]|\n', clean):
                 return clarify()
             if len(intent.lines) != 1:
                 return clarify()
@@ -104,7 +104,8 @@ class Conversation:
                         "Usa /anadir con la descripción completa."
                     )
                 # A model cannot manufacture, omit or reinterpret explicit quantities.
-                if line.quantity is not None or re.search(r"\d", clean):
+                without_product_type = re.sub(r"\btipo\s+\d+\b", "", clean)
+                if line.quantity is not None or re.search(r"\d", without_product_type):
                     return clarify(
                         "Indica producto y cantidad con /anadir <n> <envases> de <producto>."
                     )

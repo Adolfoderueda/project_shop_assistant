@@ -80,7 +80,7 @@ def test_model_local_enable_disable_preserves_private_state(tmp_path, monkeypatc
     assert (repo.list_lines(), repo.pending_orders(), repo.telegram_offset()) == before
 
 
-def test_model_local_enable_failure_and_busy_lock_never_rewrite_settings(tmp_path, monkeypatch):
+def test_model_local_enable_failure_and_busy_lock_never_rewrite_settings(tmp_path, monkeypatch, capsys):
     import cli
     from config import save_settings
 
@@ -97,6 +97,9 @@ def test_model_local_enable_failure_and_busy_lock_never_rewrite_settings(tmp_pat
     assert target.read_bytes() == before
     with ProcessLock(tmp_path / "private" / "worker.lock"):
         assert cli.main(["model-local", "disable"]) == 1
+    output = capsys.readouterr().out.lower()
+    assert "worker" in output and "stop" in output
+    assert "secret-token" not in output
     assert target.read_bytes() == before
 
 
@@ -127,8 +130,7 @@ def test_model_local_cannot_change_nested_database_settings_while_runtime_holds_
     class IO:
         async def send_pending(self): pass
         async def poll_once(self):
-            with pytest.raises(RuntimeError, match="already running"):
-                await cli.model_local(tmp_path, "disable")
+            assert await cli.model_local(tmp_path, "disable") is False
             raise asyncio.CancelledError
 
     with pytest.raises(asyncio.CancelledError):
@@ -453,6 +455,64 @@ def test_reconfigure_preserves_offline_pending_offset(tmp_path, monkeypatch):
     asyncio.run(cli.configure(tmp_path))
     assert repo.telegram_offset() == 5
     assert load_settings(tmp_path).address == "new destination"
+
+
+def test_reconfigure_cannot_write_while_worker_holds_lock(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import cli
+    from config import save_settings
+
+    existing = settings(tmp_path).model_copy(update={
+        "database_path": tmp_path / "private" / "assistant.db", "telegram_bot_id": 999})
+    save_settings(tmp_path, existing)
+    target = tmp_path / "private" / "settings.json"
+    before = target.read_bytes()
+
+    class Bot:
+        def __init__(self, token): pass
+        async def get_me(self): return SimpleNamespace(id=999, username="same")
+
+    monkeypatch.setattr("telegram.Bot", Bot)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: "secret-token")
+    answers = iter(["new destination", "", "", "dry_run"])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+    with (ProcessLock(existing.database_path.parent / "worker.lock"),
+          pytest.raises(RuntimeError, match="already running")):
+        asyncio.run(cli.configure(tmp_path))
+    assert target.read_bytes() == before
+
+
+def test_first_configuration_does_not_overwrite_configuration_created_while_binding(
+        tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import cli
+    from config import save_settings
+
+    class Bot:
+        def __init__(self, token): pass
+        async def get_me(self): return SimpleNamespace(id=999, username="same")
+
+    async def bind(*_): return 123, 1
+
+    monkeypatch.setattr("telegram.Bot", Bot)
+    monkeypatch.setattr(cli, "bind_user", bind)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: "secret-token")
+    other = settings(tmp_path).model_copy(update={
+        "database_path": tmp_path / "private" / "assistant.db", "telegram_bot_id": 999})
+    answers = iter(["new destination", "", "", "dry_run"])
+
+    def answer(_):
+        value = next(answers)
+        if value == "dry_run":
+            save_settings(tmp_path, other)
+        return value
+
+    monkeypatch.setattr("builtins.input", answer)
+    with pytest.raises(ValueError, match="changed during setup"):
+        asyncio.run(cli.configure(tmp_path))
+    assert load_settings(tmp_path).address == "private destination"
 
 
 def test_reconfigure_rejects_different_bot_before_consuming_updates(tmp_path, monkeypatch):

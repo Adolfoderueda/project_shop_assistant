@@ -38,6 +38,7 @@ async def configure(root: Path) -> None:
     bot = Bot(token)
     info = await bot.get_me()  # No settings persisted before API verification and binding.
     target = root / "private" / "settings.json"
+    previous = None
     if target.exists():
         previous = load_settings(root)
         if previous.telegram_bot_id is None:
@@ -69,11 +70,24 @@ async def configure(root: Path) -> None:
     choice = input("Type dry_run to confirm local configuration: ").strip()
     if choice != "dry_run":
         raise ValueError("Configuration cancelled; no schedule or live mode enabled")
-    save_settings(root, Settings(telegram_token=token, telegram_bot_id=info.id,
-                                  authorized_user_id=user_id,
-                                  address=address, postcode=postcode, mode="dry_run",
-                                  database_path=Path("private/assistant.db"),
-                                  openai_model=model, openai_api_key=key))
+    from runtime import ProcessLock
+
+    lock_path = (previous.database_path.parent if previous is not None
+                 else root / "private") / "worker.lock"
+    with ProcessLock(lock_path):
+        if target.exists():
+            if previous is None:
+                raise ValueError("Configuration changed during setup; retry")
+            current = load_settings(root)
+            if (current.database_path != previous.database_path
+                    or current.authorized_user_id != user_id
+                    or current.telegram_bot_id not in (None, info.id)):
+                raise ValueError("Configuration changed during setup; retry")
+        save_settings(root, Settings(telegram_token=token, telegram_bot_id=info.id,
+                                      authorized_user_id=user_id,
+                                      address=address, postcode=postcode, mode="dry_run",
+                                      database_path=Path("private/assistant.db"),
+                                      openai_model=model, openai_api_key=key))
     from storage import Repository
     repo = Repository(root / "private" / "assistant.db")
     repo.migrate()
@@ -150,7 +164,13 @@ async def model_local(root: Path, action: str) -> bool:
     from runtime import ProcessLock
 
     initial = load_settings(root)
-    with ProcessLock(initial.database_path.parent / "worker.lock"):
+    try:
+        lock = ProcessLock(initial.database_path.parent / "worker.lock")
+        lock.__enter__()
+    except RuntimeError:
+        print("Worker is running; stop the worker before changing the local model, then retry.")
+        return False
+    try:
         settings = load_settings(root)
         if settings.database_path != initial.database_path:
             raise ValueError("Database lock target changed; configuration unchanged")
@@ -170,6 +190,8 @@ async def model_local(root: Path, action: str) -> bool:
         save_settings(root, settings.model_copy(update={"model_provider": provider}))
         print(f"Provider: {provider}. Restart the worker to apply; Telegram binding unchanged.")
         return True
+    finally:
+        lock.__exit__(None, None, None)
 
 
 async def login(root: Path, store_id: str) -> None:

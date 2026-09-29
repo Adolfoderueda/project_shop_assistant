@@ -30,7 +30,7 @@ def test_commands_do_not_contact_server():
     assert requests == []
 
 
-def test_natural_language_posts_only_current_text_and_minimal_lines_to_loopback():
+def test_natural_language_posts_only_current_text_without_list_to_loopback():
     line = ListLine(id="line-1", description="pan", quantity=2, revision=3, product_id="secret")
     result, requests = run(
         "necesito arroz",
@@ -52,9 +52,9 @@ def test_natural_language_posts_only_current_text_and_minimal_lines_to_loopback(
     assert body["messages"][0]["role"] == "system"
     assert json.loads(body["messages"][1]["content"]) == {
         "text": "necesito arroz",
-        "lines": [{"id": "line-1", "description": "pan", "quantity": 2}],
     }
     assert "secret" not in request.content.decode()
+    assert "pan" not in request.content.decode()
 
 
 @pytest.mark.parametrize(
