@@ -111,3 +111,5 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
   `python -m shop_assistant model-local disable`, parar Ollama desde aplicación/servicio;
   opcionalmente `ollama rm gemma4:e2b` y desinstalar desde Aplicaciones instaladas.
   Consulta `docs/setup.md`. No se ha publicado ni subido esta rama.
+- Documentación offline registrada en commit `bc7d1a4`; resultados de verificación y
+  consentimientos pendientes en `.superpowers/sdd/2026-09-29-gemma4-local-telegram/task-3-report.md`.
