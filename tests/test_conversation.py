@@ -414,6 +414,29 @@ def test_model_preserving_full_qualifiers_keeps_product_unresolved(repo):
     assert line.quantity is None
 
 
+@pytest.mark.parametrize("action", ["buy", "remove", "set_quantity"])
+def test_model_destructive_intents_never_mutate_list_or_create_order(repo, action):
+    send(repo, "/anadir 2 arroz")
+    before = repo.list_lines()
+    intent = Intent(action=action, lines=[IntentLine(line_id=before[0].id, quantity=3)])
+    reply = send(repo, "por favor revisa el arroz", FakeInterpreter(intent))
+    assert reply.order_id is None
+    assert repo.list_lines() == before
+    assert orders(repo) == 0
+
+
+@pytest.mark.parametrize(
+    "text,description",
+    [("no necesito arroz", "arroz"), ("necesito pienso de pollo", "pienso")],
+)
+def test_model_negation_or_dropped_product_qualifier_cannot_add(repo, text, description):
+    before = repo.list_lines()
+    reply = send(repo, text, FakeInterpreter(Intent(action="add", lines=[IntentLine(description=description)])))
+    assert reply.order_id is None
+    assert repo.list_lines() == before
+    assert orders(repo) == 0
+
+
 @pytest.mark.parametrize(
     "text", ["/anadir 2 paquetes de Dodot talla 3", "/anadir dos envases de Dodot talla 3"]
 )
