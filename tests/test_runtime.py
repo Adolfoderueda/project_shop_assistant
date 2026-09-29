@@ -1,10 +1,12 @@
 """Offline runtime safety and lifecycle contracts."""
 
 import asyncio
+import json
 import logging
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -22,6 +24,272 @@ def settings(tmp_path):
 def test_missing_configuration_has_actionable_message(tmp_path):
     with pytest.raises(ValueError, match="configure"):
         load_settings(tmp_path)
+
+
+def test_legacy_openai_settings_select_openai_without_rewriting_file(tmp_path):
+    from config import save_settings
+
+    old = Settings(telegram_token="secret-token", authorized_user_id=123,
+                   address="private destination", database_path=tmp_path / "private" /
+                   "assistant.db", openai_model="legacy", openai_api_key="key")
+    save_settings(tmp_path, old)
+    target = tmp_path / "private" / "settings.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload.pop("model_provider", None)
+    target.write_text(json.dumps(payload), encoding="utf-8")
+    before = target.read_bytes()
+    assert load_settings(tmp_path).model_provider == "openai"
+    assert target.read_bytes() == before
+
+
+def test_model_local_enable_disable_preserves_private_state(tmp_path, monkeypatch, capsys):
+    import cli
+    from config import save_settings
+    from domain import IncomingMessage, Intent, IntentLine
+    from storage import Repository
+
+    original = settings(tmp_path).model_copy(update={"database_path": tmp_path / "private" /
+                                             "assistant.db", "telegram_bot_id": 777})
+    save_settings(tmp_path, original)
+    repo = Repository(original.database_path)
+    repo.migrate()
+    repo.ingest_batch([IncomingMessage(update_id=3, user_id=123, chat_id=123,
+                                       text="/anadir 1 pienso")], 4)
+    repo.apply_intent(3, Intent(action="add", lines=[IntentLine(description="pienso", quantity=1)]),
+                      "dry_run")
+    repo.ingest_batch([IncomingMessage(update_id=4, user_id=123, chat_id=123,
+                                       text="/comprar")], 5)
+    repo.apply_intent(4, Intent(action="buy"), "dry_run")
+    before = (repo.list_lines(), repo.pending_orders(), repo.telegram_offset())
+
+    async def available(_): return True
+    monkeypatch.setattr(cli, "ollama_available", available)
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["model-local", "enable"]) == 0
+    enabled = load_settings(tmp_path)
+    assert enabled.model_provider == "ollama"
+    assert enabled.ollama_model == "gemma4:e2b"
+    assert enabled.telegram_token.get_secret_value() == "secret-token"
+    assert enabled.telegram_bot_id == 777
+    assert enabled.authorized_user_id == 123
+    assert (repo.list_lines(), repo.pending_orders(), repo.telegram_offset()) == before
+    assert cli.main(["model-local", "status"]) == 0
+    assert "ollama" in capsys.readouterr().out
+    assert cli.main(["model-local", "disable"]) == 0
+    assert load_settings(tmp_path).model_provider == "commands_only"
+    assert (repo.list_lines(), repo.pending_orders(), repo.telegram_offset()) == before
+
+
+def test_model_local_enable_failure_and_busy_lock_never_rewrite_settings(tmp_path, monkeypatch, capsys):
+    import cli
+    from config import save_settings
+
+    original = settings(tmp_path).model_copy(update={"database_path": tmp_path / "private" /
+                                             "assistant.db"})
+    save_settings(tmp_path, original)
+    target = tmp_path / "private" / "settings.json"
+    before = target.read_bytes()
+    monkeypatch.chdir(tmp_path)
+
+    async def unavailable(_): return False
+    monkeypatch.setattr(cli, "ollama_available", unavailable)
+    assert cli.main(["model-local", "enable"]) == 1
+    assert target.read_bytes() == before
+    with ProcessLock(tmp_path / "private" / "worker.lock"):
+        assert cli.main(["model-local", "disable"]) == 1
+    output = capsys.readouterr().out.lower()
+    assert "worker" in output and "stop" in output
+    assert "secret-token" not in output
+    assert target.read_bytes() == before
+
+
+def test_model_local_cannot_change_nested_database_settings_while_runtime_holds_lock(
+        tmp_path, monkeypatch):
+    import cli
+    from config import save_settings
+
+    nested = tmp_path / "private" / "nested" / "assistant.db"
+    save_settings(tmp_path, settings(tmp_path).model_copy(update={"database_path": nested}))
+    target = tmp_path / "private" / "settings.json"
+    before = target.read_bytes()
+    monkeypatch.chdir(tmp_path)
+
+    class Repo:
+        def migrate(self): pass
+        def assert_authorized_owner(self, uid): assert uid == 123
+        def pending_messages(self): return []
+        def resumable_orders(self): return []
+        def pending_orders(self): return []
+
+    class Recovery:
+        async def recover(self): pass
+
+    class Checkout:
+        async def run(self, order_id): pytest.fail("unexpected checkout")
+
+    class IO:
+        async def send_pending(self): pass
+        async def poll_once(self):
+            assert await cli.model_local(tmp_path, "disable") is False
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run(load_settings(tmp_path), repo=Repo(), recovery=Recovery(),
+                        checkout=Checkout(), transport=IO()))
+    assert target.read_bytes() == before
+
+
+def test_model_local_rejects_database_path_changed_before_lock_acquisition(tmp_path,
+                                                                           monkeypatch):
+    import cli
+    import runtime
+    from config import save_settings
+
+    first = settings(tmp_path).model_copy(update={"database_path": tmp_path / "private" /
+                                          "first" / "assistant.db"})
+    save_settings(tmp_path, first)
+    target = tmp_path / "private" / "settings.json"
+    second = first.model_copy(update={"database_path": tmp_path / "private" /
+                                      "second" / "assistant.db", "model_provider": "ollama"})
+    actual_lock = runtime.ProcessLock
+
+    class ChangeBeforeLock(actual_lock):
+        def __enter__(self):
+            save_settings(tmp_path, second)
+            return super().__enter__()
+
+    monkeypatch.setattr(runtime, "ProcessLock", ChangeBeforeLock)
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["model-local", "disable"]) == 1
+    assert load_settings(tmp_path).database_path == second.database_path.resolve()
+    assert load_settings(tmp_path).model_provider == "ollama"
+    assert target.is_file()
+
+
+@pytest.mark.parametrize("response", [
+    (200, {"models": [{"name": "gemma4:12b"}]}),
+    (200, {"models": "malformed"}),
+    (302, {"models": [{"name": "gemma4:e2b"}]}),
+])
+def test_model_diagnostic_rejects_missing_model_unexpected_response_and_redirect(response):
+    import httpx
+
+    from cli import ollama_available
+
+    status, data = response
+    transport = httpx.MockTransport(lambda _: httpx.Response(status, json=data,
+                                                               headers={"location": "http://evil/"}))
+    assert asyncio.run(ollama_available("gemma4:e2b", transport=transport)) is False
+
+
+def test_model_diagnostic_never_uses_proxy_and_closes_http_client(monkeypatch):
+    import httpx
+
+    import cli
+
+    clients = []
+    real = httpx.AsyncClient
+
+    def client(**kwargs):
+        clients.append(kwargs)
+        return real(**kwargs)
+
+    monkeypatch.setattr(cli, "httpx", SimpleNamespace(AsyncClient=client, Timeout=httpx.Timeout))
+    transport = httpx.MockTransport(lambda request: httpx.Response(
+        200, json={"models": [{"name": "gemma4:e2b"}]}))
+    assert asyncio.run(cli.ollama_available("gemma4:e2b", transport=transport)) is True
+    assert clients[0]["trust_env"] is False
+    assert clients[0]["follow_redirects"] is False
+    assert clients[0]["base_url"] == "http://127.0.0.1:11434"
+
+
+def test_runtime_ollama_failure_keeps_commands_working_without_openai_fallback(tmp_path,
+                                                                                monkeypatch):
+    import httpx
+
+    import ollama_interpreter
+    from domain import IncomingMessage
+    from storage import Repository
+
+    repo = Repository(tmp_path / "assistant.db")
+    repo.migrate()
+    repo.ingest_batch([
+        IncomingMessage(update_id=1, user_id=123, chat_id=123, text="necesito pienso"),
+        IncomingMessage(update_id=2, user_id=123, chat_id=123, text="/lista"),
+    ], 3)
+    configured = settings(tmp_path).model_copy(update={"model_provider": "ollama",
+                                                 "openai_api_key": "unused-key",
+                                                 "openai_model": "old"})
+    clients = []
+    real_client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda _: httpx.Response(503))
+
+    def client(**kwargs):
+        result = real_client(**{**kwargs, "transport": transport})
+        clients.append(result)
+        return result
+
+    # A local server fault must not trigger a remote provider or stop subsequent commands.
+    monkeypatch.setattr(ollama_interpreter, "httpx", SimpleNamespace(AsyncClient=client,
+                                                                    Timeout=httpx.Timeout))
+
+    class Recovery:
+        async def recover(self): pass
+
+    class Checkout:
+        async def run(self, order_id): pytest.fail("unexpected checkout")
+
+    class IO:
+        async def send_pending(self): pass
+        async def poll_once(self): raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run(configured, repo=repo, recovery=Recovery(), checkout=Checkout(),
+                        transport=IO()))
+    assert len(repo.pending_notices()) == 2
+    assert repo.telegram_offset() == 3
+    assert len(clients) == 1 and clients[0].is_closed
+
+
+def test_runtime_closes_legacy_openai_client_on_shutdown(tmp_path, monkeypatch):
+    import openai
+
+    clients = []
+
+    class Client:
+        def __init__(self, *, api_key):
+            assert api_key == "legacy-key"
+            self.closed = False
+            clients.append(self)
+
+        async def close(self): self.closed = True
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", Client)
+    configured = Settings(telegram_token="secret-token", authorized_user_id=123,
+                          address="private destination", database_path=tmp_path / "assistant.db",
+                          openai_model="legacy", openai_api_key="legacy-key")
+
+    class Repo:
+        def migrate(self): pass
+        def assert_authorized_owner(self, uid): assert uid == 123
+        def pending_messages(self): return []
+        def resumable_orders(self): return []
+        def pending_orders(self): return []
+
+    class Recovery:
+        async def recover(self): pass
+
+    class Checkout:
+        async def run(self, order_id): pytest.fail("unexpected checkout")
+
+    class IO:
+        async def send_pending(self): pass
+        async def poll_once(self): raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run(configured, repo=Repo(), recovery=Recovery(), checkout=Checkout(),
+                        transport=IO()))
+    assert len(clients) == 1 and clients[0].closed
 
 
 def test_second_process_cannot_start(tmp_path):
@@ -187,6 +455,64 @@ def test_reconfigure_preserves_offline_pending_offset(tmp_path, monkeypatch):
     asyncio.run(cli.configure(tmp_path))
     assert repo.telegram_offset() == 5
     assert load_settings(tmp_path).address == "new destination"
+
+
+def test_reconfigure_cannot_write_while_worker_holds_lock(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import cli
+    from config import save_settings
+
+    existing = settings(tmp_path).model_copy(update={
+        "database_path": tmp_path / "private" / "assistant.db", "telegram_bot_id": 999})
+    save_settings(tmp_path, existing)
+    target = tmp_path / "private" / "settings.json"
+    before = target.read_bytes()
+
+    class Bot:
+        def __init__(self, token): pass
+        async def get_me(self): return SimpleNamespace(id=999, username="same")
+
+    monkeypatch.setattr("telegram.Bot", Bot)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: "secret-token")
+    answers = iter(["new destination", "", "", "dry_run"])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+    with (ProcessLock(existing.database_path.parent / "worker.lock"),
+          pytest.raises(RuntimeError, match="already running")):
+        asyncio.run(cli.configure(tmp_path))
+    assert target.read_bytes() == before
+
+
+def test_first_configuration_does_not_overwrite_configuration_created_while_binding(
+        tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import cli
+    from config import save_settings
+
+    class Bot:
+        def __init__(self, token): pass
+        async def get_me(self): return SimpleNamespace(id=999, username="same")
+
+    async def bind(*_): return 123, 1
+
+    monkeypatch.setattr("telegram.Bot", Bot)
+    monkeypatch.setattr(cli, "bind_user", bind)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: "secret-token")
+    other = settings(tmp_path).model_copy(update={
+        "database_path": tmp_path / "private" / "assistant.db", "telegram_bot_id": 999})
+    answers = iter(["new destination", "", "", "dry_run"])
+
+    def answer(_):
+        value = next(answers)
+        if value == "dry_run":
+            save_settings(tmp_path, other)
+        return value
+
+    monkeypatch.setattr("builtins.input", answer)
+    with pytest.raises(ValueError, match="changed during setup"):
+        asyncio.run(cli.configure(tmp_path))
+    assert load_settings(tmp_path).address == "private destination"
 
 
 def test_reconfigure_rejects_different_bot_before_consuming_updates(tmp_path, monkeypatch):

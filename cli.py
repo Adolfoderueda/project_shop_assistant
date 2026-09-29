@@ -7,6 +7,8 @@ import re
 import secrets
 from pathlib import Path
 
+import httpx
+
 from config import Settings, load_settings, save_settings
 
 
@@ -36,6 +38,7 @@ async def configure(root: Path) -> None:
     bot = Bot(token)
     info = await bot.get_me()  # No settings persisted before API verification and binding.
     target = root / "private" / "settings.json"
+    previous = None
     if target.exists():
         previous = load_settings(root)
         if previous.telegram_bot_id is None:
@@ -67,11 +70,24 @@ async def configure(root: Path) -> None:
     choice = input("Type dry_run to confirm local configuration: ").strip()
     if choice != "dry_run":
         raise ValueError("Configuration cancelled; no schedule or live mode enabled")
-    save_settings(root, Settings(telegram_token=token, telegram_bot_id=info.id,
-                                  authorized_user_id=user_id,
-                                  address=address, postcode=postcode, mode="dry_run",
-                                  database_path=Path("private/assistant.db"),
-                                  openai_model=model, openai_api_key=key))
+    from runtime import ProcessLock
+
+    lock_path = (previous.database_path.parent if previous is not None
+                 else root / "private") / "worker.lock"
+    with ProcessLock(lock_path):
+        if target.exists():
+            if previous is None:
+                raise ValueError("Configuration changed during setup; retry")
+            current = load_settings(root)
+            if (current.database_path != previous.database_path
+                    or current.authorized_user_id != user_id
+                    or current.telegram_bot_id not in (None, info.id)):
+                raise ValueError("Configuration changed during setup; retry")
+        save_settings(root, Settings(telegram_token=token, telegram_bot_id=info.id,
+                                      authorized_user_id=user_id,
+                                      address=address, postcode=postcode, mode="dry_run",
+                                      database_path=Path("private/assistant.db"),
+                                      openai_model=model, openai_api_key=key))
     from storage import Repository
     repo = Repository(root / "private" / "assistant.db")
     repo.migrate()
@@ -118,10 +134,64 @@ async def doctor(root: Path) -> bool:
                        f"prepare={caps.prepare}, submit={caps.submit}, "
                        f"reconcile={caps.reconcile}, live_verified={caps.live_verified}; "
                        "shipping/total/destination not verified")
-    if not settings.openai_api_key or not settings.openai_model:
+    if settings.model_provider == "ollama":
+        results.append("Model: Ollama local available" if await ollama_available(settings.ollama_model)
+                       else "Model: Ollama local blocked; commands remain available")
+    elif settings.model_provider == "commands_only":
         results.append("Model: not configured; commands-only mode (not a startup blocker)")
     print("\n".join(results))
     return all("blocked" not in result for result in results[:3])
+
+
+async def ollama_available(model: str, *, transport=None) -> bool:
+    """Check a fixed loopback endpoint only; never trust proxy settings or redirects."""
+    try:
+        async with httpx.AsyncClient(base_url="http://127.0.0.1:11434", trust_env=False,
+                                     follow_redirects=False, timeout=httpx.Timeout(5.0, connect=2.0),
+                                     transport=transport) as client:
+            response = await client.get("/api/tags", follow_redirects=False)
+            if response.status_code != 200:
+                return False
+            data = response.json()
+            models = data["models"]
+            return isinstance(models, list) and any(
+                isinstance(item, dict) and item.get("name") == model for item in models)
+    except Exception:  # noqa: BLE001 -- HTTP errors may include private details
+        return False
+
+
+async def model_local(root: Path, action: str) -> bool:
+    from runtime import ProcessLock
+
+    initial = load_settings(root)
+    try:
+        lock = ProcessLock(initial.database_path.parent / "worker.lock")
+        lock.__enter__()
+    except RuntimeError:
+        print("Worker is running; stop the worker before changing the local model, then retry.")
+        return False
+    try:
+        settings = load_settings(root)
+        if settings.database_path != initial.database_path:
+            raise ValueError("Database lock target changed; configuration unchanged")
+        if action == "status":
+            print(f"Provider: {settings.model_provider}")
+            if settings.model_provider == "ollama":
+                print("Ollama local: available" if await ollama_available(settings.ollama_model)
+                      else "Ollama local: unavailable; commands still work")
+            return True
+        if action == "enable":
+            if not await ollama_available(settings.ollama_model):
+                print("Ollama local unavailable or model missing; configuration unchanged.")
+                return False
+            provider = "ollama"
+        else:
+            provider = "commands_only"
+        save_settings(root, settings.model_copy(update={"model_provider": provider}))
+        print(f"Provider: {provider}. Restart the worker to apply; Telegram binding unchanged.")
+        return True
+    finally:
+        lock.__exit__(None, None, None)
 
 
 async def login(root: Path, store_id: str) -> None:
@@ -175,6 +245,8 @@ def main(argv=None) -> int:
     login_parser.add_argument("--store", required=True)
     verify_parser = sub.add_parser("verify-product")
     verify_parser.add_argument("--id", required=True)
+    local_parser = sub.add_parser("model-local")
+    local_parser.add_argument("action", choices=("enable", "disable", "status"))
     args = parser.parse_args(argv)
     root = Path.cwd().resolve()
     try:
@@ -189,6 +261,8 @@ def main(argv=None) -> int:
             asyncio.run(run(settings))
         elif args.command == "login":
             asyncio.run(login(root, args.store))
+        elif args.command == "model-local":
+            return 0 if asyncio.run(model_local(root, args.action)) else 1
         else:
             verify_product(root, args.id)
     except KeyboardInterrupt:

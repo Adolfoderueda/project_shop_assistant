@@ -89,3 +89,34 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
   Telegram del usuario, arranque al iniciar sesión y pagos reales siguen sin comprobar.
   Las capacidades live de las cuatro tiendas permanecen inhabilitadas.
 - Evidencia y bloqueos: `docs/superpowers/task-8-report.md`.
+
+## 2026-09-29 — Gemma 4 local, Task 3: comprobación offline (PENDIENTE EN VIVO)
+
+- `nvidia-smi --query-gpu=name,memory.total --format=csv,noheader` informó
+  `NVIDIA GeForce RTX 3060, 12288 MiB`; `Get-Command ollama` no encontró binario en
+  `PATH`. Esto no demuestra que Ollama no esté instalado en otra ubicación.
+- `gemma4:e2b` requiere una descarga aproximada de 7,2 GB más espacio para el servicio
+  y descargas temporales; tampoco se ha medido el consumo adicional de contexto (4096)
+  ni la VRAM/latencia durante inferencia.
+- **Sin consentimiento para efectos externos:** no se instaló Ollama ni se descargaron
+  pesos, no se activó `model-local`, no se accedió a configuración privada ni al bot
+  Telegram vinculado, y no se probó ninguna compra. Conservar `commands_only`.
+- **Pendiente con autorización expresa separada:** instalación y descarga; `ollama list`,
+  respuesta local en español con `num_ctx=4096` y medición de tiempo/VRAM; luego, solo
+  con sesión privada disponible, parar worker, activar e iniciar de nuevo y verificar
+  frases seguras, reinicio, `/lista` y `/anadir` con Ollama detenido. No usar `/comprar`
+  para esta prueba. La aceptación en Telegram y la aptitud real de GPU/modelo **no están
+  demostradas** por tests con fakes.
+- Parada/reversión futura: parar worker (`Ctrl+C` o `scripts/Stop-ShopAssistant.ps1`),
+  `python -m shop_assistant model-local disable`, parar Ollama desde aplicación/servicio;
+  opcionalmente `ollama rm gemma4:e2b` y desinstalar desde Aplicaciones instaladas.
+  Consulta `docs/setup.md`. No se ha publicado ni subido esta rama.
+- Verificación offline: `.venv\Scripts\python.exe -m pytest -q` excedió primero el
+  límite de 120 s sin resultado final; repetido con límite de 600 s dio
+  **285 passed in 120.78s**. `.venv\Scripts\python.exe -m ruff check .` dio
+  **All checks passed!**; `git diff --check` sin errores y `git status --short`
+  vacío tras los commits iniciales. Son tests con dobles, no pruebas del modelo real.
+  Evidencia de GPU y de ausencia de `ollama` en `PATH` arriba; ninguna validación live.
+- Documentación inicial en commits `bc7d1a4` y `4788bac`. El reporte detallado local
+  `.superpowers/sdd/2026-09-29-gemma4-local-telegram/task-3-report.md` está ignorado
+  por Git; esta sección conserva los resultados auditables en la rama.

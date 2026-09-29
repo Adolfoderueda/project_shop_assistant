@@ -414,6 +414,55 @@ def test_model_preserving_full_qualifiers_keeps_product_unresolved(repo):
     assert line.quantity is None
 
 
+@pytest.mark.parametrize("action", ["buy", "remove", "set_quantity"])
+def test_model_destructive_intents_never_mutate_list_or_create_order(repo, action):
+    send(repo, "/anadir 2 arroz")
+    before = repo.list_lines()
+    intent = Intent(action=action, lines=[IntentLine(line_id=before[0].id, quantity=3)])
+    reply = send(repo, "por favor revisa el arroz", FakeInterpreter(intent))
+    assert reply.order_id is None
+    assert repo.list_lines() == before
+    assert orders(repo) == 0
+
+
+@pytest.mark.parametrize(
+    "text,description",
+    [("no necesito arroz", "arroz"), ("necesito pienso de pollo", "pienso")],
+)
+def test_model_negation_or_dropped_product_qualifier_cannot_add(repo, text, description):
+    before = repo.list_lines()
+    reply = send(repo, text, FakeInterpreter(Intent(action="add", lines=[IntentLine(description=description)])))
+    assert reply.order_id is None
+    assert repo.list_lines() == before
+    assert orders(repo) == 0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "necesito arroz o pasta",
+        "necesito arroz, o pasta",
+        "necesito arroz u otra pasta",
+        "necesito arroz y pasta",
+        "necesito arroz si hay oferta",
+        "si hay arroz necesito arroz",
+        "necesito arroz cuando llegue",
+        "necesito arroz en caso de que falte",
+        "necesito arroz a menos que sobre",
+    ],
+)
+def test_model_cannot_add_alternative_or_conditional_request(repo, text):
+    reply = send(repo, text, FakeInterpreter(Intent(action="add", lines=[IntentLine(description=text.removeprefix("necesito "))])))
+    assert repo.list_lines() == []
+    assert reply.order_id is None
+
+
+@pytest.mark.parametrize("product", ["Blemil tipo 1 Evolution", "Alpha Spirit Wild Fish / Only Fish", "arroz integral"])
+def test_model_keeps_unambiguous_product_descriptions(repo, product):
+    send(repo, f"necesito {product}", FakeInterpreter(Intent(action="add", lines=[IntentLine(description=product)])))
+    assert repo.list_lines()[0].description == product
+
+
 @pytest.mark.parametrize(
     "text", ["/anadir 2 paquetes de Dodot talla 3", "/anadir dos envases de Dodot talla 3"]
 )

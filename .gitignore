@@ -6,6 +6,7 @@ __pycache__/
 build/
 dist/
 .superpowers/
+.worktrees/
 .env
 .env.*
 secrets.env
