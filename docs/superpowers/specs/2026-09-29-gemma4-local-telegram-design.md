@@ -1,6 +1,6 @@
 # Interpretación local de mensajes con Gemma 4
 
-Estado: diseño conversacional aprobado el 29 de septiembre de 2026; documento pendiente de revisión del usuario.
+Estado: documento revisado y aprobado por el usuario el 29 de septiembre de 2026.
 
 ## Objetivo y límites
 
