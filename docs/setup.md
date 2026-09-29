@@ -109,6 +109,13 @@ y referencia independiente del fabricante antes de ejecutar
 `.\.venv\Scripts\python.exe -m shop_assistant verify-product --id formula`; un producto «Optimum Evolution»
 no se equipara automáticamente. El cotejo local no verifica precio, tienda ni compra.
 
+### Flujo independiente: compra simulada preexistente (fuera de esta aceptación)
+
+El siguiente procedimiento `dry_run` pertenece a la comprobación general previa del
+checkout, **no** a la aceptación de Gemma, lista o fichas de productos. No lo sigas
+durante esa aceptación: **no envíes `/comprar`**, ni siquiera en `dry_run`. Describir
+este flujo anterior no autoriza ejecutarlo en el bot privado.
+
 Con el chat privado vinculado, probar `/anadir 2 sacos de pienso`, `/lista`,
 `/cantidad <id> 3`, `/comprar` (solo en `dry_run`), reiniciar el servicio y consultar
 `/estado <id>`. Con los adaptadores actuales, **no esperar necesariamente un aviso
