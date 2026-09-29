@@ -100,6 +100,70 @@ def test_model_local_enable_failure_and_busy_lock_never_rewrite_settings(tmp_pat
     assert target.read_bytes() == before
 
 
+def test_model_local_cannot_change_nested_database_settings_while_runtime_holds_lock(
+        tmp_path, monkeypatch):
+    import cli
+    from config import save_settings
+
+    nested = tmp_path / "private" / "nested" / "assistant.db"
+    save_settings(tmp_path, settings(tmp_path).model_copy(update={"database_path": nested}))
+    target = tmp_path / "private" / "settings.json"
+    before = target.read_bytes()
+    monkeypatch.chdir(tmp_path)
+
+    class Repo:
+        def migrate(self): pass
+        def assert_authorized_owner(self, uid): assert uid == 123
+        def pending_messages(self): return []
+        def resumable_orders(self): return []
+        def pending_orders(self): return []
+
+    class Recovery:
+        async def recover(self): pass
+
+    class Checkout:
+        async def run(self, order_id): pytest.fail("unexpected checkout")
+
+    class IO:
+        async def send_pending(self): pass
+        async def poll_once(self):
+            with pytest.raises(RuntimeError, match="already running"):
+                await cli.model_local(tmp_path, "disable")
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run(load_settings(tmp_path), repo=Repo(), recovery=Recovery(),
+                        checkout=Checkout(), transport=IO()))
+    assert target.read_bytes() == before
+
+
+def test_model_local_rejects_database_path_changed_before_lock_acquisition(tmp_path,
+                                                                           monkeypatch):
+    import cli
+    import runtime
+    from config import save_settings
+
+    first = settings(tmp_path).model_copy(update={"database_path": tmp_path / "private" /
+                                          "first" / "assistant.db"})
+    save_settings(tmp_path, first)
+    target = tmp_path / "private" / "settings.json"
+    second = first.model_copy(update={"database_path": tmp_path / "private" /
+                                      "second" / "assistant.db", "model_provider": "ollama"})
+    actual_lock = runtime.ProcessLock
+
+    class ChangeBeforeLock(actual_lock):
+        def __enter__(self):
+            save_settings(tmp_path, second)
+            return super().__enter__()
+
+    monkeypatch.setattr(runtime, "ProcessLock", ChangeBeforeLock)
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["model-local", "disable"]) == 1
+    assert load_settings(tmp_path).database_path == second.database_path.resolve()
+    assert load_settings(tmp_path).model_provider == "ollama"
+    assert target.is_file()
+
+
 @pytest.mark.parametrize("response", [
     (200, {"models": [{"name": "gemma4:12b"}]}),
     (200, {"models": "malformed"}),

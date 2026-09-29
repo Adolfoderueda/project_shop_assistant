@@ -20,3 +20,29 @@
 - El cambio de configuración requiere detener el worker; no reinicia Telegram, y el nuevo proveedor surte efecto al reiniciar el worker. `status` también requiere bloqueo libre.
 - La comprobación confirma la respuesta y etiqueta del servidor en el puerto loopback, pero no autentica la identidad del proceso local ni comprueba VRAM/latencia/calidad reales. Una descarga real requiere consentimiento aparte. Las pruebas no acreditan conectividad real.
 - Las sesiones HTTP de Ollama son propiedad de cada llamada y se cierran dentro de `OllamaInterpreter.parse`; el runtime no mantiene ni cierra un cliente compartido Ollama.
+
+## Revisión posterior: bloqueo con base de datos anidada
+
+El bloqueo inicial del CLI usaba `private/worker.lock`, pero `runtime.run` usa
+`settings.database_path.parent / "worker.lock"`; si la base de datos está en
+`private/nested/`, ambos comandos podían ejecutarse simultáneamente. El CLI ahora
+carga la configuración para localizar exactamente el lock del runtime, lo adquiere,
+vuelve a leer la configuración bajo el lock y rechaza el cambio si el destino del
+lock (ruta de base de datos) cambió entre ambas lecturas. No modifica el archivo si
+el worker está activo o detecta esa carrera.
+
+**RED:** Se agregaron dos tests en `tests/test_runtime.py`: uno invoca
+`model_local(..., "disable")` durante el ciclo de `runtime.run` con base anidada;
+el otro cambia el destino de base de datos antes de adquirir el lock y comprueba que
+el nuevo proveedor no se sobrescribe. La primera versión del test de worker anidado
+invocaba `cli.main` desde un event loop: el `asyncio.run` anidado devolvía error antes
+de intentar bloquear y produjo un falso positivo; se corrigió el test para invocar
+`await cli.model_local` directamente. RED correcto:
+`.venv\Scripts\python.exe -m pytest tests/test_runtime.py -q` → **2 failed, 26 passed**:
+worker anidado no lanzó `RuntimeError` y el cambio de destino devolvió éxito.
+
+**GREEN:** Cambio focalizado en `cli.py`:
+`.venv\Scripts\python.exe -m pytest tests/test_runtime.py -q` → **28 passed**.
+Verificación final `.venv\Scripts\python.exe -m pytest -q` → **285 passed**;
+`.venv\Scripts\python.exe -m ruff check .` → **All checks passed**.
+No se usó Ollama real, Telegram ni recursos externos.

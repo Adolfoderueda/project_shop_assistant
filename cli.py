@@ -149,10 +149,11 @@ async def ollama_available(model: str, *, transport=None) -> bool:
 async def model_local(root: Path, action: str) -> bool:
     from runtime import ProcessLock
 
-    if not (root / "private" / "settings.json").is_file():
-        raise ValueError("Missing private configuration")
-    with ProcessLock(root / "private" / "worker.lock"):
+    initial = load_settings(root)
+    with ProcessLock(initial.database_path.parent / "worker.lock"):
         settings = load_settings(root)
+        if settings.database_path != initial.database_path:
+            raise ValueError("Database lock target changed; configuration unchanged")
         if action == "status":
             print(f"Provider: {settings.model_provider}")
             if settings.model_provider == "ollama":
