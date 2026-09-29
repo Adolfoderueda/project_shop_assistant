@@ -120,3 +120,29 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
 - Documentación inicial en commits `bc7d1a4` y `4788bac`. El reporte detallado local
   `.superpowers/sdd/2026-09-29-gemma4-local-telegram/task-3-report.md` está ignorado
   por Git; esta sección conserva los resultados auditables en la rama.
+
+## 2026-09-29 — Gemma 4 local, prueba voluntaria en este equipo (NO ACTIVADO)
+
+- Tras autorización del usuario, se instaló Ollama 0.34.4 para el usuario actual mediante
+  `winget install --id Ollama.Ollama --exact --scope user --silent`; winget comprobó la
+  suma SHA-256 del instalador. El servicio escuchaba en `127.0.0.1:11434`.
+- `ollama pull gemma4:e2b` terminó con `success` y `ollama list` mostró el modelo de
+  7,2 GB. No se descargaron otras variantes ni se modificaron los perfiles de tiendas.
+- Con el intérprete real del proyecto, `num_ctx=4096`, la primera frase «necesito arroz»
+  agotó los 60 s de arranque en frío y devolvió aclaración. Con el modelo ya cargado,
+  «necesito arroz» devolvió aclaraciones sobre el tipo/cantidad de arroz en cuatro
+  intentos sucesivos (~0,6–0,9 s cada uno), no `add`. «No compres» devolvió `clarify`;
+  «necesito Blemil etapa dos» también devolvió `clarify`. La salida del modelo varía.
+- `ollama ps` indicó **100 % GPU** y contexto **4096**; `nvidia-smi` registró
+  **3592 MiB** de VRAM total usada con el modelo cargado (antes: **755 MiB**).
+  Esta medida es una instantánea, no un máximo durante inferencia.
+- Una prueba exploratoria con instrucciones y ejemplo explícito de lista de compras
+  produjo `add` para arroz, pero no forma parte del código entregado ni demuestra
+  fiabilidad; se necesitarían pruebas reproducibles y una corrección revisada.
+- **No se activó `model-local enable`, no se accedió a la configuración privada y no se
+  enviaron mensajes al bot**: la prueba de aceptación en Telegram continúa pendiente.
+  No se cambió el proveedor configurado previamente; las compras reales continúan
+  deshabilitadas.
+- Verificación posterior: `.venv\Scripts\python.exe -m pytest -q` → **299 passed
+  in 139.89s**; `.venv\Scripts\python.exe -m ruff check .` → **All checks passed!**;
+  `git diff --check` → sin errores. Son pruebas offline, no aceptación del modelo.
