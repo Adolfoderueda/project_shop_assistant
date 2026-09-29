@@ -111,5 +111,12 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
   `python -m shop_assistant model-local disable`, parar Ollama desde aplicación/servicio;
   opcionalmente `ollama rm gemma4:e2b` y desinstalar desde Aplicaciones instaladas.
   Consulta `docs/setup.md`. No se ha publicado ni subido esta rama.
-- Documentación offline registrada en commit `bc7d1a4`; resultados de verificación y
-  consentimientos pendientes en `.superpowers/sdd/2026-09-29-gemma4-local-telegram/task-3-report.md`.
+- Verificación offline: `.venv\Scripts\python.exe -m pytest -q` excedió primero el
+  límite de 120 s sin resultado final; repetido con límite de 600 s dio
+  **285 passed in 120.78s**. `.venv\Scripts\python.exe -m ruff check .` dio
+  **All checks passed!**; `git diff --check` sin errores y `git status --short`
+  vacío tras los commits iniciales. Son tests con dobles, no pruebas del modelo real.
+  Evidencia de GPU y de ausencia de `ollama` en `PATH` arriba; ninguna validación live.
+- Documentación inicial en commits `bc7d1a4` y `4788bac`. El reporte detallado local
+  `.superpowers/sdd/2026-09-29-gemma4-local-telegram/task-3-report.md` está ignorado
+  por Git; esta sección conserva los resultados auditables en la rama.
