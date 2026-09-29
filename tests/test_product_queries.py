@@ -55,6 +55,19 @@ def test_product_query_uses_two_dated_observations_not_current_offers(repo):
     assert repo.product_requests() == []
 
 
+def test_product_observation_reports_unknown_stock_separately_from_freshness(repo):
+    reply = send(repo, "¿tenemos ficha de Blemil?", query("Blemil"))
+    assert "2026-09-27" in reply.text
+    assert "stock no observado" in reply.text.lower()
+    assert "stock no actuales" in reply.text.lower()
+
+
+def test_product_observation_reports_dated_available_stock(repo):
+    reply = send(repo, "¿qué pañales Dodot vimos?", query("pañales Dodot"))
+    assert "stock observado disponible" in reply.text.lower()
+    assert "stock no observado" in reply.text.lower()
+
+
 def test_missing_product_is_deduplicated_after_replay_and_restart(repo):
     first = send(repo, "¿qué sabes de arroz?", query("arroz"))
     reopened = Repository(repo.path)
@@ -70,6 +83,13 @@ def test_missing_product_is_deduplicated_after_replay_and_restart(repo):
 def test_generic_question_never_creates_product_backlog(repo):
     send(repo, "¿qué puedes hacer?", query("arroz"))
     assert repo.product_requests() == []
+
+
+def test_internal_question_mark_does_not_enter_backlog(repo):
+    reply = send(repo, "¿qué sabes de arroz? compra?", query("arroz? compra"))
+    assert "aclara" in reply.text.lower() or "claro" in reply.text.lower()
+    assert repo.product_requests() == []
+    assert repo.list_lines() == []
 
 
 @pytest.mark.parametrize(

@@ -289,10 +289,14 @@ class Repository(CheckoutRepository):
             for product in products:
                 price = (f"{product.price_cents // 100},{product.price_cents % 100:02d} €"
                          if product.price_cents is not None else "precio no observado")
+                stock = ("stock no observado" if product.availability is None
+                         else "stock observado disponible" if product.availability
+                         else "stock observado no disponible")
                 details.append(
                     f"{product.title} — fuente {product.store_id} ({product.url}); "
                     f"observado {product.observed_on}; "
-                    f"precio observado {price}; {product.format_note or 'sin detalle de formato'}"
+                    f"precio observado {price}; {stock}; "
+                    f"{product.format_note or 'sin detalle de formato'}"
                 )
             return Reply(text="\n".join(details) + "\nDatos históricos: precio y stock no actuales.")
         if intent.action == "add":

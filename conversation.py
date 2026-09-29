@@ -90,7 +90,7 @@ class Conversation:
 
     @staticmethod
     def _product_name(text: str) -> str | None:
-        clean = normalized(text).strip().removeprefix("¿").rstrip("? ")
+        clean = normalized(text).strip().removeprefix("¿").removesuffix("?").strip()
         match = re.fullmatch(
             r"(?:que sabes de (.+)|que (.+) vimos|tenemos ficha de (.+))", clean
         )
@@ -99,7 +99,7 @@ class Conversation:
         name = next(group for group in match.groups() if group is not None).strip()
         if (
             not name
-            or re.search(r'\b(?:no|nunca|si|o|u|y|cuando)\b|[,;:"«»“”<>/\\]|https?\b|\n', name)
+            or re.search(r'\b(?:no|nunca|si|o|u|y|cuando)\b|[?¿!¡.,;:"«»“”<>/\\]|https?\b|\n', name)
             or re.search(r"\b\d+\s+(?:paquetes?|botes?|sacos?|envases?|unidades?)\b", name)
         ):
             return None
