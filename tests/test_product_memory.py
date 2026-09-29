@@ -80,6 +80,17 @@ def test_search_aliases_accents_boundaries_and_limit(repo):
     assert repo.find_products("Dodot Sensitive")[0].availability is None
 
 
+def test_search_returns_python_boolean_availability_without_inventing_unknown(repo):
+    assert repo.find_products("Alpha Spirit")[0].availability is True
+    assert repo.find_products("Blemil")[0].availability is None
+    with sqlite3.connect(repo.path) as db:
+        db.execute("UPDATE observed_products SET availability=0 WHERE store_id='nappy'")
+    assert next(
+        product.availability for product in repo.find_products("Dodot talla 3")
+        if product.store_id == "nappy"
+    ) is False
+
+
 def test_backlog_normalizes_name_and_stores_no_message_text(repo):
     with repo._connection(write=True) as db:
         _record_missing_product(db, " Arroz ")

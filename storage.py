@@ -82,13 +82,20 @@ class Repository(CheckoutRepository):
         if limit <= 0:
             return []
         with self._connection() as db:
-            products = (
-                ObservedProduct(**dict(row)) for row in db.execute(
-                    "SELECT id,store_id,product_id,title,url,observed_on,price_cents,"
-                    "availability,format_note FROM observed_products ORDER BY id"
-                )
-            )
-            return [product for product in products if matches_observation(query, product)][:limit]
+            results = []
+            for row in db.execute(
+                "SELECT id,store_id,product_id,title,url,observed_on,price_cents,"
+                "availability,format_note FROM observed_products ORDER BY id"
+            ):
+                values = dict(row)
+                if values["availability"] is not None:
+                    values["availability"] = bool(values["availability"])
+                product = ObservedProduct(**values)
+                if matches_observation(query, product):
+                    results.append(product)
+                    if len(results) == limit:
+                        break
+            return results
 
     def product_requests(self) -> list[str]:
         with self._connection() as db:
