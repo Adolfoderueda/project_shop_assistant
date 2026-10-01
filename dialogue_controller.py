@@ -104,6 +104,15 @@ def question_prompt(state: DialogueState, lines: list[ListLine]) -> str:
     if state.question == "confirm_replace":
         source = next((l.description for l in lines if ref(l) == state.target), "el origen")
         return f"¿Confirmas sustituir {source} por {name}?"
+    if state.question == "replace_quantity":
+        source = next((l for l in lines if ref(l) == state.target), None)
+        keep = (f" Puedes responder «conserva la cantidad» ({source.quantity} {state.focus.unit})"
+                " o indicar otra." if source and source.quantity is not None else "")
+        return f"Indica la cantidad de {state.focus.unit} para {name}." + keep
+    if state.question == "replace_duplicate":
+        return (f"Ya tienes {name}. ¿Confirmas mantener líneas separadas con "
+                f"{state.proposal_quantity} {state.focus.unit} en la línea sustituida? "
+                "No se sumarán ni fusionarán; responde sí o cancelar.")
     if state.question == "remove_id":
         return "Indica el ID exacto con /quitar <id>: " + ", ".join(r.id for r in state.candidates)
     return f"Aclara la propuesta para {name}."
@@ -147,6 +156,18 @@ def reduce_dialogue(
         return decision("added", mutation=DialogueMutation(kind="add", description=state.focus.description,
                         quantity=state.proposal_quantity, unit=state.focus.unit))
 
+    def replace_focus():
+        matches = tuple(ref(l) for l in lines if l.id != state.target.id
+                        and canonical_name(l.description) == canonical_name(state.focus.description))
+        if matches and (not state.duplicate_confirmed or matches != state.candidates):
+            renew(question="replace_duplicate", candidates=matches, options=(), duplicate_confirmed=False)
+            return decision(prompt=question_prompt(state, lines))
+        renew(question=None, options=(), candidates=matches)
+        return decision("replaced", mutation=DialogueMutation(
+            kind="replace", target=state.target, description=state.focus.description,
+            quantity=state.proposal_quantity, unit=state.focus.unit,
+        ))
+
     clean = canonical_name(message.text)
     command = parse_command(message.text, lines)
     intent = command if command is not None else proposal
@@ -164,6 +185,11 @@ def reduce_dialogue(
     if answer and state:
         if answer.kind == "select" and state.question != "select_line":
             answer = DialogueAnswer(kind=state.options[answer.selection - 1])
+        if (state.target and state.target.id in reserved_ids
+                and state.question in {"add_or_replace", "confirm_replace", "replace_quantity", "replace_duplicate"}
+                and answer.kind != "add"):
+            state = None
+            return decision(prompt="La línea está reservada; revisa la lista.")
         if answer.kind == "add" and state.focus:
             if state.question == "duplicate_choice":
                 renew(duplicate_confirmed=True)
@@ -198,7 +224,25 @@ def reduce_dialogue(
         if answer.kind == "replace" and state.target:
             renew(question="confirm_replace", options=())
             return decision(prompt=question_prompt(state, lines))
-        # Task 4 owns replacement confirmation/quantity/execution.
+        if answer.kind == "confirm" and state.question == "confirm_replace" and state.target and state.focus:
+            renew(question="replace_quantity", replacement_confirmed=True, proposal_quantity=None,
+                  duplicate_confirmed=False, candidates=(), options=())
+            return decision(prompt=question_prompt(state, lines))
+        if (answer.kind in {"quantity", "keep_quantity"} and state.question == "replace_quantity"
+                and state.target and state.focus and state.replacement_confirmed):
+            quantity = rows[state.target.id].quantity if answer.kind == "keep_quantity" else answer.quantity
+            if quantity is None:
+                return decision(prompt=question_prompt(state, lines))
+            if diaper_reference(state.focus.description) and not explicit_diaper_packs(message.text):
+                return decision(prompt="Indica paquetes/envases de pañales explícitamente.")
+            renew(proposal_quantity=quantity, focus=state.focus.model_copy(update={
+                "unit": answer.unit or state.focus.unit,
+            }))
+            return replace_focus()
+        if (answer.kind == "confirm" and state.question == "replace_duplicate"
+                and state.target and state.focus and state.replacement_confirmed and state.proposal_quantity):
+            renew(duplicate_confirmed=True)
+            return replace_focus()
         return decision(prompt=question_prompt(state, lines))
     if clean in CONTEXT_ALIASES:
         return decision(prompt="Indica el producto y la acción explícitamente." if not state else question_prompt(state, lines))

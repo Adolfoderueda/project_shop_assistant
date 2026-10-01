@@ -5,7 +5,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from catalog import resolve_product
-from dialogue import DIALOGUE_TTL, DialogueState, LineRef, expired
+from dialogue import DIALOGUE_TTL, DialogueState, LineRef, canonical_name, expired
 from dialogue_controller import reduce_dialogue
 from dialogue_replies import render_dialogue_result
 from domain import IncomingMessage, Intent, Reply
@@ -43,13 +43,44 @@ class DialogueRepository:
                     db.execute("UPDATE list_lines SET quantity=?,revision=revision+1 WHERE id=? AND revision=?",
                                (mutation.quantity, line_id, mutation.target.revision))
                 else:
-                    raise ValueError("Replacement execution belongs to Task 4")
+                    final = decision.state
+                    target = mutation.target
+                    if (target is None or final is None or final.focus is None
+                            or not final.replacement_confirmed or final.target != target
+                            or final.question is not None or mutation.quantity is None
+                            or final.proposal_quantity != mutation.quantity
+                            or final.focus.description != mutation.description):
+                        raise ValueError("Replacement requires confirmed origin, destination and quantity")
+                    current = next((l for l in self._lines(db) if l.id == target.id), None)
+                    if (current is None or current.revision != target.revision
+                            or db.execute("SELECT 1 FROM reservations WHERE line_id=?", (target.id,)).fetchone()):
+                        raise ValueError("Replacement origin changed or is reserved")
+                    conflicts = tuple(LineRef(id=l.id, revision=l.revision) for l in self._lines(db)
+                                      if l.id != target.id and canonical_name(l.description)
+                                      == canonical_name(mutation.description))
+                    if conflicts != final.candidates or (conflicts and not final.duplicate_confirmed):
+                        raise ValueError("Replacement duplicate conflict requires explicit confirmation")
+                    line_id = target.id
+                    changed = db.execute(
+                        "UPDATE list_lines SET description=?,product_id=?,quantity=?,revision=revision+1 "
+                        "WHERE id=? AND revision=? AND NOT EXISTS "
+                        "(SELECT 1 FROM reservations WHERE line_id=?)",
+                        (mutation.description, resolve_product(mutation.description), mutation.quantity,
+                         line_id, target.revision, line_id),
+                    )
+                    if changed.rowcount != 1:
+                        raise ValueError("Replacement must update exactly one current, unreserved line")
                 affected = next(l for l in self._lines(db) if l.id == line_id)
                 reference = LineRef(id=affected.id, revision=affected.revision)
                 rebound = decision.state.model_copy(update={
                     "focus": decision.state.focus.model_copy(update={"line": reference}),
                     "target": reference if decision.state.question == "quantity" else None,
                 })
+                if mutation.kind == "replace":
+                    rebound = rebound.model_copy(update={
+                        "candidates": (), "proposal_quantity": None,
+                        "replacement_confirmed": False, "duplicate_confirmed": False,
+                    })
                 decision = decision.model_copy(update={"state": rebound})
             elif decision.legacy_intent:
                 legacy_reply = self._apply(db, update_id, decision.legacy_intent, mode)
