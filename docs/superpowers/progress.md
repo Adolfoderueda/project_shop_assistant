@@ -1,5 +1,27 @@
 # Progreso del asistente de compras
 
+## 2026-10-01 — Task 6, corrección de aceptación (fix round 1)
+
+- Los tres fallos reales anteriores requerían corregir la funcionalidad, no solo
+  documentar el rechazo seguro. Se reutilizó la gramática de `validate_model` en
+  `literal_request`; `parse_with_dialogue` emite para las peticiones completas
+  reconocidas un esquema restringido a acción/nombre original/cantidad nula o
+  aclaración. Sin corregir respuestas del modelo ni ampliar permisos del controlador.
+  Rutas legacy `parse`/`parse_with_context` conservan esquema y payload; contexto
+  nuevo sigue sin IDs/controles, y peticiones desconocidas conservan ruta no fiable.
+- RED enfocado: 13 failed / 9 passed antes de tocar producción; GREEN ampliado:
+  **179 passed in 19.17s**, incluidas negaciones, condiciones, citas y calificadores.
+- **Dos probes REALES corregidos PASS (exit 0), 25/25 pasos cada uno**, mismo
+  script/datos/expectativas que los dos fallidos conservados abajo. Captura,
+  duplicado, sustitución confirmada y «aroz» literal ahora funcionan; cero órdenes
+  en los 50 pasos corregidos. Primera respuesta 12,839 s con `/api/ps` vacío;
+  segunda ejecución ya cargada 7,290 s (no atribuir a frío), resto con modelo
+  0,391–0,773 s en esa segunda ejecución. No es garantía de latencia/fiabilidad.
+- Sin acciones privadas, bot/procesos/ACL/configuración, descarga o tiendas.
+  Aceptación en Telegram privado sigue pendiente, sin activarla por inferencia.
+- Verificación final: **180 focused passed in 20.97s**, **560 full passed in
+  122.82s**, Ruff **All checks passed!**, diff sin errores (avisos LF→CRLF).
+
 ## 2026-10-01 — Task 6: diálogo contextual integrado (DONE_WITH_CONCERNS)
 
 - Siete tests de runtime/TelegramIO/Conversation con datos inventados verifican

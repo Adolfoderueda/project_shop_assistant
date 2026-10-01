@@ -44,26 +44,40 @@ def product_name(text: str) -> str | None:
     return name
 
 
+def literal_request(text: str) -> tuple[str, str] | None:
+    """Recognize the existing whole-message grammar, retaining original product data."""
+    match = re.fullmatch(r"(ahora|necesito|quiero|me hace falta|me hacen falta)\s+(.+)", normalized(text))
+    if not match:
+        return None
+    requested = match[2].removesuffix(" por favor")
+    if re.search(
+        r'\b(no|nunca|si|o|u|y|cuando|gracias)\b|\b(?:en caso de|a menos que|por favor)\b|[?¿!¡.,;:"«»“”<>\\]|https?\b|\n',
+        requested,
+    ):
+        return None
+    without_qualifiers = re.sub(r"\b(?:tipo|talla|etapa)\s+[1-9]\d*\b", "", requested)
+    if re.search(r"\d", without_qualifiers):
+        return None
+    # Split only the recognized prefix, never normalize/reconstruct the product name.
+    original = text.strip().split(maxsplit=len(match[1].split()))[-1]
+    if match[2].endswith(" por favor"):
+        original = original.rsplit(" ", 2)[0]
+    return ("mention_product" if match[1] == "ahora" else "add", original)
+
+
 def validate_model(text: str, intent: Intent, lines: list[ListLine]) -> Intent:
     if intent.action in {"buy", "resume", "remove", "set_quantity", "status"}:
         return clarify("Usa un comando explícito para esa operación.")
     if intent.action in {"add", "mention_product"}:
-        prefix = "ahora" if intent.action == "mention_product" else "(?:necesito|quiero|me hace falta|me hacen falta)"
-        match = re.fullmatch(prefix + r"\s+(.+)", normalized(text))
-        requested = match[1].removesuffix(" por favor") if match else ""
-        if not match or re.search(
-            r'\b(no|nunca|si|o|u|y|cuando|gracias)\b|\b(?:en caso de|a menos que|por favor)\b|[?¿!¡.,;:"«»“”<>\\]|https?\b|\n',
-            requested,
-        ):
+        request = literal_request(text)
+        if request is None or intent.action != request[0]:
             return clarify()
         if len(intent.lines) != 1 or intent.order_id is not None or intent.question is not None:
             return clarify()
         line = intent.lines[0]
-        if not line.description or canonical_name(line.description) != canonical_name(requested):
+        if not line.description or canonical_name(line.description) != canonical_name(request[1]):
             return clarify("No puedo omitir características del producto.")
-        without_qualifiers = re.sub(r"\b(?:tipo|talla|etapa)\s+[1-9]\d*\b", "", requested)
-        if (line.line_id is not None or line.quantity is not None or line.url is not None
-                or re.search(r"\d", without_qualifiers)):
+        if line.line_id is not None or line.quantity is not None or line.url is not None:
             return clarify()
     if intent.action == "product_query":
         requested = product_name(text)

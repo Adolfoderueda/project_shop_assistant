@@ -195,6 +195,108 @@ def test_transport_injection_cannot_change_request_destination():
     assert all(request.url.host == "127.0.0.1" for request in requests)
 
 
+@pytest.mark.parametrize("text,action,name", [
+    ("ahora pasta", "mention_product", "pasta"),
+    ("necesito arroz", "add", "arroz"),
+    ("necesito aroz", "add", "aroz"),
+    ("QUIERO Arroz ÍNTEGRAL por favor", "add", "Arroz ÍNTEGRAL"),
+    ("me hace falta Café molido", "add", "Café molido"),
+    ("me hacen falta Dodot talla 4", "add", "Dodot talla 4"),
+    ("ahora Blemil etapa 2", "mention_product", "Blemil etapa 2"),
+])
+def test_dialogue_schema_constrains_literal_whole_request(text, action, name):
+    requests = []
+
+    def respond(request):
+        body = json.loads(request.content)
+        requests.append(body)
+        # Exercise the emitted format boundary, not a fabricated interpreter result.
+        success, refusal = body["format"]["anyOf"]
+        assert success["properties"]["action"] == {"type": "string", "enum": [action]}
+        line = success["properties"]["lines"]
+        assert line["minItems"] == line["maxItems"] == 1
+        item = line["items"]
+        assert item["properties"]["description"] == {"type": "string", "enum": [name]}
+        assert item["properties"]["quantity"] == {"type": "null"}
+        assert item["additionalProperties"] is False
+        assert success["additionalProperties"] is False
+        assert set(success["properties"]) == {"action", "lines"}
+        assert set(item["properties"]) == {"description", "quantity"}
+        assert refusal["properties"]["action"]["enum"] == ["clarify"]
+        return ollama(json.dumps({"action": action, "lines": [{"description": name, "quantity": None}]}))
+
+    lines = [ListLine(id="private-line", description="arroz", quantity=2, revision=1)]
+    model = OllamaInterpreter(transport=httpx.MockTransport(respond))
+    result = asyncio.run(model.parse_with_dialogue(text, lines, [], None))
+    assert result == Intent(action=action, lines=[{"description": name}])
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize("text,output", [
+    ("ahora pasta", {"action": "add", "lines": [{"description": "pasta"}]}),
+    ("necesito arroz", {"action": "add", "lines": [{"description": "arroz", "quantity": 2}]}),
+    ("necesito aroz", {"action": "add", "lines": [{"description": "arroz"}]}),
+    ("ahora Dodot talla 4", {"action": "mention_product", "lines": [{"description": "Dodot"}]}),
+    ("necesito Arroz", {"action": "add", "lines": [{"description": "arroz"}]}),
+    ("necesito arroz", {"action": "add", "lines": [{"description": "arroz", "line_id": "chosen"}]}),
+    ("necesito arroz", {"action": "add", "lines": [{"description": "arroz"}], "order_id": "chosen"}),
+])
+def test_dialogue_provider_cannot_violate_source_constraints_or_be_repaired(text, output):
+    model = OllamaInterpreter(transport=httpx.MockTransport(lambda request: ollama(json.dumps(output))))
+    result = asyncio.run(model.parse_with_dialogue(text, [], [], None))
+    assert result.action == "clarify"
+    assert result.lines == []
+
+
+@pytest.mark.parametrize("text,name", [
+    ("ahora pasta si hay oferta", "pasta"),
+    ("necesito arroz cuando haya oferta", "arroz"),
+    ("no necesito arroz", "arroz"),
+    ("necesito arroz no integral", "arroz"),
+    ('necesito "arroz"', "arroz"),
+    ("ahora arroz integral", "arroz"),
+    ("necesito arroz y pasta", "arroz"),
+    ("necesito 2 arroz", "arroz"),
+    ("necesito por favor", "por"),
+])
+def test_source_constraints_do_not_bypass_unsafe_text_or_qualifier_guard(text, name):
+    from dialogue_controller import validate_model
+
+    action = "mention_product" if text.startswith("ahora") else "add"
+    requests = []
+
+    def respond(request):
+        requests.append(json.loads(request.content))
+        return ollama(json.dumps({"action": action, "lines": [{"description": name}]}))
+
+    model = OllamaInterpreter(transport=httpx.MockTransport(respond))
+    result = asyncio.run(model.parse_with_dialogue(text, [], [], None))
+    assert validate_model(text, result, []).action == "clarify"
+    if text != "ahora arroz integral":
+        assert requests[0]["format"] == Intent.model_json_schema()
+
+
+def test_dialogue_source_schema_allows_fail_closed_clarify():
+    model = OllamaInterpreter(transport=httpx.MockTransport(lambda request: ollama('{"action":"clarify","lines":[]}')))
+    result = asyncio.run(model.parse_with_dialogue("necesito arroz", [], [], None))
+    assert result.action == "clarify" and result.lines == []
+
+
+def test_dialogue_unknown_or_overlong_request_keeps_untrusted_route_bounded():
+    requests = []
+
+    def respond(request):
+        requests.append(json.loads(request.content))
+        return ollama('{"action":"clarify","lines":[]}')
+
+    model = OllamaInterpreter(transport=httpx.MockTransport(respond))
+    for text in ("hablamos de pasta", "necesito " + "arroz integral " * 20):
+        assert asyncio.run(model.parse_with_dialogue(text, [], [], None)).action == "clarify"
+    for body in requests:
+        assert body["format"] == Intent.model_json_schema()
+        assert len(json.loads(body["messages"][1]["content"])["text"]) <= 160
+
+
 def test_dialogue_payload_bounded_and_no_history_or_control_flags():
     requests = []
     now = datetime(2026, 10, 1, tzinfo=UTC)

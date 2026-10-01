@@ -177,12 +177,12 @@ con Ctrl+C. Si se instaló la tarea con consentimiento, iniciarla con
 `.\scripts\Uninstall-ShopAssistant.ps1 -Consent`. Estos comandos son instrucciones,
 **no** indican que la tarea haya sido registrada ni probada en este equipo.
 
-## Diálogo contextual de lista (01-10-2026; calidad Gemma pendiente)
+## Diálogo contextual de lista (01-10-2026; muestra aislada corregida)
 
 SQLite conserva el producto preguntado y las propuestas, también tras reiniciar.
 El modelo solo propone nombres/interpretaciones: no elige IDs ni revisiones, no
 confirma sustituciones y no autoriza compras. Estos ejemplos describen el flujo
-validado **offline**, no una garantía del clasificador Gemma real:
+validado offline y en una pequeña muestra aislada real, no una garantía general:
 
 - «necesito arroz» → pregunta cantidad; «2» fija **2 envases en total**, no suma 2.
   Para evitar el modelo: `/anadir arroz`, seguido de «2».
@@ -227,10 +227,16 @@ falso y **no constituye prueba del modelo**; `-Offline -FailExpectation` comprue
 el camino de salida fallida/limpieza. No ejecutar el probe durante una operación
 sensible: comparte el Ollama existente y podría competir por sus recursos.
 
-**Resultado real: FALLÓ en dos ejecuciones**, con cero órdenes. Gemma confundió
-«ahora pasta» con un alta, copió una cantidad del contexto para «necesito arroz»
-y corrigió «aroz» a «arroz»; el controlador rechazó esas propuestas sin mutar.
-Alta/cantidad simple, consulta intermedia y pañales sí pasaron en esta muestra.
+**Resultado real actualizado:** las dos ejecuciones iniciales FALLARON; tras la
+corrección, dos ejecuciones del mismo probe pasaron **25/25 pasos cada una**, con
+cero órdenes. Para las peticiones completas ya reconocidas («necesito X»,
+«quiero X», «me hace(n) falta X», «ahora X»), la gramática compartida restringe
+el esquema de salida a la acción correspondiente, el nombre original exacto y
+cantidad nula, o aclaración. Conserva acentos/mayúsculas/variantes y evita copiar
+cantidades o corregir erratas. Si el modelo incumple esas restricciones se
+rechaza, no se repara. Condiciones/negaciones/citas no reciben esa restricción;
+siguen siendo datos no fiables y el controlador conserva sus rechazos. Frases
+no reconocidas o nombres de más de 160 caracteres mantienen la ruta anterior.
 Ver `docs/superpowers/prueba-dialogo-contextual-2026-10-01.md`. No demuestra
 fiabilidad general ni acepta Telegram privado: esa fase sigue **no probada**.
 No cambiar el proveedor/configuración ni reiniciar el bot a partir de esta prueba.

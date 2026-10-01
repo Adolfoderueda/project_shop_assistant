@@ -7,6 +7,7 @@ import re
 import httpx
 
 from dialogue import DialogueState
+from dialogue_controller import literal_request
 from domain import Intent, ListLine
 from interpreter import clarify, parse_command
 from product_memory import ObservedProduct
@@ -49,6 +50,29 @@ def _plain(value: str) -> str:
     return re.sub(r"<[^>]*>|[<>]", "", value)[:160]
 
 
+def _request_schema(request: tuple[str, str]) -> dict:
+    """Constrain generation from trusted source grammar, not from model proposals."""
+    action, description = request
+    return {"anyOf": [
+        {"type": "object", "additionalProperties": False, "required": ["action", "lines"],
+         "properties": {
+             "action": {"type": "string", "enum": [action]},
+             "lines": {"type": "array", "minItems": 1, "maxItems": 1, "items": {
+                 "type": "object", "additionalProperties": False,
+                 "required": ["description", "quantity"], "properties": {
+                     "description": {"type": "string", "enum": [description]},
+                     "quantity": {"type": "null"},
+                 },
+             }},
+         }},
+        {"type": "object", "additionalProperties": False, "required": ["action", "lines"],
+         "properties": {
+             "action": {"type": "string", "enum": ["clarify"]},
+             "lines": {"type": "array", "maxItems": 0, "items": {}},
+         }},
+    ]}
+
+
 class OllamaInterpreter:
     def __init__(self, model: str = "gemma4:e2b", *, transport: httpx.AsyncBaseTransport | None = None):
         self.model = model
@@ -75,6 +99,11 @@ class OllamaInterpreter:
         command = parse_command(text, lines)
         if command is not None:
             return command
+        request = literal_request(text) if dialogue else None
+        # Do not bypass the existing 160-character presentation bound through schema literals.
+        if request is not None and len(request[1]) > 160:
+            request = None
+        schema = _request_schema(request) if request is not None else Intent.model_json_schema()
         context = {
             "text": _plain(text) if dialogue else text,
             "lines": [
@@ -128,7 +157,7 @@ class OllamaInterpreter:
                             "model": self.model,
                             "stream": False,
                             "think": False,
-                            "format": Intent.model_json_schema(),
+                            "format": schema,
                             "options": {"num_ctx": 4096},
                             "messages": [
                                 {
@@ -151,6 +180,11 @@ class OllamaInterpreter:
                     if message.get("role") != "assistant" or message.get("refusal"):
                         return clarify()
                     content = message["content"]
-                    return Intent.model_validate_json(content)
+                    result = Intent.model_validate_json(content)
+                    if request is not None:
+                        expected = Intent(action=request[0], lines=[{"description": request[1]}])
+                        if result != expected:
+                            return clarify()
+                    return result
         except Exception:  # noqa: BLE001 -- untrusted local provider; never expose raw response/errors
             return clarify("No he podido interpretar el mensaje. Usa un comando explícito.")
