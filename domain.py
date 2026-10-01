@@ -69,7 +69,10 @@ class IntentLine(Model):
 
 
 class Intent(Model):
-    action: Literal["add", "remove", "set_quantity", "list", "product_query", "buy", "status", "resume", "clarify"]
+    action: Literal[
+        "add", "remove", "set_quantity", "list", "product_query", "mention_product", "buy",
+        "status", "resume", "clarify",
+    ]
     lines: list[IntentLine] = Field(default_factory=list)
     order_id: str | None = None
     question: str | None = None
