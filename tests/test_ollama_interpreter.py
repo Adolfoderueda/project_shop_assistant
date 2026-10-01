@@ -1,9 +1,11 @@
 import asyncio
 import json
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 
+from dialogue import DialogueState, LineRef, ProductMention
 from domain import Intent, ListLine
 from ollama_interpreter import OllamaInterpreter
 from product_memory import ObservedProduct
@@ -92,8 +94,12 @@ def test_context_caps_observations_and_omits_urls_private_fields_and_html():
     assert result.action == "product_query"
     payload = requests[0].content.decode()
     data = json.loads(json.loads(requests[0].content)["messages"][1]["content"])
+    assert set(data) == {"text", "lines", "products"}
     assert len(data["products"]) == 5
-    assert data["products"][0]["observed_on"] == "2026-09-27"
+    assert data["products"][0] == {
+        "title": "Dodot pañales", "store_id": "nappy", "observed_on": "2026-09-27",
+        "price_cents": 1200, "availability": None, "format_note": "bad 56 unidades",
+    }
     assert "token-SECRET" not in payload
     assert "<" not in json.dumps(data) and ">" not in json.dumps(data)
     assert "historial" not in json.dumps(data, ensure_ascii=False).lower()
@@ -187,3 +193,106 @@ def test_transport_injection_cannot_change_request_destination():
     result, requests = run("necesito arroz", ollama(json.dumps({"action": "list"})))
     assert result.action == "list"
     assert all(request.url.host == "127.0.0.1" for request in requests)
+
+
+def test_dialogue_payload_bounded_and_no_history_or_control_flags():
+    requests = []
+    now = datetime(2026, 10, 1, tzinfo=UTC)
+    lines = [
+        ListLine(id=f"private-line-{i}", description=f"current-{i} " + "x" * 200,
+                 quantity=2, revision=7, product_id="private-product")
+        for i in range(25)
+    ]
+    state = DialogueState(
+        user_id=987654, chat_id=876543,
+        focus=ProductMention(description="<b>Dodot talla 4</b>" + "x" * 200,
+                             source_update_id=765432, line=LineRef(id=lines[0].id, revision=7)),
+        target=LineRef(id=lines[0].id, revision=7),
+        candidates=tuple(LineRef(id=line.id, revision=7) for line in lines[18:]),
+        question="add_or_replace", options=("add", "replace"), proposal_quantity=99,
+        replacement_confirmed=True, duplicate_confirmed=True,
+        updated_at=now, expires_at=now + timedelta(minutes=15),
+    )
+    products = [ObservedProduct(
+        id=f"private-observation-{i}", store_id="private-store", product_id="private-product",
+        title="<b>Dodot talla 4</b>" + "x" * 200, url="https://example.org/private-url",
+        observed_on="2026-09-27", price_cents=1200, availability=None,
+        format_note="<i>paquetes</i>" + "x" * 200,
+    ) for i in range(8)]
+
+    def capture(request):
+        requests.append(request)
+        return ollama('{"action":"mention_product","lines":[{"description":"Dodot talla 4"}]}')
+
+    interpreter = OllamaInterpreter(transport=httpx.MockTransport(capture))
+    result = asyncio.run(interpreter.parse_with_dialogue("ahora Dodot talla 4", lines, products, state))
+    assert result.action == "mention_product" and result.lines[0].quantity is None
+    assert len(requests) == 1
+    body = json.loads(requests[0].content)
+    context = json.loads(body["messages"][1]["content"])
+    assert body["options"]["num_ctx"] == 4096
+    assert body["think"] is False and body["stream"] is False
+    assert str(requests[0].url) == "http://127.0.0.1:11434/api/chat"
+    assert len(body["messages"]) == 2
+    assert len(context["lines"]) == 20 and len(context["products"]) == 5
+    assert set(context["dialogue"]) == {"focus", "question", "options", "candidates"}
+    assert context["dialogue"]["question"] == "add_or_replace"
+    assert context["dialogue"]["options"] == ["add", "replace"]
+    assert context["dialogue"]["focus"] == "Dodot talla 4" + "x" * 147
+    assert context["dialogue"]["candidates"] == [
+        f"current-{i} " + "x" * 149 for i in range(18, 23)
+    ]
+    assert all(set(line) == {"description", "quantity"} for line in context["lines"])
+    assert all(set(product) == {"title", "price_cents", "availability", "format_note"}
+               for product in context["products"])
+    assert all(len(line["description"]) <= 160 for line in context["lines"])
+    assert all(len(product["title"]) <= 160 and len(product["format_note"]) <= 160
+               for product in context["products"])
+    serialized = json.dumps(context)
+    for forbidden in ("private-", "revision", "confirmed", "updated_at", "expires_at",
+                      "source_update_id", "observed_on", "history", "transcript", "configuration"):
+        assert forbidden not in serialized
+    assert "<" not in serialized and ">" not in serialized
+
+
+def test_dialogue_candidates_resolve_only_current_revisions_and_options_are_action_keys():
+    now = datetime(2026, 10, 1, tzinfo=UTC)
+    state = DialogueState(
+        user_id=7, chat_id=7, focus=None, question="select_line",
+        candidates=(LineRef(id="deleted", revision=1), LineRef(id="stale", revision=1),
+                    LineRef(id="current", revision=2)),
+        options=("change_quantity", "buy", "permission-secret"),
+        updated_at=now, expires_at=now + timedelta(minutes=15),
+    )
+    requests = []
+
+    def capture(request):
+        requests.append(request)
+        return ollama('{"action":"clarify"}')
+
+    asyncio.run(OllamaInterpreter(transport=httpx.MockTransport(capture)).parse_with_dialogue(
+        "a" * 200, [ListLine(id="stale", revision=2, description="old"),
+                    ListLine(id="current", revision=2, description="current name")], [], state,
+    ))
+    context = json.loads(json.loads(requests[0].content)["messages"][1]["content"])
+    assert context["dialogue"] == {
+        "focus": None, "question": "select_line", "options": ["change_quantity"],
+        "candidates": ["current name"],
+    }
+    assert context["text"] == "a" * 160
+
+
+def test_dialogue_none_is_explicit_and_slash_skips_http():
+    requests = []
+
+    def capture(request):
+        requests.append(request)
+        return ollama('{"action":"list"}')
+
+    interpreter = OllamaInterpreter(transport=httpx.MockTransport(capture))
+    result = asyncio.run(interpreter.parse_with_dialogue("mi lista", [], [], None))
+    assert result.action == "list"
+    context = json.loads(json.loads(requests[0].content)["messages"][1]["content"])
+    assert context == {"text": "mi lista", "lines": [], "products": [], "dialogue": None}
+    result = asyncio.run(interpreter.parse_with_dialogue("/lista", [], [], None))
+    assert result.action == "list" and len(requests) == 1

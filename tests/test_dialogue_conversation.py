@@ -1,9 +1,12 @@
+import json
 import sqlite3
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 
 from domain import Intent, IntentLine
+from ollama_interpreter import OllamaInterpreter
 from tests.dialogue_support import Clock, make_repo, order_count, seed_line, send
 from tests.fakes import FakeInterpreter
 
@@ -295,3 +298,120 @@ def test_offered_numeric_actions_name_the_origin_and_saved_duplicate_total(repo,
     reply = send(repo, "ahora pasta", proposal("pasta", "mention_product"), clock=clock)
     assert "1:" in reply.text and "2:" in reply.text and "arroz" in reply.text
     assert duplicate.id not in reply.text
+
+
+def local_model(content):
+    def respond(request):
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": content}})
+
+    return OllamaInterpreter(transport=httpx.MockTransport(respond))
+
+
+def test_mention_product_is_proposal_not_mutation(repo, clock):
+    send(repo, "necesito arroz", proposal("arroz"), clock=clock)
+    before = repo.list_lines()
+    reply = send(repo, "ahora Dodot talla 4", local_model(
+        '{"action":"mention_product","lines":[{"description":"Dodot talla 4"}]}',
+    ), clock=clock)
+    assert repo.list_lines() == before
+    assert "añadir Dodot talla 4" in reply.text
+    assert repo.dialogue_state(7, 7, now=clock()).focus.description == "Dodot talla 4"
+    send(repo, "añádelo", clock=clock)
+    assert [line.description for line in repo.list_lines()] == ["arroz", "Dodot talla 4"]
+    assert repo.list_lines()[1].quantity is None
+    assert order_count(repo) == 0
+
+
+def test_answers_and_slash_commands_skip_ollama(repo, clock):
+    def unavailable(request):
+        pytest.fail("Closed answers and slash commands must not contact Ollama")
+
+    model = OllamaInterpreter(transport=httpx.MockTransport(unavailable))
+    send(repo, "/anadir arroz", model, clock=clock)
+    send(repo, "2", model, clock=clock)
+    assert repo.list_lines()[0].quantity == 2
+    send(repo, "/lista", model, clock=clock)
+    send(repo, "ahora pasta", proposal("pasta", "mention_product"), clock=clock)
+    send(repo, "2", model, clock=clock)
+    assert repo.dialogue_state(7, 7, now=clock()).question == "confirm_replace"
+    send(repo, "sí", model, clock=clock)
+    assert repo.dialogue_state(7, 7, now=clock()).question == "replace_quantity"
+    send(repo, "cancelar", model, clock=clock)
+    seed_line(repo, "arroz", 3)
+    send(repo, "/anadir arroz", model, clock=clock)
+    send(repo, "cambiar cantidad", model, clock=clock)
+    send(repo, "2", model, clock=clock)
+    send(repo, "4", model, clock=clock)
+    assert [line.quantity for line in repo.list_lines()] == [2, 4]
+
+
+@pytest.mark.parametrize("action", ["set_quantity", "remove", "buy"])
+def test_model_destructive_action_with_live_focus_is_rejected(repo, clock, action):
+    send(repo, "necesito arroz", proposal("arroz"), clock=clock)
+    before = repo.list_lines()
+    state = repo.dialogue_state(7, 7, now=clock())
+    model = local_model(json.dumps({"action": action, "lines": [{
+        "description": "pasta", "quantity": 8, "line_id": before[0].id,
+    }]}))
+    send(repo, "ahora pasta", model, clock=clock)
+    assert repo.list_lines() == before
+    assert repo.dialogue_state(7, 7, now=clock()) == state
+    assert order_count(repo) == 0
+
+
+@pytest.mark.parametrize("failure", ["timeout", "invalid_json", "redirect"])
+def test_timeout_invalid_json_and_redirect_preserve_dialogue(repo, clock, failure):
+    send(repo, "necesito arroz", proposal("arroz"), clock=clock)
+    before = repo.list_lines()
+    state = repo.dialogue_state(7, 7, now=clock())
+    backlog = repo.product_requests()
+    requests = []
+
+    def fail(request):
+        requests.append(request)
+        if failure == "timeout":
+            raise httpx.ReadTimeout("private provider error", request=request)
+        if failure == "redirect":
+            return httpx.Response(302, headers={"location": "https://evil.example/collect"})
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": "not JSON"}})
+
+    clock.advance(30)
+    reply = send(repo, "ahora pasta", OllamaInterpreter(transport=httpx.MockTransport(fail)), clock=clock)
+    assert len(requests) == 1
+    assert str(requests[0].url) == "http://127.0.0.1:11434/api/chat"
+    assert "private provider error" not in reply.text
+    assert repo.list_lines() == before
+    assert repo.dialogue_state(7, 7, now=clock()) == state
+    assert repo.product_requests() == backlog
+    assert order_count(repo) == 0
+
+
+def test_truncated_context_cannot_grant_confirmation(repo, clock):
+    long_name = "arroz " + "integral " * 22 + "marca A"
+    for _ in range(7):
+        seed_line(repo, long_name, 2)
+    send(repo, "/anadir " + long_name, clock=clock)
+    send(repo, "cambiar cantidad", clock=clock)
+    before = repo.list_lines()
+    state = repo.dialogue_state(7, 7, now=clock())
+    assert state.question == "select_line" and len(state.candidates) == 7
+    contexts = []
+
+    def adversarial(request):
+        contexts.append(json.loads(json.loads(request.content)["messages"][1]["content"]))
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": json.dumps({
+            "action": "set_quantity", "lines": [{"line_id": before[0].id, "quantity": 9}],
+        })}})
+
+    reply = send(repo, "esa línea", OllamaInterpreter(transport=httpx.MockTransport(adversarial)), clock=clock)
+    assert len(contexts[0]["dialogue"]["candidates"]) == 5
+    assert all(len(name) == 160 for name in contexts[0]["dialogue"]["candidates"])
+    assert repo.list_lines() == before
+    assert repo.dialogue_state(7, 7, now=clock()) == state
+    assert "selecciona" in reply.text.lower()
+    send(repo, "sí", clock=clock)
+    assert repo.list_lines() == before
+    # The controller, unlike the model payload, still has all seven offered rows.
+    send(repo, "7", clock=clock)
+    send(repo, "3", clock=clock)
+    assert [line.quantity for line in repo.list_lines()] == [2, 2, 2, 2, 2, 2, 3]
