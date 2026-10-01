@@ -1,7 +1,7 @@
 # Conversación contextual segura para lista y fichas
 
-Estado: diseño conversacional aprobado el 01-10-2026; este documento queda
-pendiente de revisión y aprobación del usuario antes de preparar el plan.
+Estado: diseño conversacional y este documento aprobados por el usuario el
+01-10-2026. La implementación espera revisión del plan y elección de ejecución.
 
 ## 1. Objetivo y criterio de éxito
 
