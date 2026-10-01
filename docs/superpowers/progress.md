@@ -1,10 +1,11 @@
 # Progreso del asistente de compras
 
-**Punto de continuación (30-09-2026):**
-`docs/superpowers/continuacion-gemma-lista-2026-09-30.md` registra los avances,
-dos defectos pendientes antes de activar Gemma y límites de seguridad para otra
-sesión. Los 343 tests pasan, pero esos casos aún no están corregidos ni cubiertos;
-la aceptación en Telegram permanece pendiente.
+**Punto de continuación (01-10-2026):**
+`docs/superpowers/continuacion-gemma-2026-10-01.md` registra la corrección de los
+dos defectos del handoff anterior. Suite: 371 tests pasan; Ruff limpio.
+`docs/superpowers/prueba-gemma-2026-10-01.md` conserva dos pruebas aisladas con
+Ollama real y límites observados. La calidad de clasificación sigue pendiente,
+al igual que la aceptación/activación autorizada en Telegram; no habilitar todavía.
 
 ## 2026-09-29 — Aceptación sin compras (Task 4; PENDIENTE EN TELEGRAM)
 

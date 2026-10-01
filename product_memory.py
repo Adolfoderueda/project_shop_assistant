@@ -33,6 +33,8 @@ def identifiable_product_name(name: str) -> bool:
         "de", "del", "el", "la", "los", "las", "un", "una", "que",
         "producto", "productos", "articulo", "articulos", "cosa", "cosas",
         "ficha", "fichas", "precio", "precios", "stock", "disponibilidad",
+        "disponible", "disponibles", "actual", "actuales", "observado", "observados",
+        "observada", "observadas", "tienda", "tiendas",
     }
     return bool(_tokens(name) - generic)
 

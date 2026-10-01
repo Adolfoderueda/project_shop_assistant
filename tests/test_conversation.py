@@ -485,6 +485,42 @@ def test_model_add_accepts_closed_affirmative_request(repo, prefix):
     assert [line.description for line in repo.list_lines()] == ["arroz integral"]
 
 
+@pytest.mark.parametrize("prefix", ["necesito", "quiero", "me hace falta", "me hacen falta"])
+def test_model_add_accepts_only_bounded_polite_suffix(repo, prefix):
+    reply = send(
+        repo, f"{prefix} arroz integral por favor",
+        FakeInterpreter(Intent(action="add", lines=[IntentLine(description="arroz integral")])),
+    )
+    assert [line.description for line in repo.list_lines()] == ["arroz integral"]
+    assert repo.list_lines()[0].quantity is None
+    assert reply.order_id is None
+    assert orders(repo) == 0
+
+
+@pytest.mark.parametrize(
+    "text,description",
+    [
+        ("necesito arroz por favor", "arroz por favor"),
+        ("¿necesito arroz por favor?", "arroz"),
+        ("no necesito arroz por favor", "arroz"),
+        ("necesito arroz si hay oferta por favor", "arroz si hay oferta"),
+        ("necesito arroz o pasta por favor", "arroz o pasta"),
+        ("necesito arroz por favor y pasta", "arroz por favor y pasta"),
+        ("necesito por favor arroz", "por favor arroz"),
+        ("necesito arroz por favor por favor", "arroz por favor"),
+        ("necesito pienso de pollo por favor", "pienso"),
+    ],
+)
+def test_politeness_does_not_relax_affirmative_product_validation(repo, text, description):
+    reply = send(
+        repo, text,
+        FakeInterpreter(Intent(action="add", lines=[IntentLine(description=description)])),
+    )
+    assert repo.list_lines() == []
+    assert reply.order_id is None
+    assert orders(repo) == 0
+
+
 @pytest.mark.parametrize(
     "text,description",
     [("no necesito arroz", "arroz"), ("necesito pienso de pollo", "pienso")],

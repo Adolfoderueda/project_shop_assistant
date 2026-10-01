@@ -117,16 +117,18 @@ class Conversation:
         if intent.action == "add":
             clean = normalized(text)
             match = re.fullmatch(r"(?:necesito|quiero|me hace falta|me hacen falta)\s+(.+)", clean)
+            # Only a trailing closed courtesy phrase may be omitted from the
+            # product. Validate the remaining request without relaxing its guards.
+            requested = match[1].removesuffix(" por favor") if match else ""
             if not match or re.search(
                 r'\b(no|nunca|si|o|u|y|cuando|gracias)\b|\b(?:en caso de|a menos que|por favor)\b|[?¿!¡.,;:"«»“”<>\\]|https?\b|\n',
-                match[1],
+                requested,
             ):
                 return clarify()
             if len(intent.lines) != 1:
                 return clarify()
             # Remove only a closed set of request prefixes, never product qualifiers.
             # Substring matching lets a model turn 'pienso de pollo' into the fish alias.
-            requested = match[1]
             for line in intent.lines:
                 if not line.description or normalized(line.description) != requested:
                     return clarify(

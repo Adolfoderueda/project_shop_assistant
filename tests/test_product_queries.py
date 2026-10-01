@@ -105,6 +105,33 @@ def test_specific_unobserved_product_still_queues(repo):
     assert "anotado" in reply.text.lower()
 
 
+@pytest.mark.parametrize("direct", [False, True])
+@pytest.mark.parametrize(
+    "name",
+    ["productos disponibles", "artículos disponibles", "precios actuales",
+     "fichas observadas", "disponibilidad actual", "productos de las tiendas"],
+)
+def test_generic_compound_query_never_claims_or_records_backlog(repo, name, direct):
+    text = f"¿qué {name} vimos?"
+    if direct:
+        message = IncomingMessage(update_id=1, user_id=7, chat_id=7, text=text)
+        repo.ingest_batch([message], 2)
+        reply = repo.apply_intent(1, query(name), "dry_run")
+    else:
+        reply = send(repo, text, query(name))
+    assert repo.product_requests() == []
+    assert "pendiente" not in reply.text.lower()
+    assert "anotado" not in reply.text.lower()
+    assert repo.list_lines() == []
+
+
+@pytest.mark.parametrize("name", ["arroz integral", "leche sin lactosa", "Dodot talla 4"])
+def test_specific_compound_product_remains_researchable(repo, name):
+    reply = send(repo, f"¿qué sabes de {name}?", query(name))
+    assert repo.product_requests() == [name.casefold()]
+    assert "anotado" in reply.text.lower()
+
+
 def test_direct_product_query_does_not_queue_generic_name(repo):
     message = IncomingMessage(update_id=1, user_id=7, chat_id=7, text="¿Qué productos vimos?")
     repo.ingest_batch([message], 2)
