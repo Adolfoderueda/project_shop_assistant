@@ -61,3 +61,31 @@ def send(
 def order_count(repo: Repository) -> int:
     with sqlite3.connect(repo.path) as db:
         return db.execute("SELECT count(*) FROM orders").fetchone()[0]
+
+
+def dialogue_parts(path, bot, clock, interpreter=None):
+    from tests.fakes import FakeStore
+    from tests.test_end_to_end import components
+
+    store = FakeStore("test", [])
+    parts = list(components(path, bot, store))
+    parts[3] = Conversation(parts[1], interpreter or FakeInterpreter(), clock=clock)
+
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("Dialogue integration must not invoke checkout/store operations")
+
+    parts[4].run = forbidden
+    for method in ("search", "quote", "prepare", "submit", "reconcile"):
+        setattr(store, method, forbidden)
+    return tuple(parts), store
+
+
+def feed(parts, bot, number, text):
+    from tests.test_end_to_end import cycles
+
+    bot.receive(number, text)
+    cycles(parts, 2)
+
+
+def propose(name, action="add"):
+    return FakeInterpreter(Intent(action=action, lines=[IntentLine(description=name)]))

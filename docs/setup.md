@@ -177,7 +177,67 @@ con Ctrl+C. Si se instaló la tarea con consentimiento, iniciarla con
 `.\scripts\Uninstall-ShopAssistant.ps1 -Consent`. Estos comandos son instrucciones,
 **no** indican que la tarea haya sido registrada ni probada en este equipo.
 
-## Bloqueos de compra autónoma
+## Diálogo contextual de lista (01-10-2026; calidad Gemma pendiente)
+
+SQLite conserva el producto preguntado y las propuestas, también tras reiniciar.
+El modelo solo propone nombres/interpretaciones: no elige IDs ni revisiones, no
+confirma sustituciones y no autoriza compras. Estos ejemplos describen el flujo
+validado **offline**, no una garantía del clasificador Gemma real:
+
+- «necesito arroz» → pregunta cantidad; «2» fija **2 envases en total**, no suma 2.
+  Para evitar el modelo: `/anadir arroz`, seguido de «2».
+- «ahora pasta» → ofrece añadir o sustituir; «añádelo» añade pasta y pregunta su
+  cantidad. «sustitúyelo» pide confirmar origen/destino; «sí» todavía no cambia
+  la línea. Contestar «conserva la cantidad» o una cantidad explícita completa
+  el reemplazo. Si la cantidad original no se conoce, hay que indicar una.
+- Un producto repetido ofrece «cambiar cantidad» o «añadir otra línea»; «sí»
+  no elige una opción. Cuando hay varias líneas, seleccionar solo el número
+  ofrecido y después contestar su cantidad. No se fusionan ni suman variantes.
+  Si la sustitución choca con un destino existente, requiere confirmar que las
+  líneas sigan separadas, o cancelar. Una línea cambiada/reservada no se sustituye.
+- «cancelar» cancela la propuesta, **no deshace** altas/cantidades ya guardadas.
+  Consultar la ficha de otro producto cancela una pregunta incompatible;
+  consultar la lista no cambia el foco. `/lista` conserva IDs; lista natural no.
+
+El contexto caduca a los **15 minutos de inactividad**, incluido tras reinicio.
+Cada respuesta válida renueva el plazo; leer la lista, respuestas inválidas y
+replay del mismo update no lo renuevan. Un número o «sí» fuera del contexto no
+autoriza actuar. La cantidad afecta solo al producto preguntado. Se admiten
+enteros positivos de envases (etiquetas paquetes/botes/sacos), no kilos, litros,
+fracciones ni conversiones. Para pañales hay que escribir «2 paquetes» o
+«2 envases» explícitamente; «2» solo no basta. No se corrigen nombres con erratas.
+
+### Verificación separada, sin activar ni parar el bot
+
+Desde el worktree, con el entorno existente:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_dialogue_end_to_end.py -q
+powershell.exe -NoProfile -File scripts/Probe-Dialogue.ps1
+```
+
+El script es opt-in: usa solo datos inventados y SQLite temporal bajo
+`$env:LOCALAPPDATA\Temp\opencode`, muestra `/api/ps` inicial y mide tiempos.
+No carga configuración privada, no llama a Telegram/tiendas, no arranca servicios,
+no instala/descarga y no fuerza descarga de memoria ni reinicio de Ollama. Borra
+sus DB al terminar; devuelve 0 si pasan todas las expectativas, 1 si fallan y
+2 si el servicio existente no está disponible (pendiente, sin activarlo).
+`-Python <ruta>` permite elegir el entorno existente. `-Offline` usa un transporte
+falso y **no constituye prueba del modelo**; `-Offline -FailExpectation` comprueba
+el camino de salida fallida/limpieza. No ejecutar el probe durante una operación
+sensible: comparte el Ollama existente y podría competir por sus recursos.
+
+**Resultado real: FALLÓ en dos ejecuciones**, con cero órdenes. Gemma confundió
+«ahora pasta» con un alta, copió una cantidad del contexto para «necesito arroz»
+y corrigió «aroz» a «arroz»; el controlador rechazó esas propuestas sin mutar.
+Alta/cantidad simple, consulta intermedia y pañales sí pasaron en esta muestra.
+Ver `docs/superpowers/prueba-dialogo-contextual-2026-10-01.md`. No demuestra
+fiabilidad general ni acepta Telegram privado: esa fase sigue **no probada**.
+No cambiar el proveedor/configuración ni reiniciar el bot a partir de esta prueba.
+La receta `-P`/`PYTHONPATH` y la protección ACL anteriores siguen vigentes; solo
+usar esa receta con autorización privada independiente, sin `/comprar`.
+
+## Bloqueos de compra autónoma (situación preexistente)
 
 Actualmente todas las tiendas exponen `prepare=False`, `submit=False`,
 `reconcile=False`, `live_verified=False`, cotización parcial sin envío/total/destino

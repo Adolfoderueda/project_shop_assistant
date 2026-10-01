@@ -1,5 +1,26 @@
 # Progreso del asistente de compras
 
+## 2026-10-01 — Task 6: diálogo contextual integrado (DONE_WITH_CONCERNS)
+
+- Siete tests de runtime/TelegramIO/Conversation con datos inventados verifican
+  captura, reemplazo tras reinicio, replay sin duplicación/renovación, caducidad
+  a 900 segundos, fallo del intérprete, chat ajeno, rollback de outbox y script
+  con salida 0/1 y limpieza temporal. Las rutas previas ya eran verdes: ningún
+  RED artificial ni cambio de producción; RED del script ausente antes de crearlo.
+- Probe opt-in `scripts/Probe-Dialogue.ps1`, solo loopback Ollama existente y DB
+  temporales eliminadas. **Dos ejecuciones live FALLARON (exit 1): 13/25 pasos
+  válidos en cada una**, con cero órdenes en los 50 pasos. Gemma propone `add`
+  para «ahora pasta», copia cantidad del contexto y corrige «aroz»; el controlador
+  rechaza esas propuestas. No se relajó validación para dar un PASS aparente.
+- Primera respuesta con `/api/ps` vacío: 13,074 s; caliente 0,372–0,415 s.
+  Repetición diagnóstica ya cargada: primera 0,584 s, resto 0,387–1,085 s.
+  Informe versionado: `docs/superpowers/prueba-dialogo-contextual-2026-10-01.md`.
+- **Telegram privado no probado**, proveedor sin cambios, worker existente intacto.
+  Sin ajustes/DB privados, tiendas, compras, descarga/instalación, ACL, merge/push.
+  No considerar el flujo Gemma fiable ni activar el bot por estos resultados.
+- Verificación final tras reforzar guards/assertions: **535 passed in 113.62s**,
+  Ruff **All checks passed!**, `git diff --check` limpio (solo avisos LF→CRLF).
+
 **Punto de continuación (01-10-2026):**
 `docs/superpowers/continuacion-gemma-2026-10-01.md` registra la corrección de los
 dos defectos del handoff anterior. Suite: 371 tests pasan; Ruff limpio.
