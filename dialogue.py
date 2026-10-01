@@ -36,6 +36,7 @@ class DialogueState(Model):
     target: LineRef | None = None
     candidates: tuple[LineRef, ...] = ()
     question: Question | None = None
+    # Choice options are ordered action keys, not displayed Spanish labels.
     options: tuple[str, ...] = ()
     proposal_quantity: Positive | None = None
     replacement_confirmed: bool = False
@@ -113,14 +114,14 @@ def parse_answer(
     if clean in {"si", "confirmo"} and question in {"confirm_replace", "replace_duplicate"}:
         return DialogueAnswer(kind="confirm")
     if question == "add_or_replace":
-        if clean in {"anadelo", "anadelo a mi lista", "anade eso"}:
+        if clean in {"anadelo", "anadelo a mi lista", "anade eso"} and "add" in state.options:
             return DialogueAnswer(kind="add")
-        if clean == "sustituyelo":
+        if clean == "sustituyelo" and "replace" in state.options:
             return DialogueAnswer(kind="replace")
     if question == "duplicate_choice":
-        if clean == "anadir otra linea":
+        if clean == "anadir otra linea" and "add" in state.options:
             return DialogueAnswer(kind="add")
-        if clean == "cambiar cantidad":
+        if clean == "cambiar cantidad" and "change_quantity" in state.options:
             return DialogueAnswer(kind="change_quantity")
     if question == "replace_quantity" and clean == "conserva la cantidad":
         return DialogueAnswer(kind="keep_quantity")

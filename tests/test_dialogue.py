@@ -31,7 +31,7 @@ def state():
 @pytest.fixture
 def duplicate_state(state):
     return state.model_copy(update={
-        "question": "duplicate_choice", "options": ("añadir otra línea", "cambiar cantidad"),
+        "question": "duplicate_choice", "options": ("add", "change_quantity"),
     })
 
 
@@ -107,11 +107,45 @@ def test_quantity_and_selection_are_question_specific(state):
     ("no", "confirm_replace", "cancel"),
 ])
 def test_closed_vocabulary_is_scoped(state, text, question, kind):
-    pending = state.model_copy(update={"question": question})
+    options = (kind,) if question in {"add_or_replace", "duplicate_choice"} else ()
+    pending = state.model_copy(update={"question": question, "options": options})
     assert parse_answer(text, pending, now=state.updated_at).kind == kind
     if kind != "cancel":
         assert parse_answer(text, state, now=state.updated_at) is None
         assert parse_answer(text + " por favor", pending, now=state.updated_at) is None
+
+
+@pytest.mark.parametrize("question,text,unoffered_options", [
+    ("add_or_replace", "añádelo", ("replace",)),
+    ("add_or_replace", "añádelo a mi lista", ("replace",)),
+    ("add_or_replace", "añade eso", ("replace",)),
+    ("add_or_replace", "sustitúyelo", ("add",)),
+    ("duplicate_choice", "añadir otra línea", ("change_quantity",)),
+    ("duplicate_choice", "cambiar cantidad", ("add",)),
+])
+@pytest.mark.parametrize("empty_options", [False, True])
+def test_textual_choice_requires_offered_action(state, question, text,
+                                              unoffered_options, empty_options):
+    pending = state.model_copy(update={
+        "question": question, "options": () if empty_options else unoffered_options,
+    })
+    assert parse_answer(text, pending, now=state.updated_at) is None
+
+
+def test_choice_options_are_action_keys_not_display_labels(state):
+    pending = state.model_copy(update={
+        "question": "duplicate_choice", "options": ("añadir otra línea",),
+    })
+    assert parse_answer("añadir otra línea", pending, now=state.updated_at) is None
+
+
+def test_numeric_choice_uses_offered_action_order(state):
+    pending = state.model_copy(update={
+        "question": "duplicate_choice", "options": ("change_quantity", "add"),
+    })
+    answer = parse_answer("2", pending, now=state.updated_at)
+    assert (answer.kind, answer.selection) == ("select", 2)
+    assert parse_answer("3", pending, now=state.updated_at) is None
 
 
 @pytest.mark.parametrize("unit", ["envases", "paquetes", "botes", "sacos"])
