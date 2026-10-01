@@ -3,13 +3,16 @@
 import re
 import unicodedata
 from datetime import datetime, timedelta
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from domain import Intent, Model, Positive, UtcTime, utc
 
 DIALOGUE_TTL = timedelta(minutes=15)
+# Contextual quantities must fit SQLite's signed 64-bit INTEGER bindings.
+MAX_QUANTITY = 2**63 - 1
+PackageQuantity = Annotated[int, Field(gt=0, le=MAX_QUANTITY)]
 Unit = Literal["envases", "paquetes", "botes", "sacos"]
 Question = Literal[
     "add_or_replace", "duplicate_choice", "select_line", "quantity", "confirm_replace",
@@ -38,7 +41,7 @@ class DialogueState(Model):
     question: Question | None = None
     # Choice options are ordered action keys, not displayed Spanish labels.
     options: tuple[str, ...] = ()
-    proposal_quantity: Positive | None = None
+    proposal_quantity: PackageQuantity | None = None
     replacement_confirmed: bool = False
     duplicate_confirmed: bool = False
     updated_at: UtcTime
@@ -50,7 +53,7 @@ class DialogueAnswer(Model):
         "add", "replace", "change_quantity", "keep_quantity", "quantity", "confirm",
         "select", "remove_id", "cancel",
     ]
-    quantity: Positive | None = None
+    quantity: PackageQuantity | None = None
     unit: Unit | None = None
     selection: Positive | None = None
     line_id: str | None = None
@@ -59,7 +62,7 @@ class DialogueAnswer(Model):
 class DialogueMutation(Model):
     kind: Literal["add", "set_quantity", "replace"]
     description: str | None = None
-    quantity: Positive | None = None
+    quantity: PackageQuantity | None = None
     target: LineRef | None = None
     unit: Unit = "envases"
 
@@ -133,6 +136,8 @@ def parse_answer(
             try:
                 quantity = int(match[1])
             except ValueError:
+                return None
+            if quantity > MAX_QUANTITY:
                 return None
             return DialogueAnswer(
                 kind="quantity", quantity=quantity, unit=match[2],

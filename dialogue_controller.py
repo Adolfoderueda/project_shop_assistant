@@ -5,6 +5,7 @@ from datetime import datetime
 
 from dialogue import (
     DIALOGUE_TTL,
+    MAX_QUANTITY,
     DialogueAnswer,
     DialogueDecision,
     DialogueMutation,
@@ -187,6 +188,10 @@ def reduce_dialogue(
     intent = command if command is not None else proposal
     if command is None and intent is not None:
         intent = validate_model(message.text, intent, lines)
+    if intent is not None and any(
+        line.quantity is not None and line.quantity > MAX_QUANTITY for line in intent.lines
+    ):
+        return decision(prompt="Indica una cantidad entera de envases dentro del rango permitido.")
     priority = message.text.strip().startswith("/") or (command and command.action == "buy")
     answer = None if priority else parse_answer(message.text, state, now=now)
     if answer and answer.kind == "cancel":
