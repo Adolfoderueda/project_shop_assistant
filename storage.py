@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from catalog import PRODUCT_RULES, resolve_product
 from checkout_storage import CheckoutRepository
+from dialogue_storage import DialogueRepository
 from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
 from product_memory import (
     ObservedProduct,
@@ -35,7 +36,7 @@ OBSERVED_PRODUCTS = (
 )
 
 
-class Repository(CheckoutRepository):
+class Repository(CheckoutRepository, DialogueRepository):
     def __init__(self, path: Path):
         self.path = Path(path)
 
@@ -61,7 +62,7 @@ class Repository(CheckoutRepository):
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 5:
+            if version > 6:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
@@ -73,6 +74,8 @@ class Repository(CheckoutRepository):
                 db.executescript((Path(__file__).parent / "migrations/004.sql").read_text())
             if version < 5:
                 db.executescript((Path(__file__).parent / "migrations/005.sql").read_text())
+            if version < 6:
+                db.executescript((Path(__file__).parent / "migrations/006.sql").read_text())
             db.executemany(
                 "INSERT OR IGNORE INTO observed_products "
                 "(id,store_id,product_id,title,url,observed_on,price_cents,availability,format_note) "
@@ -119,7 +122,11 @@ class Repository(CheckoutRepository):
             missing_source = db.execute(
                 "SELECT 1 FROM orders o LEFT JOIN inbox i ON i.update_id=o.source_update_id "
                 "WHERE i.update_id IS NULL LIMIT 1").fetchone()
-            if foreign_inbox or foreign_notices or missing_source:
+            foreign_dialogue = db.execute(
+                "SELECT 1 FROM dialogue_state WHERE user_id!=? OR chat_id!=? "
+                "OR user_id IS NULL OR chat_id IS NULL LIMIT 1", (user_id, user_id),
+            ).fetchone()
+            if foreign_inbox or foreign_notices or missing_source or foreign_dialogue:
                 raise PermissionError("Stored work belongs to another owner; manual review required")
 
     def verify_formula(self, gtin: str) -> None:
