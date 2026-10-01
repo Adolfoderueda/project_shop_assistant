@@ -86,6 +86,27 @@ necesitas. Son instrucciones de parada y retirada; no se ha ejecutado `disable`,
 `ollama rm` ni la desinstalación.
 Ninguna de estas acciones borra la configuración privada ni los datos de Telegram.
 
+**Prueba experimental desde el worktree conservando el bot original:** solo si el
+usuario decide probarlo pese a las limitaciones de calidad conocidas. No copiar
+`private/` ni volver a ejecutar `configure`. Detener el worker actual con Ctrl+C
+y, en PowerShell desde la raíz original `project_shop_assistant`, ejecutar:
+
+```powershell
+$env:PYTHONPATH = "$PWD\.worktrees\gemma4-local"
+.\.venv\Scripts\python.exe -P -m shop_assistant model-local enable
+# Solo tras confirmar Provider: ollama, y sin otro worker en marcha:
+.\.venv\Scripts\python.exe -P -m shop_assistant run
+```
+
+`-P` evita que los módulos de la raíz antigua oculten los del worktree, mientras
+la carpeta actual conserva la configuración privada existente. La revisión de
+permisos ahora se aplica/verifica por lotes: una activación de prueba con perfiles
+inventados (728 archivos, 236 carpetas) tardó 23,898 s; no garantiza ese tiempo en
+el bot privado. Primero probar `/lista` y preguntas de lista/fichas; no `/comprar`.
+Para volver a comandos, parar el worker y ejecutar en esa misma consola
+`.\.venv\Scripts\python.exe -P -m shop_assistant model-local disable`, y reiniciar.
+El bot interpreta compras/lista/fichas; todavía no ofrece conversación general.
+
 **Aceptación pendiente (sin compras):** requiere autorización expresa y sesión privada
 disponible; no se realiza desde esta rama. Antes de habilitarlo, confirma la calidad del
 modelo con más pruebas representativas y conserva `commands_only` si no es suficiente.

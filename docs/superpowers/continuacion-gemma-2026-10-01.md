@@ -60,3 +60,37 @@ ni se asumió identidad a partir de commits anteriores.
 Antes de habilitar, acordar una fase de calidad para la clasificación genérica y la
 respuesta de cantidad de la primera línea pendiente, repetir aceptación aislada y
 solicitar autorización específica para Telegram. No merge/push/activación en esta fase.
+
+## Seguimiento: atasco de permisos al probar Telegram
+
+El usuario pidió interactuar por Telegram y después aprobó corregir la activación
+lenta sin rebajar la protección. Se observó `model-local enable` durante más de
+tres minutos con un hijo PowerShell ejecutando ACL; Ollama respondía sin modelos
+cargados. Solo se contaron metadatos de perfiles/logs: 728 archivos y 236 carpetas
+en perfiles. No se leyeron tokens, dirección, mensajes ni base privada.
+
+- Causa: `_private_tree` iniciaba `whoami` y dos PowerShell por ruta, repetido por
+  las cargas/guardado de configuración. Ahora hay un `whoami` y un PowerShell por
+  árbol; se reutilizan los scripts de aplicación/lectura y se verifica cada DACL.
+- Conserva propietario, FullControl exclusivo, protección contra herencia,
+  herencia correcta en directorios y propagación cero. Preflight de todo el árbol
+  antes de mutar, sin descender en enlaces/junctions; recheck por ruta en PowerShell.
+  Informes incompletos, permisos incorrectos o fallos del comando bloquean la operación.
+- RED real Windows: 12 PowerShell para seis rutas en vez de uno, y mutación del
+  padre antes de rechazar una junction. GREEN con lectura ACL independiente.
+- Revisión independiente: un Important por no comprobar propagación en el lote;
+  regresión RED (no rechazaba `InheritOnly`) → GREEN al exigir propagación cero.
+  También se corrigió UTF-8 en la lectura independiente del test con nombre Unicode;
+  el código de producción recibe nombres en JSON escapado y devuelve solo un resumen.
+- Verificación final: **379 passed in 93.07s**; Ruff limpio y diff check limpio.
+- Benchmark aislado, sin Telegram/configuración del bot: 728 archivos y 236
+  directorios de perfiles inventados; árbol **5,142 s / un PowerShell**. Enable
+  completo de esa configuración temporal, comprobando Ollama local existente:
+  **23,898 s / seis PowerShell**. No es un máximo ni medición del bot privado.
+- La revisión no evaluó reemplazos concurrentes del sistema de archivos ni el
+  bot privado: no se promete defensa por handles contra carreras TOCTOU ni
+  aceptación de Telegram. No se arrancó/paró un bot, ni hubo merge/push/compras.
+
+Próximo paso del usuario: reintentar `model-local enable` con la rama del worktree
+y raíz original (ver `docs/setup.md`), arrancar un solo worker y probar `/lista`
+y preguntas seguras. No enviar `/comprar`. Sigue siendo una prueba experimental.

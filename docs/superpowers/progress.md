@@ -5,7 +5,14 @@
 dos defectos del handoff anterior. Suite: 371 tests pasan; Ruff limpio.
 `docs/superpowers/prueba-gemma-2026-10-01.md` conserva dos pruebas aisladas con
 Ollama real y límites observados. La calidad de clasificación sigue pendiente,
-al igual que la aceptación/activación autorizada en Telegram; no habilitar todavía.
+al igual que la aceptación en Telegram; no considerarlo listo para uso habitual.
+
+**Seguimiento solicitado por el usuario:** quiere probar Telegram experimentalmente.
+Se corrigió el atasco de `model-local enable` por procesos ACL por archivo; ahora
+se aplica/verifica por lotes sin relajar los permisos. **379 tests pasan**, Ruff
+limpio. Activación en configuración temporal con 728 archivos/236 carpetas de
+perfiles: 23,898 s; no es prueba del bot privado. Ver el seguimiento del documento
+de continuación y las instrucciones de worktree en `docs/setup.md`.
 
 ## 2026-09-29 — Aceptación sin compras (Task 4; PENDIENTE EN TELEGRAM)
 
