@@ -37,7 +37,7 @@ def test_list_from_model_uses_persisted_lines_after_restart(repo):
     reply = send(reopened, "¿qué hay en mi lista?", Intent(action="list"))
     assert "arroz" in reply.text
     assert "2" in reply.text
-    assert reopened.list_lines()[0].id in reply.text
+    assert reopened.list_lines()[0].id not in reply.text
 
 
 def test_product_query_uses_two_dated_observations_not_current_offers(repo):

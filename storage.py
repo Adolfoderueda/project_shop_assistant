@@ -3,11 +3,13 @@
 import json
 import sqlite3
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from catalog import PRODUCT_RULES, resolve_product
 from checkout_storage import CheckoutRepository
+from dialogue import expired
 from dialogue_storage import DialogueRepository
 from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
 from product_memory import (
@@ -224,14 +226,25 @@ class Repository(CheckoutRepository, DialogueRepository):
 
     def pending_clarification(self, user_id: int) -> Intent | None:
         with self._connection() as db:
-            row = db.execute(
-                "SELECT intent_json FROM clarifications WHERE user_id=?", (user_id,)
-            ).fetchone()
-            return Intent.model_validate_json(row[0]) if row else None
+            revisions = {l.id: l.revision for l in self._lines(db)}
+            for row in db.execute("SELECT chat_id FROM dialogue_state WHERE user_id=?", (user_id,)):
+                state = self._read_dialogue_state(db, user_id, row[0])
+                if state is None or expired(state, datetime.now(UTC)):
+                    continue
+                refs = (*state.candidates, *((state.target,) if state.target else ()))
+                if any(revisions.get(r.id) != r.revision for r in refs):
+                    continue
+                if state.question == "quantity" and state.target:
+                    return Intent(action="set_quantity", lines=[IntentLine(line_id=state.target.id)])
+                if state.question == "remove_id":
+                    return Intent(action="remove", lines=[IntentLine(line_id=r.id) for r in state.candidates])
+            return None
 
     def apply_intent(
         self, update_id: int, intent: Intent, mode: str, *, conversation=False
     ) -> Reply:
+        if conversation:
+            return self.apply_dialogue(update_id, intent, mode, now=datetime.now(UTC))
         if mode not in ("dry_run", "live"):
             raise ValueError("Invalid mode")
         with self._connection(write=True) as db:
@@ -241,27 +254,6 @@ class Repository(CheckoutRepository, DialogueRepository):
             if source["completed"]:
                 return Reply.model_validate_json(source["reply_json"])
             reply = self._apply(db, update_id, intent, mode)
-            if conversation and intent.action in ("add", "buy", "set_quantity", "remove"):
-                db.execute("DELETE FROM clarifications WHERE user_id=?", (source["user_id"],))
-                missing = [l for l in self._lines(db) if l.quantity is None]
-                if missing:
-                    target = missing[0]
-                    pending = Intent(action="set_quantity", lines=[IntentLine(line_id=target.id)])
-                    db.execute(
-                        "INSERT INTO clarifications VALUES (?,?)",
-                        (source["user_id"], pending.model_dump_json()),
-                    )
-                    reply = Reply(
-                        text=reply.text + f" Indica la cantidad de envases para "
-                        f"{target.description} ({target.id}).",
-                        order_id=reply.order_id,
-                    )
-            if conversation and intent.action == "clarify" and intent.lines:
-                pending = Intent(action="remove", lines=intent.lines)
-                db.execute(
-                    "INSERT OR REPLACE INTO clarifications VALUES (?,?)",
-                    (source["user_id"], pending.model_dump_json()),
-                )
             payload = reply.model_dump_json()
             db.execute(
                 "UPDATE inbox SET completed=1,reply_json=? WHERE update_id=?", (payload, update_id)
