@@ -116,9 +116,12 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                                        repo, settings.authorized_user_id)
             if conversation is None:
                 interpreter = _CommandsOnly()
+                reply_writer = None
                 if settings.model_provider == "ollama":
                     from ollama_interpreter import OllamaInterpreter
+                    from ollama_replies import OllamaReplyWriter
                     interpreter = OllamaInterpreter(settings.ollama_model)
+                    reply_writer = OllamaReplyWriter(settings.ollama_model)
                 elif (settings.model_provider == "openai" and settings.openai_api_key
                       and settings.openai_model):
                     from openai import AsyncOpenAI
@@ -131,7 +134,7 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                     logger.warning("Model not configured: commands-only mode; use /lista or /anadir")
                 else:
                     logger.warning("OpenAI model incomplete: commands-only mode")
-                conversation = Conversation(repo, interpreter)
+                conversation = Conversation(repo, interpreter, reply_writer=reply_writer)
             await recovery.recover()  # Abandoned attempts must be reconciled before new work.
             logger.info("Recovery finished; worker ready")
             retry_delay = 1
