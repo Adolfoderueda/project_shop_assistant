@@ -243,13 +243,16 @@ No cambiar el proveedor/configuración ni reiniciar el bot a partir de esta prue
 La receta `-P`/`PYTHONPATH` y la protección ACL anteriores siguen vigentes; solo
 usar esa receta con autorización privada independiente, sin `/comprar`.
 
-## Redacción grounded de respuestas (08-10-2026; calidad NO aceptada)
+## Redacción grounded de respuestas (08-10-2026; muestra aislada corregida)
 
 Con proveedor Ollama, Conversation prepara el resultado y un trabajo durable en
 SQLite, redacta fuera de la transacción y finaliza inbox/outbox idempotentemente.
 Tras una caída recupera la presentación sin aplicar otra vez ni renovar el TTL.
 La gramática inicial es acotada: Gemma elige lead, agrupación y composición;
 hechos, preguntas y opciones proceden de aplicación. No es prosa totalmente libre.
+El schema de generación contiene referencias completas del snapshot: permite
+bloques separados/agrupados y lead opcional aprobado; no cambia hechos ni orden
+de preguntas/opciones. El validador posterior sigue igual, sin reparar el output.
 Si el draft falla, se usa el respaldo íntegro y mejorado. Slash commands,
 autorizaciones de compra, avisos operativos y otros proveedores siguen deterministas.
 
@@ -269,11 +272,17 @@ Offline prueba contrato; OfflineReject prueba respaldo, **no calidad del modelo*
 `-Offline -FailExpectation` y `-TestUnavailable` son fixtures de fallo explícitas.
 No ejecutar el probe durante trabajo sensible: comparte recursos del Ollama local.
 
-**Tres runs REALES fallaron: 0/18 drafts normales aceptados y20/20 respaldos en
-cada uno**, aunque persistencia/seguridad pasó. El gate nunca acepta fallback-only.
-El modelo copió valores/omitió referencias; un ejemplo JSON adicional al prompt
-tampoco lo corrigió y fue revertido. No activar/reiniciar el bot por estos tests;
-calidad generativa y aceptación Telegram siguen pendientes. Evidencia completa:
+**Histórico:** tres runs REALES fallaron (0/18 drafts normales aceptados y20/20
+respaldos); un ejemplo adicional al prompt no lo corrigió y fue revertido.
+Tras autorización, se condicionó el schema a los tokens actuales; se diagnosticó
+también compatibilidad de tuples con Ollama0.35.1, conservando sus fallos.
+**Dos probes REALES corregidos PASS: 18/18 drafts normales aceptados +2 respaldos
+inyectados por run, veinte escenarios completos y cero órdenes.** El gate nunca
+acepta fallback-only. El modelo eligió lead opcional y frases aprobadas; en esta
+muestra no eligió agrupación. Hechos/preguntas/opciones siguen de aplicación.
+Solo muestra aislada y acotada, no garantía de redacción libre/fiabilidad general.
+No activar/reiniciar el bot por estos tests: aceptación Telegram sigue pendiente.
+Evidencia con fallos históricos preservados, métricas y outputs exactos:
 `docs/superpowers/prueba-respuestas-gemma-2026-10-08.md`.
 
 ## Bloqueos de compra autónoma (situación preexistente)

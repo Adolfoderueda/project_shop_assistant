@@ -72,7 +72,7 @@ def test_request_contains_only_presentation_data():
     assert body["model"] == "gemma4:e2b"
     assert body["stream"] is False and body["think"] is False
     assert body["options"] == {"num_ctx": 4096}
-    assert body["format"] == ReplyDraft.model_json_schema()
+    assert body["format"] != ReplyDraft.model_json_schema()
     assert [m["role"] for m in body["messages"]] == ["system", "user"]
     assert json.loads(body["messages"][1]["content"]) == {
         "version": 1, "kind": "question", "facts": [
@@ -85,6 +85,116 @@ def test_request_contains_only_presentation_data():
     assert request.extensions["timeout"] == {
         "connect": 2.0, "read": 20.0, "write": 20.0, "pool": 20.0,
     }
+
+
+def schema_sequences(schema):
+    assert schema["type"] == "object"
+    assert schema["required"] == ["blocks"]
+    assert schema["additionalProperties"] is False
+    sequences = []
+    for branch in schema["properties"]["blocks"]["anyOf"]:
+        assert branch["type"] == "array"
+        assert branch["minItems"] == branch["maxItems"] == len(branch["prefixItems"])
+        # Ollama's converter prioritizes items over prefixItems; omit items so
+        # the complete tuple is used. maxItems still forbids additional elements.
+        assert "items" not in branch
+        sequence = []
+        for block in branch["prefixItems"]:
+            assert block["required"] == ["role", "text"]
+            assert block["additionalProperties"] is False
+            sequence.append((block["properties"]["role"]["const"],
+                             block["properties"]["text"]["enum"]))
+        sequences.append(sequence)
+    return sequences
+
+
+def test_emitted_schema_conditions_complete_roles_and_tokens_on_snapshot():
+    value = snapshot(facts=(PresentationFact(key="f0", text="rice 1"),
+                            PresentationFact(key="f1", text="rice 2")),
+                     options=(PresentationOption(key="o0", text="change"),
+                              PresentationOption(key="o1", text="add")))
+    _, requests, _ = run(value)
+    schema = json.loads(requests[0].content)["format"]
+    sequences = schema_sequences(schema)
+    assert len(sequences) == 4  # Separate/grouped, each with/without approved lead.
+    for sequence in sequences:
+        if sequence[0][0] == "lead":
+            assert sequence[0][1] == ["Aquí tienes el detalle.", "Vamos por partes.",
+                                       "Estas son las opciones.", "Te lo explico.",
+                                       "Puedes elegir entre estas opciones."]
+            sequence = sequence[1:]
+        texts = [text for _, choices in sequence for text in choices]
+        assert "\n".join(texts).split() == ["{{f0}}", "{{f1}}", "{{q}}", "{{o0}}", "{{o1}}"]
+        assert all(len(choices) == 1 for _, choices in sequence)
+        assert all(all(token.startswith({"fact": "{{f", "question": "{{q", "option": "{{o"}[role])
+                           for token in choices[0].split()) for role, choices in sequence)
+    assert all(json.dumps(literal) not in json.dumps(schema)
+               for literal in ("rice 1", "change", "add", "PRIVATE"))
+
+
+def test_schema_omits_absent_question_and_options_without_inventing_a_draft():
+    value = snapshot(question=None, options=())
+    result, requests, _ = run(value, provider=response({"blocks": [
+        {"role": "fact", "text": "{{f0}}"}]}))
+    assert result == ReplyDraft.model_validate_json(
+        '{"blocks":[{"role":"fact","text":"{{f0}}"}]}')
+    for sequence in schema_sequences(json.loads(requests[0].content)["format"]):
+        assert {role for role, _ in sequence} <= {"lead", "fact"}
+        assert "{{q}}" not in str(sequence) and "{{o0}}" not in str(sequence)
+
+
+def test_largest_schema_is_bounded_and_description_independent():
+    value = snapshot(facts=tuple(PresentationFact(key=f"f{i}", text="{{f77}} hostile")
+                                 for i in range(20)),
+                     options=tuple(PresentationOption(key=f"o{i}", text="data") for i in range(10)))
+    _, requests, _ = run(value)
+    schema = json.loads(requests[0].content)["format"]
+    assert len(json.dumps(schema)) < 32000
+    assert len(schema_sequences(schema)) == 4
+    assert "hostile" not in str(schema) and "f77" not in str(schema)
+
+
+def test_every_emitted_branch_and_lead_choice_passes_unchanged_validator():
+    value = snapshot(facts=tuple(PresentationFact(key=f"f{i}", text=f"data {i}")
+                                 for i in range(20)),
+                     options=tuple(PresentationOption(key=f"o{i}", text=f"option {i}")
+                                   for i in range(10)))
+    _, requests, _ = run(value)
+    sequences = schema_sequences(json.loads(requests[0].content)["format"])
+    for sequence in sequences:
+        choices = sequence[0][1] if sequence[0][0] == "lead" else [None]
+        for lead in choices:
+            blocks = [{"role": role, "text": lead if role == "lead" else texts[0]}
+                      for role, texts in sequence]
+            draft = ReplyDraft.model_validate_json(json.dumps({"blocks": blocks}))
+            reply = validate_draft(value, draft)
+            assert reply is not None
+            assert all(f.text in reply.text for f in value.facts)
+            assert all(o.text in reply.text for o in value.options)
+            result, _, _ = run(value, provider=response({"blocks": blocks}))
+            assert result == draft  # No rewriting/fabrication; keep provider's grouping/lead.
+
+
+@pytest.mark.parametrize("changes", [
+    {"facts": (PresentationFact(key="f99", text="x"),)},
+    {"options": (PresentationOption(key="o99", text="x"),)},
+    {"facts": (), "options": (), "question": None},
+])
+def test_invalid_reference_context_skips_http(changes):
+    result, requests, _ = run(snapshot(**changes))
+    assert result is None and requests == []
+
+
+@pytest.mark.parametrize("blocks", [
+    [{"role": "fact", "text": "Añadido café: 2 unidades."}, *VALID["blocks"][2:]],
+    VALID["blocks"][:1],
+    [*VALID["blocks"], {"role": "fact", "text": "{{f0}}"}],
+    [{"role": "lead", "text": "No he añadido nada."}, *VALID["blocks"][1:]],
+    [{"role": "fact", "text": "{{f99}}"}, *VALID["blocks"][2:]],
+])
+def test_provider_ignoring_conditioned_schema_is_not_repaired_or_accepted(blocks):
+    result, requests, transport = run(provider=response({"blocks": blocks}))
+    assert result is None and transport.closed and len(requests) == 1
 
 
 def test_data_injection_cannot_add_a_tool_or_action():

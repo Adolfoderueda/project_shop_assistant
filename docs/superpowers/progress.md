@@ -1,5 +1,24 @@
 # Progreso del asistente de compras
 
+## 2026-10-08 — Task6 reparación autorizada (muestra REAL PASS, Telegram pendiente)
+
+- Base15b586f; schema condicionado al snapshot con roles/tokens completos,
+  composición separada/agrupada y lead opcional aprobado. Sin reescribir output,
+  ampliar leadgrammar, debilitar validator o cambiar autoridad de interpretación,
+  reducer, lista/SQLite o checkout. Facts/question/options siguen de aplicación.
+- RED schema **7 failed/38 passed**; dos fallos de compatibilidad reales preservados:
+  items:false=>HTTP400, items:{} priorizado sobre prefixItems=>HTTP200 con objetos
+  genéricos rechazados. Omitir items conserva tuple/min=max y logra la corrección.
+- **Dos probes REALES corregidos PASS, exit0: accepted18/fallback2 cada uno**, todas
+  las18 clases normales aceptadas y solo2fallos inyectados con respaldo. Todos20
+  checks/zeroorders/replay/TTL/inbox/outbox pasan en ambos. No fallback-only PASS.
+  Gemma eligió leads (Te lo explico/Vamos por partes/Aquí tienes el detalle o sin
+  lead); no se observó agrupación en estos dos runs. No es redacción libre total.
+- Full suite plain **752 passed in177.00s**, Ruff **All checks passed!**, diff limpio
+  (avisos LF→CRLF). Evidencia versionada conserva fallos anteriores y40 outputs raw
+  exactos cotejados con capturas. Sin privados/Telegram/tiendas/órdenes, reinicios,
+  ACL, instalación/descargas, subagentes, merge/push. Telegram no aceptado.
+
 ## 2026-10-08 — Task6: redacción, probe/evidencia (calidad REAL FAIL)
 
 - Probe opt-in de veinte escenarios independientes, SQLite temporal inventada,
