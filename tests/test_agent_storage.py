@@ -323,6 +323,53 @@ def test_real_slash_duplicate_selection_preserves_quantity_continuation(repo):
     assert repo.dialogue_state(7, 7, now=NOW) == before
 
 
+@pytest.mark.parametrize('choice', ['añadir otra línea', '2'])
+@pytest.mark.parametrize('damage', [None, 'missing_choice', 'incomplete_choice', 'choice_reply', 'choice_text', 'choice_owner', 'candidates'])
+def test_duplicate_add_quantity_requires_real_committed_choice_trace(repo, damage, choice):
+    from tests.dialogue_support import seed_line
+    line = seed_line(repo, 'arroz', 2)
+    ingest(repo, 2, '/anadir arroz')
+    repo.apply_dialogue(2, None, 'dry_run', now=NOW)
+    ingest(repo, 3, choice)
+    repo.apply_dialogue(3, None, 'dry_run', now=NOW + timedelta(seconds=1))
+    state = repo.dialogue_state(7, 7, now=NOW)
+    assert state.question == 'add_quantity' and state.duplicate_confirmed
+    assert state.candidates[0].id == line.id
+    with repo._connection(write=True) as db:
+        if damage == 'missing_choice':
+            db.execute('DELETE FROM outbox WHERE update_id=3')
+        elif damage == 'incomplete_choice':
+            db.execute('UPDATE inbox SET completed=0 WHERE update_id=3')
+        elif damage == 'choice_reply':
+            payload = Reply(text='unrelated choice reply').model_dump_json()
+            db.execute('UPDATE inbox SET reply_json=? WHERE update_id=3', (payload,))
+            db.execute('UPDATE outbox SET reply_json=? WHERE update_id=3', (payload,))
+        elif damage == 'choice_text':
+            db.execute("UPDATE inbox SET text='hola' WHERE update_id=3")
+        elif damage == 'choice_owner':
+            db.execute('UPDATE inbox SET user_id=8,chat_id=8 WHERE update_id=3')
+        elif damage == 'candidates':
+            from dialogue import LineRef
+            damaged = state.model_copy(update={'candidates': (LineRef(id=line.id, revision=2),)})
+            repo._write_dialogue_state(db, damaged, 7, 7)
+    origin = repo.command_origin(7, 7)
+    if damage is None:
+        assert origin is not None and origin.update_id == 2
+    else:
+        assert origin is None
+    assert repo.set_conversation_route(7, 7, 'agent', now=NOW)
+    assert repo.dialogue_state(7, 7, now=NOW) == (state if damage is None else None)
+    assert repo.list_lines() == [line]
+    if damage is None:
+        recovered = Repository(repo.path)
+        assert recovered.command_origin(7, 7).update_id == 2
+        ingest(recovered, 4, '3')
+        recovered.apply_dialogue(4, None, 'dry_run', now=NOW + timedelta(seconds=2))
+        saved = recovered.list_lines()
+        assert saved[0] == line
+        assert len(saved) == 2 and saved[1].description == 'arroz' and saved[1].quantity == 3
+
+
 def test_expired_and_embedded_confirmation_never_commits(repo):
     propose(repo)
     ingest(repo, 2, 'sí, añade otro producto')

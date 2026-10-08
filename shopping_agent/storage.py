@@ -7,6 +7,7 @@ from typing import Literal
 from uuid import uuid4
 
 from catalog import resolve_product
+from dialogue import parse_answer
 from dialogue_controller import reduce_dialogue
 from dialogue_replies import render_dialogue_result
 from domain import IncomingMessage, Model, Reply, utc
@@ -236,9 +237,8 @@ class AgentRepository:
             return None
         if intent.action == 'clarify' and not intent.lines:
             return None
-        decision = reduce_dialogue(message, None, None, lines, frozenset(
-            row[0] for row in db.execute('SELECT line_id FROM reservations')
-        ), now=state.updated_at)
+        reserved = frozenset(row[0] for row in db.execute('SELECT line_id FROM reservations'))
+        decision = reduce_dialogue(message, None, None, lines, reserved, now=state.updated_at)
         expected = decision.state
         if expected is None or expected.question is None or decision.mutation is not None:
             return None
@@ -253,10 +253,37 @@ class AgentRepository:
                 'question': 'quantity', 'target': state.target, 'candidates': (), 'options': (),
                 'pending_kind': None, 'duplicate_confirmed': False, 'proposal_quantity': None,
                 'focus': expected.focus.model_copy(update={'line': state.target})})
+        elif (expected.question == 'duplicate_choice' and state.question == 'add_quantity'
+              and state.duplicate_confirmed):
+            expected = self._trace_duplicate_add_choice(db, message, expected, state, lines, reserved)
+            if expected is None:
+                return None
         excluded = {'updated_at', 'expires_at'}
         if state.model_dump(exclude=excluded) != expected.model_dump(exclude=excluded):
             return None
         return render_dialogue_result(decision, None, lines, None)
+
+    def _trace_duplicate_add_choice(self, db, origin, initial, retained, lines, reserved):
+        """Accredit the separate-line choice only through its committed transition."""
+        excluded = {'updated_at', 'expires_at'}
+        for source in db.execute(
+            'SELECT * FROM inbox WHERE user_id=? AND chat_id=? AND completed=1 '
+            'AND update_id>? ORDER BY update_id DESC',
+            (origin.user_id, origin.chat_id, origin.update_id),
+        ):
+            message = self._agent_message(source)
+            answer = parse_answer(message.text, initial, now=retained.updated_at)
+            if answer is None or not (answer.kind == 'add' or (
+                    answer.kind == 'select' and initial.options[answer.selection - 1] == 'add')):
+                continue
+            decision = reduce_dialogue(message, None, initial, lines, reserved, now=retained.updated_at)
+            if (decision.mutation is not None or decision.state is None
+                    or decision.state.model_dump(exclude=excluded) != retained.model_dump(exclude=excluded)):
+                continue
+            reply = render_dialogue_result(decision, None, lines, None)
+            if self._committed_reply_matches(db, source, reply):
+                return decision.state
+        return None
 
     def _command_origin(self, db, user_id, chat_id):
         state = self._read_dialogue_state(db, user_id, chat_id)
@@ -290,7 +317,11 @@ class AgentRepository:
         if not source['completed']:
             return False
         expected = self._command_context_reply(db, self._agent_message(source), state)
-        if expected is None or Reply.model_validate_json(source['reply_json']) != expected:
+        return expected is not None and self._committed_reply_matches(db, source, expected)
+
+    @staticmethod
+    def _committed_reply_matches(db, source, expected):
+        if not source['completed'] or Reply.model_validate_json(source['reply_json']) != expected:
             return False
         notices = db.execute('SELECT chat_id,reply_json FROM outbox WHERE update_id=?',
                              (source['update_id'],)).fetchall()
