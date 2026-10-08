@@ -34,7 +34,7 @@ def test_overflow_answer_completes_clarification_without_changes(tmp_path, repla
     notices = repo.pending_notices()
     clock.advance(30)
     reply = send(repo, "9223372036854775808" + suffix, clock=clock)
-    assert reply.text.startswith("Indica la cantidad de envases para " if replacement else "¿Cuántos envases de arroz")
+    assert reply.text.startswith("Indica la cantidad total de envases para " if replacement else "¿Cuántos envases de arroz")
     assert repo.list_lines() == rows
     assert repo.dialogue_state(7, 7, now=clock()) == state
     assert repo.pending_messages() == []

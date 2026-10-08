@@ -216,7 +216,7 @@ def test_model_offline_does_not_block_ambiguous_closed_answers(repo, clock):
     offline = Offline()
     reply = send(repo, "sí", offline, clock=clock)
     assert offline.calls == 0
-    assert "cambiar cantidad" in reply.text
+    assert "cambiar cantidad" in reply.text.lower()
     assert [l.quantity for l in repo.list_lines()] == [1]
 
 

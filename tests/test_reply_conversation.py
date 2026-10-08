@@ -21,7 +21,8 @@ class Writer:
         self.snapshots.append(snapshot)
         if self.callback:
             self.callback(snapshot)
-        blocks = [DraftBlock(role="lead", text="Vamos por partes")]
+        blocks = ([DraftBlock(role="lead", text="Vamos por partes")]
+                  if snapshot.version == 1 else [])
         blocks.extend(DraftBlock(role="fact", text="{{" + f.key + "}}") for f in snapshot.facts)
         if snapshot.question is not None:
             blocks.append(DraftBlock(role="question", text="{{q}}"))
@@ -53,7 +54,7 @@ def test_closed_quantity_uses_writer_not_interpreter(tmp_path):
         repo.list_lines()[0].quantity == 2 or pytest.fail("quantity was not committed")))
     reply = handle(repo, "2", writer, ForbiddenInterpreter())
     assert writer.snapshots[0].kind == "added"
-    assert "2 envases" in reply.text and reply.text.startswith("Vamos por partes")
+    assert "2 envases" in reply.text and reply.text.startswith("He añadido")
     assert repo.list_lines()[0].revision == 1
     assert repo.message_result(10)[1] == reply
     assert order_count(repo) == 0
@@ -85,6 +86,7 @@ def test_all_natural_classes_reach_writer(tmp_path):
     assert len(writer.snapshots) == len(sequence) - 1  # Slash command bypasses the writer.
     assert {s.kind for s in writer.snapshots} == {
         "added", "updated", "list", "product", "clarify", "cancelled", "question", "replaced",
+        "pending_add",
     }
     assert [(line.description, line.quantity) for line in repo.list_lines()] == [
         ("arroz", 3), ("avena", 4),

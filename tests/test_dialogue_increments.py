@@ -204,15 +204,27 @@ def test_prepared_v1_increment_facts_recover_without_reapplying(repo, clock):
         return repo.prepare_dialogue(update_id, None, "dry_run", now=clock())
 
     question = prepare(40, "quiero más arroz")
-    assert question.snapshot.version == 1 and "adicionales" in question.snapshot.question
+    assert question.snapshot.version == 2 and "adicionales" in question.snapshot.question
     repo.finalize_presentation(40, question.snapshot.fallback)
     confirmation = prepare(41, "2")
-    assert "2 envases" in confirmation.snapshot.question and "de 1 a 3" in confirmation.snapshot.question
+    assert "2 envases" in confirmation.snapshot.question and "de 1 envase a 3" in confirmation.snapshot.question
     assert repo.list_lines() == [line]
     repo.finalize_presentation(41, confirmation.snapshot.fallback)
     result = prepare(42, "sí")
-    assert result.snapshot.version == 1 and result.snapshot.kind == "updated"
-    assert "2 envases" in result.snapshot.facts[0].text and "de 1 a 3" in result.snapshot.fallback.text
+    assert result.snapshot.version == 2 and result.snapshot.kind == "incremented"
+    assert "2 envases" in result.snapshot.facts[0].text and "de 1 envase a 3" in result.snapshot.fallback.text
+    # The old bridge saved kind=updated and no act/phrases. Keep that recovery case.
+    from presentation import PresentationSnapshot
+
+    historical = result.snapshot.model_dump(mode="json", exclude={"act", "phrases"})
+    historical.update(version=1, kind="updated")
+    historical["facts"][0]["text"] = "He añadido 2 envases a arroz: de 1 a 3 envases."
+    historical["fallback"]["text"] = historical["facts"][0]["text"]
+    result = result.model_copy(update={"snapshot": PresentationSnapshot.model_validate_json(
+        json.dumps(historical))})
+    with sqlite3.connect(repo.path) as db:
+        db.execute("UPDATE presentation_jobs SET snapshot_json=? WHERE update_id=42",
+                   (result.snapshot.model_dump_json(),))
     saved = repo.list_lines()
     assert saved[0].quantity == 3 and saved[0].revision == line.revision + 1
     clock.advance(900)

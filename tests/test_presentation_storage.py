@@ -137,7 +137,7 @@ def test_orphan_foreign_corrupt_and_conflicting_job_fail_closed(repo, damage):
         else:
             payload = json.loads(job.snapshot.model_dump_json())
             if damage == "version":
-                payload["version"] = 2
+                payload["version"] = 3
             elif damage == "extra":
                 payload["authority"] = True
             elif damage == "order":

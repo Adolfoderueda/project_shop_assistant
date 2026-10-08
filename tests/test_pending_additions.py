@@ -198,8 +198,17 @@ def test_v8_preserves_rows_and_prepared_v1(tmp_path):
     message = IncomingMessage(update_id=30, user_id=7, chat_id=7, text="añade 2 leche")
     repo.ingest_batch([message], 31)
     prepared = repo.prepare_dialogue(30, Intent(action="add", lines=[IntentLine(description="leche", quantity=2)]), "dry_run", now=datetime.now(UTC))
+    # Freeze the actual historical v1 contract, not the current factory version.
+    from presentation import PresentationSnapshot
+
+    historical = prepared.snapshot.model_dump(mode="json", exclude={"act", "phrases"})
+    historical["version"] = 1
+    prepared = prepared.model_copy(update={"snapshot": PresentationSnapshot.model_validate_json(
+        json.dumps(historical))})
     rows = repo.list_lines()
     with sqlite3.connect(repo.path) as db:
+        db.execute("UPDATE presentation_jobs SET snapshot_json=? WHERE update_id=30",
+                   (prepared.snapshot.model_dump_json(),))
         payload = json.loads(db.execute("SELECT state_json FROM dialogue_state").fetchone()[0])
         for key in ("version", "pending_kind", "base_quantity", "additional_quantity", "increment_confirmed"):
             del payload[key]

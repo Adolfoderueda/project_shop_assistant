@@ -148,7 +148,7 @@ class RecordingWriter:
         elif reject:
             value = ReplyDraft(blocks=(DraftBlock(role='lead', text='No he cambiado la lista'),))
         else:
-            blocks = [DraftBlock(role='lead', text='Vamos por partes.')]
+            blocks = [DraftBlock(role='lead', text='Vamos por partes.')] if snapshot.version == 1 else []
             blocks.extend(DraftBlock(role='fact', text='{{' + f.key + '}}') for f in snapshot.facts)
             if snapshot.question is not None:
                 blocks.append(DraftBlock(role='question', text='{{q}}'))
@@ -180,7 +180,7 @@ async def scenario(repo, clock, name):
         await setup_send(repo, clock, 'a\u00f1adir otra l\u00ednea')
         await setup_send(repo, clock, '2')
         if name == 'natural_list':
-            return 'lista', None, [['arroz', 1], rice], None, ['Entrada 1', '1 envase.', 'Entrada 2', '2 envases.']
+            return 'lista', None, [['arroz', 1], rice], None, ['arroz: 1 envase.', 'arroz: 2 envases.']
         if name == 'select_entry':
             await setup_send(repo, clock, 'necesito arroz', proposal('arroz'))
             await setup_send(repo, clock, 'cambiar cantidad')
