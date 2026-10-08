@@ -90,10 +90,14 @@ class ProposalItem(Model):
     additional_quantity: PackageQuantity | None = None
     duplicate_decision: DuplicateDecision | None = None
     conflict_signatures: tuple[LineRef, ...] = ()
+    # Positions of canonically conflicting outputs in this same batch.
+    internal_conflicts: tuple[Position, ...] = ()
 
     @property
     def complete(self) -> bool:
         if self.quantity is None:
+            return False
+        if self.internal_conflicts and self.duplicate_decision is None:
             return False
         if self.kind == "add":
             if self.duplicate_decision == "set_total":
@@ -102,8 +106,12 @@ class ProposalItem(Model):
         if self.target is None:
             return False
         if self.kind == "replace":
+            # Selected origin candidates are not destination duplicates. Also
+            # preserve the conservative gate for legacy destination-only tuples.
+            has_conflicts = bool(self.conflict_signatures or (
+                self.candidates and self.target not in self.candidates))
             return (self.replacement is not None
-                    and (not self.candidates or self.duplicate_decision is not None))
+                    and (not has_conflicts or self.duplicate_decision is not None))
         if self.kind == "increment":
             return (self.base_quantity is not None and self.additional_quantity is not None
                     and self.quantity == self.base_quantity + self.additional_quantity)
