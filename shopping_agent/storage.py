@@ -7,6 +7,8 @@ from typing import Literal
 from uuid import uuid4
 
 from catalog import resolve_product
+from dialogue_controller import reduce_dialogue
+from dialogue_replies import render_dialogue_result
 from domain import IncomingMessage, Model, Reply, utc
 from interpreter import diaper_reference, parse_command, purchase_authorized
 from shopping_agent.contracts import (
@@ -223,13 +225,55 @@ class AgentRepository:
                 raise ValueError('Agent replies cannot authorize an order')
             return self._complete_reply(db, source, reply)
 
+    def _command_context_reply(self, db, message, state):
+        """Replay only a deterministic command, never arbitrary natural requests."""
+        if state is None or state.question is None or not (
+                message.text.strip().startswith('/') or purchase_authorized(message.text)):
+            return None
+        lines = self._lines(db)
+        intent = parse_command(message.text, lines)
+        if intent is None or intent.action not in {'add', 'buy', 'clarify'}:
+            return None
+        if intent.action == 'clarify' and not intent.lines:
+            return None
+        decision = reduce_dialogue(message, None, None, lines, frozenset(
+            row[0] for row in db.execute('SELECT line_id FROM reservations')
+        ), now=state.updated_at)
+        expected = decision.state
+        if expected is None or expected.question is None or decision.mutation is not None:
+            return None
+        # A duplicate slash addition can legitimately select a saved total.
+        # Match the exact offered references and transition fields, not just an ID.
+        if expected.question == 'duplicate_choice' and state.question == 'select_line':
+            expected = expected.model_copy(update={
+                'question': 'select_line', 'options': ('change_quantity',), 'pending_kind': None})
+        elif (expected.question == 'duplicate_choice' and state.question == 'quantity'
+              and state.target in expected.candidates):
+            expected = expected.model_copy(update={
+                'question': 'quantity', 'target': state.target, 'candidates': (), 'options': (),
+                'pending_kind': None, 'duplicate_confirmed': False, 'proposal_quantity': None,
+                'focus': expected.focus.model_copy(update={'line': state.target})})
+        excluded = {'updated_at', 'expires_at'}
+        if state.model_dump(exclude=excluded) != expected.model_dump(exclude=excluded):
+            return None
+        return render_dialogue_result(decision, None, lines, None)
+
     def _command_origin(self, db, user_id, chat_id):
+        state = self._read_dialogue_state(db, user_id, chat_id)
         row = db.execute('SELECT command_update_id FROM conversation_routes WHERE user_id=? AND chat_id=?',
                          (user_id, chat_id)).fetchone()
         if row is None:
             # Migrated legacy context may already carry an inbox-backed focus.
-            state = self._read_dialogue_state(db, user_id, chat_id)
             update_id = state.focus.source_update_id if state and state.focus else None
+            if state and state.question == 'remove_id' and state.focus is None:
+                # Removal state has no focus/source field. Accredit only a committed
+                # removal command whose deterministic candidates and reply match.
+                for source in db.execute(
+                    "SELECT * FROM inbox WHERE user_id=? AND chat_id=? AND completed=1 "
+                    "AND text LIKE '/quitar %' ORDER BY update_id DESC", (user_id, chat_id)
+                ):
+                    if self._committed_command_context(db, source, state):
+                        return self._agent_message(source)
         else:
             update_id = row[0]
         if update_id is None:
@@ -238,11 +282,20 @@ class AgentRepository:
         message = self._agent_message(source)
         if (message.user_id, message.chat_id) != (user_id, chat_id):
             raise ValueError('Command origin owner mismatch')
-        intent = parse_command(message.text, self._lines(db))
-        if (intent is None or intent.action == 'clarify' and not intent.lines
-                or not (message.text.strip().startswith('/') or purchase_authorized(message.text))):
+        if not self._committed_command_context(db, source, state):
             return None
         return message
+
+    def _committed_command_context(self, db, source, state):
+        if not source['completed']:
+            return False
+        expected = self._command_context_reply(db, self._agent_message(source), state)
+        if expected is None or Reply.model_validate_json(source['reply_json']) != expected:
+            return False
+        notices = db.execute('SELECT chat_id,reply_json FROM outbox WHERE update_id=?',
+                             (source['update_id'],)).fetchall()
+        return (len(notices) == 1 and notices[0]['chat_id'] == source['chat_id']
+                and notices[0]['reply_json'] == source['reply_json'])
 
     def command_origin(self, user_id: int, chat_id: int) -> IncomingMessage | None:
         with self._connection() as db:
@@ -256,10 +309,9 @@ class AgentRepository:
         if self._agent_message(durable) != self._agent_message(source):
             raise ValueError('Command must come from durable inbox')
         message = self._agent_message(durable)
-        intent = parse_command(message.text, self._lines(db))
-        if (intent is None or intent.action == 'clarify' and not intent.lines
-                or not (message.text.strip().startswith('/') or purchase_authorized(message.text))):
-            raise ValueError('Unknown command cannot authorize continuation')
+        state = self._read_dialogue_state(db, message.user_id, message.chat_id)
+        if self._command_context_reply(db, message, state) is None:
+            raise ValueError('Command did not create this retained continuation')
         db.execute('INSERT INTO conversation_routes VALUES (?,?,?,?) ON CONFLICT(user_id,chat_id) '
                    'DO UPDATE SET command_update_id=excluded.command_update_id',
                    (message.user_id, message.chat_id, 'legacy', message.update_id))

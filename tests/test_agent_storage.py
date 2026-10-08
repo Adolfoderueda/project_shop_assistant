@@ -195,12 +195,18 @@ def test_command_origin_uses_caller_transaction_and_revokes_agent(repo):
     propose(repo)
     ingest(repo, 2, '/anadir arroz')
     with pytest.raises(RuntimeError), repo._connection(write=True) as db:
+        source = db.execute('SELECT * FROM inbox WHERE update_id=2').fetchone()
+        *_, reply = repo._apply_dialogue(db, source, None, 'dry_run', now=NOW)
         repo._record_command_origin(db, db.execute('SELECT * FROM inbox WHERE update_id=2').fetchone())
+        repo._complete_reply(db, source, reply)
         raise RuntimeError('rollback')
     assert repo.command_origin(7, 7) is None
     assert repo.agent_snapshot(2, now=NOW).proposal is not None
     with repo._connection(write=True) as db:
-        repo._record_command_origin(db, db.execute('SELECT * FROM inbox WHERE update_id=2').fetchone())
+        source = db.execute('SELECT * FROM inbox WHERE update_id=2').fetchone()
+        *_, reply = repo._apply_dialogue(db, source, None, 'dry_run', now=NOW)
+        repo._record_command_origin(db, source)
+        repo._complete_reply(db, source, reply)
     assert repo.command_origin(7, 7).update_id == 2
     assert repo.agent_snapshot(2, now=NOW).proposal is None
     ingest(repo, 3, '/unknown')
@@ -210,15 +216,111 @@ def test_command_origin_uses_caller_transaction_and_revokes_agent(repo):
 
 @pytest.mark.parametrize('text,retained', [('/anadir arroz', True), ('necesito arroz', False)])
 def test_initial_agent_route_preserves_only_inbox_backed_command_context(repo, text, retained):
-    from dialogue import DIALOGUE_TTL, DialogueState, ProductMention
+    from domain import Intent, IntentLine
     ingest(repo, 1, text)
-    state = DialogueState(user_id=7, chat_id=7, focus=ProductMention(description='arroz', source_update_id=1),
-        question='quantity', updated_at=NOW, expires_at=NOW + DIALOGUE_TTL)
-    with repo._connection(write=True) as db:
-        repo._write_dialogue_state(db, state, 7, 7)
+    repo.apply_dialogue(1, Intent(action='add', lines=[IntentLine(description='arroz')]), 'dry_run', now=NOW)
     assert repo.set_conversation_route(7, 7, 'agent', now=NOW)
     assert (repo.dialogue_state(7, 7, now=NOW) is not None) == retained
     assert (repo.command_origin(7, 7) is not None) == retained
+
+
+@pytest.mark.parametrize('damage', ['read_only', 'incomplete', 'description', 'witness'])
+def test_command_provenance_rejects_unrelated_or_uncommitted_permission(repo, damage):
+    ingest(repo, 1, '/anadir arroz')
+    if damage == 'incomplete':
+        with repo._connection(write=True) as db:
+            source = db.execute('SELECT * FROM inbox WHERE update_id=1').fetchone()
+            repo._apply_dialogue(db, source, None, 'dry_run', now=NOW)
+    else:
+        repo.apply_dialogue(1, None, 'dry_run', now=NOW)
+        with repo._connection(write=True) as db:
+            if damage == 'read_only':
+                db.execute("UPDATE inbox SET text='/lista' WHERE update_id=1")
+            elif damage == 'description':
+                state = repo._read_dialogue_state(db, 7, 7)
+                state = state.model_copy(update={'focus': state.focus.model_copy(update={'description': 'carne'})})
+                repo._write_dialogue_state(db, state, 7, 7)
+            else:
+                payload = Reply(text='unrelated reply').model_dump_json()
+                db.execute('UPDATE inbox SET reply_json=? WHERE update_id=1', (payload,))
+                db.execute('UPDATE outbox SET reply_json=? WHERE update_id=1', (payload,))
+    assert repo.command_origin(7, 7) is None
+    assert repo.set_conversation_route(7, 7, 'agent', now=NOW)
+    assert repo.dialogue_state(7, 7, now=NOW) is None
+
+
+def test_record_origin_rejects_read_only_command_and_missing_state(repo):
+    ingest(repo, 1, '/anadir arroz')
+    with repo._connection(write=True) as db, pytest.raises(ValueError):
+        repo._record_command_origin(db, db.execute('SELECT * FROM inbox WHERE update_id=1').fetchone())
+    repo.apply_dialogue(1, None, 'dry_run', now=NOW)
+    ingest(repo, 2, '/lista')
+    with repo._connection(write=True) as db, pytest.raises(ValueError):
+        source = db.execute('SELECT * FROM inbox WHERE update_id=2').fetchone()
+        repo._apply_dialogue(db, source, None, 'dry_run', now=NOW)
+        repo._record_command_origin(db, source)
+
+
+def test_initial_route_preserves_real_remove_candidates(repo):
+    from tests.dialogue_support import seed_line
+    seed_line(repo, 'arroz blanco', 2)
+    seed_line(repo, 'arroz integral', 3)
+    ingest(repo, 3, '/quitar arroz')
+    repo.apply_dialogue(3, None, 'dry_run', now=NOW)
+    before = repo.dialogue_state(7, 7, now=NOW)
+    assert before.question == 'remove_id'
+    assert repo.set_conversation_route(7, 7, 'agent', now=NOW)
+    assert repo.dialogue_state(7, 7, now=NOW) == before
+    assert repo.command_origin(7, 7).update_id == 3
+
+
+def test_purchase_quantity_origin_cannot_support_another_target(repo):
+    from dialogue import LineRef
+    from tests.dialogue_support import seed_line
+    seed_line(repo, 'arroz')
+    other = seed_line(repo, 'carne')
+    ingest(repo, 3, '/comprar')
+    repo.apply_dialogue(3, None, 'dry_run', now=NOW)
+    assert repo.command_origin(7, 7).update_id == 3
+    with repo._connection(write=True) as db:
+        state = repo._read_dialogue_state(db, 7, 7)
+        ref = LineRef(id=other.id, revision=other.revision)
+        state = state.model_copy(update={'target': ref, 'focus': state.focus.model_copy(update={'line': ref, 'description': 'carne'})})
+        repo._write_dialogue_state(db, state, 7, 7)
+    assert repo.command_origin(7, 7) is None
+
+
+def test_read_only_origin_cannot_accredit_increment_confirmation(repo):
+    from dialogue import DIALOGUE_TTL, DialogueState, LineRef, ProductMention
+    from tests.dialogue_support import seed_line
+    line = seed_line(repo, 'arroz', 2)
+    ingest(repo, 2, '/lista')
+    repo.apply_dialogue(2, None, 'dry_run', now=NOW)
+    ref = LineRef(id=line.id, revision=line.revision)
+    state = DialogueState(user_id=7, chat_id=7, pending_kind='increment',
+        focus=ProductMention(description='arroz', source_update_id=2, line=ref), target=ref,
+        base_quantity=2, additional_quantity=3, proposal_quantity=5, question='confirm_increment',
+        updated_at=NOW, expires_at=NOW + DIALOGUE_TTL)
+    with repo._connection(write=True) as db:
+        repo._write_dialogue_state(db, state, 7, 7)
+    assert repo.command_origin(7, 7) is None
+    repo.set_conversation_route(7, 7, 'agent', now=NOW)
+    assert repo.dialogue_state(7, 7, now=NOW) is None
+    assert repo.list_lines()[0].quantity == 2
+
+
+def test_real_slash_duplicate_selection_preserves_quantity_continuation(repo):
+    from tests.dialogue_support import seed_line
+    line = seed_line(repo, 'arroz', 2)
+    ingest(repo, 2, '/anadir arroz')
+    repo.apply_dialogue(2, None, 'dry_run', now=NOW)
+    ingest(repo, 3, 'cambiar cantidad')
+    repo.apply_dialogue(3, None, 'dry_run', now=NOW + timedelta(seconds=1))
+    before = repo.dialogue_state(7, 7, now=NOW)
+    assert before.question == 'quantity' and before.target.id == line.id
+    assert repo.command_origin(7, 7).update_id == 2
+    repo.set_conversation_route(7, 7, 'agent', now=NOW)
+    assert repo.dialogue_state(7, 7, now=NOW) == before
 
 
 def test_expired_and_embedded_confirmation_never_commits(repo):
