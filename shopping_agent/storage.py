@@ -357,7 +357,8 @@ class AgentRepository:
     def set_conversation_route(self, user_id: int, chat_id: int,
                                route: Literal['legacy', 'agent'], *, now: datetime) -> bool:
         utc(now)
-        if route not in {'legacy', 'agent'} or type(user_id) is not int or type(chat_id) is not int:
+        if (route not in {'legacy', 'agent'} or type(user_id) is not int
+                or type(chat_id) is not int or user_id <= 0 or chat_id != user_id):
             raise ValueError('Invalid conversation route')
         with self._connection(write=True) as db:
             previous = db.execute('SELECT * FROM conversation_routes WHERE user_id=? AND chat_id=?',
@@ -382,6 +383,11 @@ class AgentRepository:
                        'DO UPDATE SET route=excluded.route,command_update_id=excluded.command_update_id',
                         (user_id, chat_id, route, command.update_id if command else None))
             if discarded:
+                notice = Reply(text='El contexto anterior se ha descartado al cambiar de motor. '
+                               'Vuelve a formular la petición y revisa la nueva propuesta antes de confirmar. '
+                               'Las entradas guardadas no han cambiado.')
+                db.execute('INSERT INTO outbox(id,update_id,chat_id,reply_json) VALUES (?,NULL,?,?)',
+                           (f'route-discard:{uuid4()}', chat_id, notice.model_dump_json()))
                 logging.getLogger('runtime').warning('Incompatible conversation memory discarded; review a new proposal before confirming')
             return True
 

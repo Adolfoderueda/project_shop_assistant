@@ -43,5 +43,6 @@ agent previos bajo el lock del worker, incluso sin mensajes entre cambios o si
 después falla guardar la configuración. `model-local disable` también vuelve a
 legacy y desactiva el proveedor; `model-local enable` no activa el agente.
 Los trabajos ya comprometidos se recuperan antes de invalidar memoria incompatible;
-el aviso de descarte es controlado, sin texto privado, en el log local del worker.
+el descarte genera un aviso independiente y durable en Telegram para volver a
+formular la petición, sin alterar respuestas anteriores ni entradas guardadas.
 Status no modifica permisos y doctor no descarga ni genera texto.

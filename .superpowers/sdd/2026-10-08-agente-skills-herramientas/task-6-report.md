@@ -77,3 +77,57 @@ Result: **183 passed in 68.79s**, no warnings. The two failed full-suite tests n
 - Final full-suite result is not claimed green: the single full run had the two migration regressions above, subsequently fixed and verified in the 183-test focused run.
 - Existing large dialogue/repository files were changed narrowly; no parser redesign or unrelated refactoring.
 - No dependencies, private original settings/list, real model calls, Telegram, restarts, model activation, merges or pushes. HTTP model verification uses MockTransport; runtime/CLI tests use temporary repositories/settings and injected offline collaborators. Wheel deferral remains unchanged.
+
+## Pre-review concern resolution: durable user-visible discard notice
+
+The controller clarified that the local log alone does not satisfy spec §7. This
+supersedes the notice concern and the incomplete full-suite baseline above.
+
+### Changes
+
+- `set_conversation_route` now queues a separate, application-owned UUID outbox
+  notice (`update_id=NULL`) in the same write transaction that discards incompatible
+  context and updates the route. Its fixed Spanish text tells the user to reformulate
+  and review a new proposal, and states that saved entries have not changed.
+- The recipient comes only from the validated route identity (strict positive
+  integer user ID and matching private chat ID), never proposal JSON. Existing
+  owner assertions continue to validate the resulting outbox.
+- Same-route replay does not enqueue another notice. A genuine preserved slash
+  continuation produces none. Failed outbox insertion rolls back invalidation and
+  route mutation together. Neither primary inbox replies nor proposal review
+  outbox witnesses are rewritten.
+- README now documents the independent durable Telegram notice; the controlled
+  local log remains supplementary.
+
+### RED / GREEN evidence
+
+Same interpreter/PYTHONPATH as above; all commands used timeout 600000 ms.
+
+RED: `python -m pytest tests/test_agent_route_notices.py -q`
+
+**8 failed, 1 passed in 1.11s**: no standalone notice existed, injected notice
+failure did not abort the transaction, and invalid private route identities were
+accepted. The preserved-continuation fixture initially started on the already
+selected agent route; corrected it to begin the slash command on legacy before
+testing the route transition, without changing production continuation behavior.
+
+GREEN focused:
+`python -m pytest tests/test_agent_route_notices.py tests/test_agent_conversation.py tests/test_agent_runtime.py tests/test_agent_storage.py tests/test_agent_recovery.py tests/test_presentation_storage.py -q`
+
+**117 passed in 38.47s**, including actual outbox contents, saved-row and committed
+review preservation, restart/replay deduplication after delivery, transactional
+rollback, preserved genuine continuation, invalid identities, and corrupted
+proposal payload recipient isolation.
+
+FINAL full integration baseline: `python -m pytest -q`
+
+**1165 passed in 316.34s (0:05:16)**, no warnings or failures. This also verifies
+the two migration fixes from the earlier full run.
+
+Self-review: read the notice transaction/identity validation diff and new tests;
+`git diff --check` has no whitespace errors (only local LF/CRLF conversion notices).
+No outstanding task-6 concerns from this correction. No external activation,
+real Telegram/model calls, dependencies, subagents, merge or push.
+
+Files in this correction: `shopping_agent/storage.py`, `README.md`, new
+`tests/test_agent_route_notices.py`, and this report.
