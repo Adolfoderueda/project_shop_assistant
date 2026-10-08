@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run_probe(tmp_path, *flags):
+def run_probe(tmp_path, *flags, hook_code=""):
     sentinel = tmp_path / "private" / "settings.json"
     sentinel.parent.mkdir()
     sentinel.write_bytes(b"PRIVATE SENTINEL DO NOT READ")
@@ -21,7 +21,7 @@ def run_probe(tmp_path, *flags):
         "def guard(event, args):\n"
         "    if event == 'open' and str(args[0]) == sentinel:\n"
         "        raise RuntimeError('private sentinel read')\n"
-        "sys.addaudithook(guard)\n", encoding="utf-8")
+        "sys.addaudithook(guard)\n" + hook_code, encoding="utf-8")
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-File", str(ROOT / "scripts/Probe-Replies.ps1"),
          "-Python", sys.executable, *flags], cwd=tmp_path, capture_output=True, text=True,
@@ -60,6 +60,38 @@ def test_probe_failed_expectation_exit_one(tmp_path):
     assert {"duplicate_rice:rows", "add_known:question"} <= set(records[-1]["failures"])
     assert "duplicate_rice:quality" in records[-1]["failures"]
     assert next(r for r in records if r.get("case") == "duplicate_rice")["accepted"] is False
+    assert records[-1]["temporary_removed"] is True
+    assert not Path(records[0]["temporary_root"]).exists()
+
+
+def test_probe_scenario_exception_reports_unknown_orders_and_cleans_up(tmp_path):
+    # Inject only one offline conversation failure; execute the real probe catch/finally.
+    hook_code = (
+        f"sys.path.insert(0, {str(ROOT)!r})\n"
+        "from conversation import Conversation\n"
+        "original_handle = Conversation.handle\n"
+        "async def failing_handle(self, message, mode):\n"
+        "    if self.repo.path.name == 'duplicate_rice.db' and self.reply_writer is not None:\n"
+        "        raise RuntimeError('invented scenario failure before order measurement')\n"
+        "    return await original_handle(self, message, mode)\n"
+        "Conversation.handle = failing_handle\n"
+        "import httpx\n"
+        "async def forbid_http(self, request):\n"
+        "    raise RuntimeError('offline fixture forbids HTTP')\n"
+        "httpx.AsyncHTTPTransport.handle_async_request = forbid_http\n"
+    )
+    result, records = run_probe(tmp_path, "-Offline", hook_code=hook_code)
+    assert result.returncode == 1, result.stdout + result.stderr
+    cases = [r for r in records if "case" in r]
+    assert len(cases) == 20, result.stdout + result.stderr
+    failed = next(r for r in cases if r["case"] == "duplicate_rice")
+    assert failed["passed"] is False
+    assert failed["error"] == "RuntimeError"
+    assert failed["detail"] == "invented scenario failure before order measurement"
+    assert failed["orders"] is None
+    assert all(r["passed"] and r["orders"] == 0 for r in cases if r is not failed)
+    assert records[-1]["status"] == "FAIL"
+    assert records[-1]["failures"] == ["duplicate_rice:exception"]
     assert records[-1]["temporary_removed"] is True
     assert not Path(records[0]["temporary_root"]).exists()
 

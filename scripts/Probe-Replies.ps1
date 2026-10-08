@@ -337,7 +337,7 @@ async def probe(directory):
             failures.extend(name + ':' + check for check, passed in checks.items() if not passed)
         except Exception as error:
             # Keep every scenario failure; synthetic evidence is not runtime logging.
-            emit(case=name, passed=False, orders=0, error=type(error).__name__, detail=str(error))
+            emit(case=name, passed=False, orders=None, error=type(error).__name__, detail=str(error))
             failures.append(name + ':exception')
         finally:
             del repo
