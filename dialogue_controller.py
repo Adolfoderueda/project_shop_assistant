@@ -18,7 +18,7 @@ from dialogue import (
 )
 from dialogue_additions import answer_addition, begin_addition
 from dialogue_increments import answer_increment, begin_increment
-from dialogue_requests import classify_request, validate_request
+from dialogue_requests import classify_request, incremental_attempt, validate_request
 from dialogue_requests import literal_request as _literal_request
 from dialogue_requests import product_name as _product_name
 from domain import IncomingMessage, Intent, IntentLine, ListLine, utc
@@ -105,6 +105,13 @@ def reduce_dialogue(
     lines: list[ListLine], reserved_ids: frozenset[str], *, now: datetime,
 ) -> DialogueDecision:
     utc(now)
+    request = classify_request(message.text)
+    if request is not None and request.action == "greet":
+        # No row-dependent validation or TTL transition on a pure social turn.
+        # Expiry/stale/reservation checks still run on the next shopping transition.
+        owned = state if state and (state.user_id, state.chat_id) == (message.user_id, message.chat_id) else None
+        return DialogueDecision(mutation=None, legacy_intent=None, state=owned, reply_kind="greeting",
+                                prompt="¡Hola! ¿Qué necesitas para tu lista?")
     was_expired = state is not None and expired(state, now)
     if state and (expired(state, now) or (state.user_id, state.chat_id) != (message.user_id, message.chat_id)):
         state = None
@@ -154,7 +161,6 @@ def reduce_dialogue(
         ))
 
     clean = canonical_name(message.text)
-    request = classify_request(message.text)
     # Source grammar, not a model action or the legacy add parser, authorizes this branch.
     if request is not None and request.action == "increment":
         result = begin_increment(ProductMention(description=request.description,
@@ -162,7 +168,7 @@ def reduce_dialogue(
             user_id=message.user_id, chat_id=message.chat_id, now=now)
         return result.model_copy(update={"prompt": question_prompt(result.state, lines)
                                        if result.state and result.state.question else result.prompt})
-    command = parse_command(message.text, lines)
+    command = None if incremental_attempt(message.text) else parse_command(message.text, lines)
     intent = command if command is not None else proposal
     if command is None and intent is not None:
         intent = validate_model(message.text, intent, lines)
@@ -276,8 +282,6 @@ def reduce_dialogue(
     if intent.action == "list":
         return decision("legacy" if clean == "/lista" else "natural_list",
                         legacy=intent if clean == "/lista" else None)
-    if intent.action == "greet":
-        return decision("greeting", prompt="¡Hola! ¿Qué necesitas para tu lista?")
     if command and intent.action == "set_quantity":
         target = rows.get(intent.lines[0].line_id)
         if target is None:

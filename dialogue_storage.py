@@ -8,6 +8,7 @@ from catalog import resolve_product
 from dialogue import DIALOGUE_TTL, DialogueMutation, DialogueState, LineRef, canonical_name, expired
 from dialogue_controller import reduce_dialogue
 from dialogue_replies import render_dialogue_result
+from dialogue_requests import classify_request
 from domain import IncomingMessage, Intent, Reply
 
 
@@ -34,6 +35,13 @@ class DialogueRepository:
             proposal = Intent.model_validate_json(proposal.model_dump_json())
         message = IncomingMessage(**{k: source[k] for k in ("update_id", "user_id", "chat_id", "text")})
         state = self._read_dialogue_state(db, message.user_id, message.chat_id)
+        request = classify_request(message.text)
+        if request is not None and request.action == "greet":
+            # Keep validated inbox/state provenance and normal prepare/finalize,
+            # but neither inspect private rows/reservations nor rewrite context.
+            decision = reduce_dialogue(message, proposal, state, [], frozenset(), now=now)
+            reply = render_dialogue_result(decision, None, [], None)
+            return decision, None, None, [], None, [], reply
         before = self._lines(db)
         decision = reduce_dialogue(message, proposal, state, before, frozenset(
             r[0] for r in db.execute("SELECT line_id FROM reservations")

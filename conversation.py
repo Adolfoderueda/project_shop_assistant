@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from dialogue import parse_answer
 from dialogue_controller import closed_attempt, product_name, validate_model
-from dialogue_requests import classify_request
+from dialogue_requests import classify_request, incremental_attempt
 from domain import IncomingMessage, Intent, Reply
 from interpreter import Interpreter, clarify, parse_command, purchase_authorized
 from presentation import PreparedPresentation, ReplyWriter
@@ -35,22 +35,22 @@ class Conversation:
         prepared = self.repo.prepared_presentation(message.update_id)
         if prepared is not None:
             return await self._present(prepared)
-        lines = self.repo.list_lines()
         now = self.clock()
-        state = self.repo.dialogue_state(message.user_id, message.chat_id, now=now)
         priority = message.text.strip().startswith("/") or purchase_authorized(message.text)
+        request = None if priority else classify_request(message.text)
+        if request is not None and request.action == "greet":
+            # Recover/validate durable work first, but social turns need no rows.
+            return await self._apply(message, Intent(action="greet"), mode, now=now, priority=False)
+        lines = self.repo.list_lines()
+        state = self.repo.dialogue_state(message.user_id, message.chat_id, now=now)
         if not priority and (
             parse_answer(message.text, state, now=now) is not None
             or closed_attempt(message.text)
         ):
             return await self._apply(message, None, mode, now=now, priority=False)
-        request = None if priority else classify_request(message.text)
-        if request is not None and request.action == "greet":
-            # A complete social turn is source-authorized, never a model query.
-            return await self._apply(message, Intent(action="greet"), mode, now=now, priority=False)
-        # Natural increments must not fall into the legacy "añade <product>" alias.
-        intent = (None if request is not None and request.action == "increment"
-                  else parse_command(message.text, lines))
+        # Rejected increments also must not fall into the legacy literal add alias.
+        intent = (None if not priority and incremental_attempt(message.text)
+                   else parse_command(message.text, lines))
         if intent is None:
             requested = product_name(message.text)
             products = self.repo.find_products(requested) if requested is not None else []

@@ -135,6 +135,89 @@ def test_pending_add_list_greeting_resume(tmp_path):
     assert [(x.description, x.quantity) for x in repo.list_lines()] == [("arroz jazmín", 2)]
 
 
+@pytest.mark.parametrize("text", [
+    "añade más arroz si hay oferta", "añade más 2 arroz", "añade más arroz cuando haya oferta",
+    'añade más "arroz"', "añade más eso", "Hola, añade más arroz si hay oferta",
+])
+@pytest.mark.parametrize("boundary", ["conversation", "repository"])
+def test_rejected_increment_never_becomes_literal_add(tmp_path, text, boundary):
+    repo, clock = make_repo(tmp_path), Clock(NOW)
+    models = Models()
+    def turn(text):
+        if boundary == "conversation":
+            return send(repo, text, models.interpreter, clock=clock, reply_writer=models.writer)
+        with sqlite3.connect(repo.path) as db:
+            number = db.execute("SELECT coalesce(max(update_id),0)+1 FROM inbox").fetchone()[0]
+        message = ingest(repo, text, number=number)
+        return repo.apply_dialogue(message.update_id, Intent(action="add", lines=[
+            IntentLine(description="más arroz si hay oferta")]), "dry_run", now=clock())
+    turn(text)
+    assert state(repo) == []
+    turn("2")
+    assert repo.list_lines() == []
+    # A malformed new request must not replace an earlier valid proposal.
+    send(repo, "necesito avena", models.interpreter, clock=clock)
+    pending = state(repo)
+    turn(text)
+    assert state(repo) == pending
+    turn("2")
+    assert [(x.description, x.quantity) for x in repo.list_lines()] == [("avena", 2)]
+
+
+@pytest.mark.parametrize("change", ["revision", "reservation", "expiry"])
+@pytest.mark.parametrize("boundary", ["conversation", "apply", "prepare"])
+def test_greeting_does_not_read_rows_or_invalidate_pending_increment(
+    tmp_path, monkeypatch, change, boundary,
+):
+    repo, models, clock = make_repo(tmp_path), Models(), Clock(NOW)
+    line = seed_line(repo, "arroz", 1)
+    send(repo, "quiero más arroz", models.interpreter, clock=clock)
+    send(repo, "2", clock=clock)
+    pending = state(repo)
+    with sqlite3.connect(repo.path) as db:
+        if change == "revision":
+            db.execute("UPDATE list_lines SET revision=revision+1 WHERE id=?", (line.id,))
+        elif change == "reservation":
+            db.execute("PRAGMA foreign_keys=OFF")
+            db.execute("INSERT INTO reservations VALUES (?,?)", (line.id, "synthetic-order"))
+    clock.advance(900 if change == "expiry" else 100)
+    before = repo.list_lines()
+    message = ingest(repo, "hola")
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Greeting must not query list rows")
+    with monkeypatch.context() as patch:
+        patch.setattr(repo, "list_lines", forbidden)
+        patch.setattr(repo, "_lines", forbidden)
+        if boundary == "conversation":
+            reply = asyncio.run(Conversation(repo, models.interpreter, clock=clock,
+                                            reply_writer=models.writer).handle(message, "dry_run"))
+        elif boundary == "apply":
+            reply = repo.apply_dialogue(100, Intent(action="list"), "dry_run", now=clock())
+        else:
+            prepared = repo.prepare_dialogue(100, Intent(action="list"), "dry_run", now=clock())
+            reply = repo.finalize_presentation(100, prepared.snapshot.fallback)
+    assert "Hola" in reply.text and "arroz" not in reply.text
+    assert state(repo) == pending
+    assert repo.list_lines() == before
+    # Deferred stale/reservation/expiry checks still prohibit the old confirmation.
+    send(repo, "sí", clock=clock)
+    assert repo.list_lines() == before
+    assert repo.dialogue_state(7, 7, now=clock()) is None
+
+
+@pytest.mark.parametrize("text,name", [
+    ("/anadir más arroz", "más arroz"), ('añade "más arroz"', '"más arroz"'),
+    ("añade Arroz Más", "Arroz Más"), ("necesito Arroz Más", "Arroz Más"),
+])
+def test_literal_more_names_still_add_when_not_increment_grammar(tmp_path, text, name):
+    repo, models, clock = make_repo(tmp_path), Models(), Clock(NOW)
+    send(repo, text, models.interpreter, clock=clock)
+    assert repo.list_lines() == []
+    assert repo.dialogue_state(7, 7, now=clock()).focus.description == name
+    send(repo, "2", clock=clock)
+    assert [(x.description, x.quantity) for x in repo.list_lines()] == [(name, 2)]
+
+
 def test_compound_greeting_and_hostile_list_proposal(tmp_path):
     repo, models = make_repo(tmp_path), Models()
     seed_line(repo, "private product", 3)

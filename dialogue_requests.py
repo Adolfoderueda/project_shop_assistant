@@ -28,16 +28,26 @@ def product_name(text: str) -> str | None:
     return name
 
 
+def _shopping_text(text: str) -> str:
+    raw = text.strip()
+    social = re.match(r"hola(?:\s*,\s*|\s+)", raw, re.IGNORECASE)
+    return raw[social.end():] if social else raw
+
+
+def incremental_attempt(text: str) -> bool:
+    """Increment-shaped requests cannot become legacy literal adds if rejected."""
+    return re.match(r"(?:quiero|anade)\s+mas(?:\s|$)",
+                    normalized(_shopping_text(text))) is not None
+
+
 def classify_request(text: str) -> SourceRequest | None:
     raw = text.strip()
     clean = normalized(raw).strip("¿?¡!., ")
     if clean in {"hola", "hols", "buenas", "buenos dias", "hola que tal", "que tal"}:
         return SourceRequest(action="greet")
-    social = re.match(r"hola(?:\s*,\s*|\s+)", raw, re.IGNORECASE)
-    if social:
-        raw = raw[social.end():]
-        if raw.startswith("/"):
-            return None
+    raw = _shopping_text(text)
+    if raw.startswith("/"):
+        return None
     clean = normalized(raw)
     if clean.strip("¿?¡!., ") in {
         "lista", "que hay en la lista", "que hay en mi lista", "muestra la lista",
