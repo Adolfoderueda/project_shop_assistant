@@ -5,6 +5,7 @@ import pytest
 
 from domain import IncomingMessage, Intent, IntentLine
 from storage import Repository
+from tests.dialogue_support import seed_line
 from tests.fakes import FakeInterpreter, FakeOpenAI
 
 
@@ -35,8 +36,10 @@ def orders(repo):
 def test_add_does_not_buy(repo):
     send(repo, "añade pañales")
     assert orders(repo) == 0
+    assert repo.list_lines() == []
+    send(repo, "2 paquetes")
     assert repo.list_lines()[0].product_id == "diapers"
-    assert repo.list_lines()[0].quantity is None
+    assert repo.list_lines()[0].quantity == 2
 
 
 @pytest.mark.parametrize(
@@ -60,7 +63,7 @@ def test_negated_purchase_is_not_order(repo, text):
 
 
 def test_unresolved_quantity_requests_clarification(repo):
-    send(repo, "añade pañales")
+    seed_line(repo, "pañales")
     reply = send(repo, "compra lo pendiente")
     assert "cantidad" in reply.text.lower()
     assert orders(repo) == 0
@@ -147,7 +150,7 @@ def test_invalid_or_piece_quantities_do_not_mutate(repo, text):
 def test_pending_is_user_scoped(repo):
     send(repo, "añade pienso")
     send(repo, "3", user=8)
-    assert repo.list_lines()[0].quantity is None
+    assert repo.list_lines() == []
     send(repo, "3")
     assert repo.list_lines()[0].quantity == 3
 
@@ -245,8 +248,10 @@ def test_spanish_number_words_and_bare_product_url(repo):
         repo,
         "https://www.amascotados.com/alpha-spirit/2883-alpha-spirit-seco-only-fish-12-kg-8436586310295.html",
     )
+    assert len(repo.list_lines()) == 1
+    send(repo, "2")
     assert repo.list_lines()[1].product_id == "dog-food"
-    assert repo.list_lines()[1].quantity is None
+    assert repo.list_lines()[1].quantity == 2
     assert orders(repo) == 0
 
 
@@ -295,14 +300,15 @@ def test_unhandled_explicit_quantity_is_not_silently_lost(repo, text):
 
 def test_pending_and_mutation_roll_back_with_outbox(repo):
     send(repo, "añade pienso")
-    pending = repo.pending_clarification(7)
+    from datetime import UTC, datetime
+    pending = repo.dialogue_state(7, 7, now=datetime.now(UTC))
     with sqlite3.connect(repo.path) as db:
         db.executescript("""CREATE TRIGGER reject_notice BEFORE INSERT ON outbox
         BEGIN SELECT RAISE(ABORT, 'injected'); END;""")
     with pytest.raises(sqlite3.IntegrityError):
         send(repo, "2")
-    assert repo.pending_clarification(7) == pending
-    assert repo.list_lines()[0].quantity is None
+    assert repo.dialogue_state(7, 7, now=datetime.now(UTC)) == pending
+    assert repo.list_lines() == []
 
 
 def test_product_near_matches_stay_unresolved(repo):
@@ -321,8 +327,10 @@ def test_ordinary_spanish_structured_add(repo):
 
     client = FakeOpenAI(Intent(action="add", lines=[IntentLine(description="pañales")]))
     send(repo, "necesito pañales", OpenAIInterpreter(client, "test"))
+    assert repo.list_lines() == []
+    send(repo, "2 paquetes")
     assert repo.list_lines()[0].product_id == "diapers"
-    assert repo.list_lines()[0].quantity is None
+    assert repo.list_lines()[0].quantity == 2
     assert orders(repo) == 0
 
 
@@ -444,10 +452,12 @@ def test_model_preserving_full_qualifiers_keeps_product_unresolved(repo):
         "necesito pienso de pollo",
         FakeInterpreter(Intent(action="add", lines=[IntentLine(description="pienso de pollo")])),
     )
+    assert repo.list_lines() == []
+    send(repo, "2")
     line = repo.list_lines()[0]
     assert line.description == "pienso de pollo"
     assert line.product_id is None
-    assert line.quantity is None
+    assert line.quantity == 2
 
 
 @pytest.mark.parametrize("action", ["buy", "remove", "set_quantity"])
@@ -482,6 +492,8 @@ def test_model_add_requires_explicit_affirmative_request(repo, text, description
 @pytest.mark.parametrize("prefix", ["necesito", "quiero", "me hace falta", "me hacen falta"])
 def test_model_add_accepts_closed_affirmative_request(repo, prefix):
     send(repo, f"{prefix} arroz integral", FakeInterpreter(Intent(action="add", lines=[IntentLine(description="arroz integral")])))
+    assert repo.list_lines() == []
+    send(repo, "2")
     assert [line.description for line in repo.list_lines()] == ["arroz integral"]
 
 
@@ -491,8 +503,10 @@ def test_model_add_accepts_only_bounded_polite_suffix(repo, prefix):
         repo, f"{prefix} arroz integral por favor",
         FakeInterpreter(Intent(action="add", lines=[IntentLine(description="arroz integral")])),
     )
+    assert repo.list_lines() == []
+    send(repo, "2")
     assert [line.description for line in repo.list_lines()] == ["arroz integral"]
-    assert repo.list_lines()[0].quantity is None
+    assert repo.list_lines()[0].quantity == 2
     assert reply.order_id is None
     assert orders(repo) == 0
 
@@ -556,6 +570,8 @@ def test_model_cannot_add_alternative_or_conditional_request(repo, text):
 @pytest.mark.parametrize("product", ["Blemil tipo 1 Evolution", "Alpha Spirit Wild Fish / Only Fish", "arroz integral"])
 def test_model_keeps_unambiguous_product_descriptions(repo, product):
     send(repo, f"necesito {product}", FakeInterpreter(Intent(action="add", lines=[IntentLine(description=product)])))
+    assert repo.list_lines() == []
+    send(repo, "2 paquetes")
     assert repo.list_lines()[0].description == product
 
 

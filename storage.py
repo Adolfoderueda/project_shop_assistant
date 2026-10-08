@@ -65,7 +65,7 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository)
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 7:
+            if version > 8:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
@@ -81,6 +81,8 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository)
                 db.executescript((Path(__file__).parent / "migrations/006.sql").read_text())
             if version < 7:
                 db.executescript((Path(__file__).parent / "migrations/007.sql").read_text())
+            if version < 8:
+                db.executescript((Path(__file__).parent / "migrations/008.sql").read_text())
             db.executemany(
                 "INSERT OR IGNORE INTO observed_products "
                 "(id,store_id,product_id,title,url,observed_on,price_cents,availability,format_note) "

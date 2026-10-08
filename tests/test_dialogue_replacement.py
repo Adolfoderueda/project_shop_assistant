@@ -23,9 +23,12 @@ def propose(name, action="mention_product"):
 
 
 def start(repo, clock, quantity=2, destination="arroz integral"):
-    send(repo, "necesito arroz", propose("arroz", "add"), clock=clock)
-    if quantity is not None:
-        send(repo, str(quantity), clock=clock)
+    if quantity is None:
+        line = seed_line(repo, "arroz")
+        send(repo, "/comprar", clock=clock)
+        assert repo.dialogue_state(7, 7, now=clock()).target.id == line.id
+    else:
+        send(repo, f"/anadir {quantity} arroz", clock=clock)
     original = repo.list_lines()[0]
     send(repo, "ahora " + destination, propose(destination), clock=clock)
     return original
@@ -285,20 +288,16 @@ def test_zero_affected_replacement_rolls_back_pending_confirmation(repo, clock):
 
 
 @pytest.mark.parametrize("interrupt", ["¿qué sabes de pasta?", "/lista"])
-def test_other_product_cancels_replacement_but_list_preserves_it(repo, clock, interrupt):
-    original = start(repo, clock)
+def test_product_query_and_list_preserve_pending_replacement(repo, clock, interrupt):
+    start(repo, clock)
     send(repo, "sustitúyelo", clock=clock)
     send(repo, "sí", clock=clock)
     before = repo.dialogue_state(7, 7, now=clock())
     clock.advance(30)
     send(repo, interrupt, propose("pasta", "product_query"), clock=clock)
-    if interrupt == "/lista":
-        assert repo.dialogue_state(7, 7, now=clock()) == before
+    assert repo.dialogue_state(7, 7, now=clock()) == before
     send(repo, "3", clock=clock)
-    if interrupt == "/lista":
-        assert repo.list_lines()[0].description == "arroz integral"
-    else:
-        assert repo.list_lines() == [original]
+    assert repo.list_lines()[0].description == "arroz integral"
 
 
 def test_reserved_origin_does_not_block_offered_numeric_add_alternative(repo, clock):
@@ -306,4 +305,6 @@ def test_reserved_origin_does_not_block_offered_numeric_add_alternative(repo, cl
     assert synthetic_order(repo)
     send(repo, "1", clock=clock)
     assert repo.list_lines()[0] == original
+    assert len(repo.list_lines()) == 1
+    send(repo, "2", clock=clock)
     assert [l.description for l in repo.list_lines()] == ["arroz", "arroz integral"]

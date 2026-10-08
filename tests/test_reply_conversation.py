@@ -21,7 +21,8 @@ class Writer:
         self.snapshots.append(snapshot)
         if self.callback:
             self.callback(snapshot)
-        blocks = [DraftBlock(role="lead", text="Vamos por partes")]
+        blocks = ([DraftBlock(role="lead", text="Vamos por partes")]
+                  if snapshot.version == 1 else [])
         blocks.extend(DraftBlock(role="fact", text="{{" + f.key + "}}") for f in snapshot.facts)
         if snapshot.question is not None:
             blocks.append(DraftBlock(role="question", text="{{q}}"))
@@ -52,9 +53,9 @@ def test_closed_quantity_uses_writer_not_interpreter(tmp_path):
     writer = Writer(lambda snapshot: (
         repo.list_lines()[0].quantity == 2 or pytest.fail("quantity was not committed")))
     reply = handle(repo, "2", writer, ForbiddenInterpreter())
-    assert writer.snapshots[0].kind == "updated"
-    assert "2 envases" in reply.text and reply.text.startswith("Vamos por partes")
-    assert repo.list_lines()[0].revision == 2
+    assert writer.snapshots[0].kind == "added"
+    assert "2 envases" in reply.text and reply.text.startswith("He añadido")
+    assert repo.list_lines()[0].revision == 1
     assert repo.message_result(10)[1] == reply
     assert order_count(repo) == 0
 
@@ -76,15 +77,19 @@ def test_all_natural_classes_reach_writer(tmp_path):
         ("sustitúyelo", ForbiddenInterpreter()),
         ("sí", ForbiddenInterpreter()),
         ("4", ForbiddenInterpreter()),
+        ("/anadir arroz", None),
+        ("cambiar cantidad", ForbiddenInterpreter()),
+        ("3", ForbiddenInterpreter()),
     ]
     for number, (text, interpreter) in enumerate(sequence, 10):
         handle(repo, text, writer, interpreter, number=number)
-    assert len(writer.snapshots) == len(sequence)
+    assert len(writer.snapshots) == len(sequence) - 1  # Slash command bypasses the writer.
     assert {s.kind for s in writer.snapshots} == {
         "added", "updated", "list", "product", "clarify", "cancelled", "question", "replaced",
+        "pending_add",
     }
     assert [(line.description, line.quantity) for line in repo.list_lines()] == [
-        ("arroz", 2), ("avena", 4),
+        ("arroz", 3), ("avena", 4),
     ]
     assert order_count(repo) == 0
 
@@ -125,7 +130,7 @@ def test_recover_prepared_before_any_interpretation(tmp_path, monkeypatch):
         msg, "dry_run"))
     assert reply == prepared.snapshot.fallback
     assert repo.dialogue_state(7, 7, now=clock()) == state
-    assert len(repo.list_lines()) == 1
+    assert repo.list_lines() == []
     assert len(repo.pending_notices()) == 1
 
 
@@ -151,7 +156,7 @@ def test_cancel_between_commits_and_replay_after_finalization(tmp_path):
     assert asyncio.run(restarted.handle(msg, "dry_run")) == reply
     assert len(writer.snapshots) == 1
     assert repo.dialogue_state(7, 7, now=clock()) == state
-    assert len(repo.pending_notices()) == 1 and repo.list_lines()[0].revision == 1
+    assert len(repo.pending_notices()) == 1 and repo.list_lines() == []
 
 
 def test_mutated_store_after_prepare_does_not_change_facts(tmp_path):
@@ -161,7 +166,7 @@ def test_mutated_store_after_prepare_does_not_change_facts(tmp_path):
         with sqlite3.connect(repo.path) as db:
             db.execute("UPDATE list_lines SET description='changed',quantity=99,revision=revision+1")
 
-    reply = handle(repo, "necesito arroz", Writer(mutate), propose("arroz"))
+    reply = handle(repo, "añade 2 arroz", Writer(mutate))
     assert "arroz" in reply.text and "changed" not in reply.text and "99" not in reply.text
     assert repo.list_lines()[0].description == "changed"
 
@@ -196,7 +201,8 @@ def test_no_write_transaction_during_http(tmp_path):
     second = Repository(repo.path)
 
     def write(snapshot):
-        assert second.list_lines()[0].description == "arroz"
+        assert second.list_lines() == []
+        assert second.dialogue_state(7, 7, now=datetime.now(UTC)).focus.description == "arroz"
         assert second.message_result(10)[1] is None
         with second._connection(write=True) as db:
             db.execute("INSERT INTO meta(key,value) VALUES ('writer_probe','ok')")

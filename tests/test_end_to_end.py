@@ -44,7 +44,7 @@ def cycles(parts, count):
 
 
 def start_order(path, bot, store, mode, *, defer_purchase=False):
-    bot.receive(1, "quiero pienso")
+    bot.receive(1, "/anadir 1 pienso")
     cycles(components(path, bot, store, mode), 2)
     repo = Repository(path)
     line = repo.list_lines()[0]
@@ -61,7 +61,7 @@ def test_telegram_to_simulated_receipt_after_restart(tmp_path):
     store = FakeStore("test", [offer()])
     repo, line = start_order(path, bot, store, "dry_run", defer_purchase=True)
     assert len(repo.list_lines()) == 1
-    assert repo.list_lines()[0].quantity is None
+    assert repo.list_lines()[0].quantity == 1
     assert not any("simulado" in text.lower() for _, text in bot.sent)
     # Restart with fresh persistence/service objects and deliver the durable receipt.
     cycles(components(path, bot, store), 2)

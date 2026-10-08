@@ -81,6 +81,13 @@ def ingest(repo, text):
 async def setup_send(repo, clock, text, intent=None):
     return await Conversation(repo, Interpreter(intent), clock=clock).handle(ingest(repo, text), 'dry_run')
 
+async def setup_legacy_quantity(repo, clock):
+    # A historical unknown row remains durable; only an offered reference may update it.
+    message = ingest(repo, 'legacy arroz')
+    repo.apply_intent(message.update_id, proposal('arroz'), 'dry_run')
+    await setup_send(repo, clock, '/anadir arroz')
+    await setup_send(repo, clock, 'cambiar cantidad')
+
 def rows(repo):
     return [[line.description, line.quantity] for line in repo.list_lines()]
 
@@ -141,7 +148,7 @@ class RecordingWriter:
         elif reject:
             value = ReplyDraft(blocks=(DraftBlock(role='lead', text='No he cambiado la lista'),))
         else:
-            blocks = [DraftBlock(role='lead', text='Vamos por partes.')]
+            blocks = [DraftBlock(role='lead', text='Vamos por partes.')] if snapshot.version == 1 else []
             blocks.extend(DraftBlock(role='fact', text='{{' + f.key + '}}') for f in snapshot.facts)
             if snapshot.question is not None:
                 blocks.append(DraftBlock(role='question', text='{{q}}'))
@@ -173,14 +180,17 @@ async def scenario(repo, clock, name):
         await setup_send(repo, clock, 'a\u00f1adir otra l\u00ednea')
         await setup_send(repo, clock, '2')
         if name == 'natural_list':
-            return 'lista', None, [['arroz', 1], rice], None, ['Entrada 1', '1 envase.', 'Entrada 2', '2 envases.']
+            return 'lista', None, [['arroz', 1], rice], None, ['arroz: 1 envase.', 'arroz: 2 envases.']
         if name == 'select_entry':
             await setup_send(repo, clock, 'necesito arroz', proposal('arroz'))
             await setup_send(repo, clock, 'cambiar cantidad')
             return '2', None, [['arroz', 1], rice], 'quantity', ['seleccionada', '2 envases']
         return 'necesito arroz', proposal('arroz'), [['arroz', 1], rice], 'duplicate_choice', ['Entrada 1', '1 envase.', 'Entrada 2', '2 envases.', 'Cambiar cantidad', 'otra entrada', 'Cancelar']
     if name in {'quantity_known', 'quantity_unknown'}:
-        await setup_send(repo, clock, '/anadir 1 arroz' if name == 'quantity_known' else '/anadir arroz')
+        if name == 'quantity_unknown':
+            await setup_legacy_quantity(repo, clock)
+        else:
+            await setup_send(repo, clock, '/anadir 1 arroz')
         if name == 'quantity_known':
             await setup_send(repo, clock, 'necesito arroz', proposal('arroz'))
             await setup_send(repo, clock, 'cambiar cantidad')
@@ -188,7 +198,7 @@ async def scenario(repo, clock, name):
     if name in {'add_unknown', 'add_known', 'invalid_draft', 'timeout'}:
         known = name == 'add_known'
         # Existing no-slash command alias supplies quantity; not a model proposal.
-        return 'a\u00f1ade 2 arroz' if known else 'necesito arroz', None if known else proposal('arroz'), [rice if known else pending], None if known else 'quantity', ['He a\u00f1adido', '2 envases' if known else 'cantidad pendiente']
+        return 'a\u00f1ade 2 arroz' if known else 'necesito arroz', None if known else proposal('arroz'), [rice] if known else [], None if known else 'add_quantity', ['He a\u00f1adido', '2 envases'] if known else ['arroz', 'Todav\u00eda no est\u00e1 en la lista']
     if name in {'mention_add', 'replace_confirm', 'replace_quantity', 'replace_duplicate'}:
         await setup_send(repo, clock, '/anadir 2 arroz')
         if name == 'replace_duplicate':
@@ -197,7 +207,7 @@ async def scenario(repo, clock, name):
             await setup_send(repo, clock, '/cantidad ' + repo.list_lines()[0].id + ' 2')
         await setup_send(repo, clock, 'ahora pasta', proposal('pasta', 'mention_product'))
         if name == 'mention_add':
-            return 'a\u00f1\u00e1delo', None, [rice, ['pasta', None]], 'quantity', ['He a\u00f1adido pasta', 'cantidad pendiente', 'cantidad total']
+            return 'a\u00f1\u00e1delo', None, [rice], 'add_quantity', ['pasta', 'Todav\u00eda no est\u00e1 en la lista']
         if name == 'replace_confirm':
             return 'sustit\u00fayelo', None, [rice], 'confirm_replace', ['arroz', 'pasta', 'Todav\u00eda no lo he sustituido', 'Cancelar']
         await setup_send(repo, clock, 'sustit\u00fayelo')
@@ -206,7 +216,10 @@ async def scenario(repo, clock, name):
             return '3', None, [rice, ['pasta', 1]], 'replace_duplicate', ['No se sumar\u00e1n ni fusionar\u00e1n', '3 envases', 'Cancelar']
         return '3', None, [['pasta', 3]], None, ['He sustituido arroz por pasta', '3 envases']
     if name in {'cancel_pending', 'expiry', 'stale', 'reserved'}:
-        await setup_send(repo, clock, '/anadir arroz')
+        if name in {'stale', 'reserved'}:
+            await setup_legacy_quantity(repo, clock)
+        else:
+            await setup_send(repo, clock, '/anadir arroz')
         if name == 'expiry':
             clock.advance(900)
         if name in {'stale', 'reserved'}:
@@ -220,7 +233,7 @@ async def scenario(repo, clock, name):
                 db.commit()
         label = {'cancel_pending': 'Propuesta cancelada', 'expiry': 'caducado',
                  'stale': 'lista ha cambiado', 'reserved': 'reservada'}[name]
-        return 'cancelar' if name == 'cancel_pending' else '2', None, [pending], None, [label]
+        return 'cancelar' if name == 'cancel_pending' else '2', None, [pending] if name in {'stale', 'reserved'} else [], None, [label]
     if name == 'cancel_none':
         return 'cancelar', None, [], None, ['No hay propuesta pendiente']
     if name == 'product_known_hostile':

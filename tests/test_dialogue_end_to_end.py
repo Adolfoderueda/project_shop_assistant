@@ -81,7 +81,7 @@ def test_expired_restart_does_not_consume_number_as_selection(tmp_path):
     parts, _ = dialogue_parts(path, bot, clock, propose("pasta"))
     feed(parts, bot, 3, "necesito pasta")
     feed(parts, bot, 4, "4")
-    assert [(l.description, l.quantity) for l in parts[1].list_lines()] == [("arroz", None), ("pasta", 4)]
+    assert [(l.description, l.quantity) for l in parts[1].list_lines()] == [("pasta", 4)]
     assert order_count(parts[1]) == 0
 
 
@@ -102,7 +102,7 @@ def test_model_failure_keeps_commands_and_contextual_answers_available(tmp_path)
     assert parts[1].dialogue_state(7, 7, now=clock()) == state
     assert parts[1].product_requests() == []
     feed(parts, bot, 3, "/lista")
-    assert before[0].id in bot.sent[-1][1]
+    assert before == [] and "vacía" in bot.sent[-1][1]
     feed(parts, bot, 4, "2")
     assert parts[1].list_lines()[0].quantity == 2
     assert order_count(parts[1]) == 0

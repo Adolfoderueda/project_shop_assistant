@@ -3,6 +3,7 @@
 from dialogue import DialogueDecision
 from dialogue_controller import question_prompt
 from domain import ListLine, Reply
+from presentation_replies import build_presentation, quantity_text
 
 
 def render_dialogue_result(
@@ -11,17 +12,30 @@ def render_dialogue_result(
 ) -> Reply:
     if decision.reply_kind == "legacy":
         return legacy_reply or Reply(text="No he cambiado la lista.")
-    if decision.reply_kind == "natural_list":
-        return Reply(text="\n".join(f"{l.description}: {l.quantity or '?'} envases" for l in lines)
-                     or "La lista está vacía.")
-    if affected and decision.reply_kind in {"added", "updated", "replaced"}:
-        unit = decision.state.focus.unit if decision.state and decision.state.focus else "envases"
+    if affected is None:
+        if (decision.prompt and decision.reply_kind == "clarify"
+                and not (decision.state and decision.state.question)):
+            # Operational scalar prompts (e.g. explicit diaper units) are already
+            # application-owned; do not erase them with the generic fallback.
+            return Reply(text=decision.prompt)
+        return build_presentation(decision, None, lines, legacy_reply,
+                                  observations=[], original=None).fallback
+    if affected and decision.reply_kind in {"added", "updated", "replaced", "incremented"}:
+        unit = (decision.mutation.unit if decision.mutation else
+                decision.state.focus.unit if decision.state and decision.state.focus else "envases")
         text = (f"He añadido {affected.description}." if decision.reply_kind == "added"
-                else f"{affected.description}: {affected.quantity} {unit}.")
+                else f"{affected.description}: {quantity_text(affected.quantity, unit)}.")
         if decision.reply_kind == "added" and affected.quantity is not None:
-            text += f" {affected.quantity} {unit}."
+            text += f" {quantity_text(affected.quantity, unit)}."
         if decision.reply_kind == "replaced":
-            text = f"He sustituido la línea por {affected.description}: {affected.quantity} {unit}."
+            text = (f"He sustituido la entrada por {affected.description}: "
+                    f"{quantity_text(affected.quantity, unit)}.")
+        if decision.reply_kind == "incremented":
+            mutation = decision.mutation
+            unit = mutation.unit
+            text = (f"He añadido {quantity_text(mutation.additional_quantity, unit)} "
+                    f"a {affected.description}: de {quantity_text(mutation.expected_base, unit)} "
+                    f"a {quantity_text(affected.quantity, unit)}.")
         if decision.state and decision.state.question:
             text += " " + question_prompt(decision.state, lines)
         return Reply(text=text)

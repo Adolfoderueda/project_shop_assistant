@@ -196,7 +196,7 @@ def test_real_removal_snapshot_and_commands_count_toward_final_budget():
     decision = DialogueDecision(mutation=None, legacy_intent=None, state=state, reply_kind="clarify")
     s = build_presentation(decision, None, [row], None, observations=[], original=None)
     proposed = draft(("fact", "{{f0}}"), ("question", "{{q}}"),
-                     ("option", "{{o0}} {{o1}}"))
+                     ("option", "{{o0}}\n{{o1}}"))
     reply = validate_draft(s, proposed)
     assert reply is not None
     assert reply.text.endswith("\nEntrada 1: /quitar application-private")

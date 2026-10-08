@@ -1,9 +1,8 @@
 """Fail-closed composition of application-owned facts, questions and options.
 
-This initial frontier deliberately anchors all factual wording and the question.
-The model chooses grouping/order and at most two approved introductory phrases;
-it does not enjoy arbitrary prose freedom or an arbitrary-prose truth guarantee.
-Expand this frontier only after user approval and new semantic tests.
+All factual wording and questions are application-owned. Version 1 recovery
+retains its historical grouping/lead grammar. Version 2 chooses only exact
+act-dependent variants and grouping, without leads or arbitrary prose freedom.
 
 Context budget counts compact snapshot JSON excluding fallback (never send that
 private field to a model). Draft budget counts block text before substitution;
@@ -17,7 +16,8 @@ import unicodedata
 from itertools import pairwise
 
 from domain import Reply
-from presentation import PresentationSnapshot, ReplyDraft
+from presentation import PresentationSnapshot, ReplyDraft, public_presentation_json
+from presentation_phrases import phrase_compositions
 
 _TOKEN = re.compile(r"\{\{(f\d+|o\d+|q)\}\}")
 _SEPARATORS = re.compile(r"(?:[\s.,:;•-]|\b(?:y|también|además)\b)*")
@@ -35,7 +35,7 @@ def within_budget(snapshot: PresentationSnapshot) -> bool:
     except (ValueError, TypeError):
         return False
     return (len(snapshot.facts) <= 20 and len(snapshot.options) <= 10
-            and len(snapshot.model_dump_json(exclude={"fallback"})) <= 8000)
+            and len(public_presentation_json(snapshot)) <= 8000)
 
 
 def _valid_lead(text: str) -> bool:
@@ -57,6 +57,13 @@ def validate_draft(snapshot: PresentationSnapshot, draft: ReplyDraft) -> Reply |
         return None
     if not within_budget(snapshot) or sum(len(b.text) for b in draft.blocks) > 2000:
         return None
+    if snapshot.version == 2 and not any(
+        len(composition) == len(draft.blocks) and all(
+            block.role == role and block.text in variants
+            for block, (role, variants) in zip(draft.blocks, composition, strict=True)
+        ) for composition in phrase_compositions(snapshot)
+    ):
+        return None
     # Contiguous local keys are part of the application snapshot contract.
     if ([f.key for f in snapshot.facts] != [f"f{i}" for i in range(len(snapshot.facts))]
             or [o.key for o in snapshot.options] != [f"o{i}" for i in range(len(snapshot.options))]):
@@ -74,7 +81,12 @@ def validate_draft(snapshot: PresentationSnapshot, draft: ReplyDraft) -> Reply |
                 return None
             continue
         matches = list(_TOKEN.finditer(block.text))
-        if not matches or _SEPARATORS.fullmatch(_TOKEN.sub(" ", block.text)) is None:
+        if snapshot.version == 2:
+            # Exact grammar was checked above, before looking at any literal data.
+            if snapshot.act == "greeting" and not matches:
+                seen["fact"].append("f0")
+                continue
+        elif not matches or _SEPARATORS.fullmatch(_TOKEN.sub(" ", block.text)) is None:
             return None
         for previous, following in pairwise(matches):
             gap = block.text[previous.end():following.start()]

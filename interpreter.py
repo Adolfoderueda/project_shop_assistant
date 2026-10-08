@@ -7,6 +7,7 @@ import unicodedata
 from typing import TYPE_CHECKING, Protocol
 
 from catalog import DOG_URL, resolve_product
+from dialogue import MAX_QUANTITY
 from domain import Intent, IntentLine, ListLine
 
 if TYPE_CHECKING:
@@ -57,12 +58,20 @@ def number_words(text: str) -> str:
     return re.sub(r"^(" + "|".join(words) + r")\b", lambda m: str(words[m[1]]), text)
 
 
+def _package_count(text: str) -> int | None:
+    try:
+        count = int(text)
+    except ValueError:
+        return None
+    return count if 1 <= count <= MAX_QUANTITY else None
+
+
 def quantity(text: str) -> int | None:
     match = re.fullmatch(
         r"([1-9]\d*)(?:\s+(?:paquetes?|botes?|sacos?|envases?|unidades?))?",
         number_words(normalized(text)),
     )
-    return int(match[1]) if match else None
+    return _package_count(match[1]) if match else None
 
 
 def diaper_reference(description: str) -> bool:
@@ -89,8 +98,11 @@ def parse_command(text: str, lines: list[ListLine]) -> Intent | None:
         return Intent(action="status" if match[1] == "estado" else "resume", order_id=match[2])
     match = re.fullmatch(r"/cantidad\s+(\S+)\s+([1-9]\d*)", clean)
     if match:
+        count = _package_count(match[2])
+        if count is None:
+            return clarify("Indica una cantidad entera de envases dentro del rango permitido.")
         return Intent(
-            action="set_quantity", lines=[IntentLine(line_id=match[1], quantity=int(match[2]))]
+            action="set_quantity", lines=[IntentLine(line_id=match[1], quantity=count)]
         )
     match = re.fullmatch(r"(?:/quitar|quita|elimina|borra)\s+(.+)", clean)
     if match:
@@ -119,10 +131,10 @@ def parse_command(text: str, lines: list[ListLine]) -> Intent | None:
         ):
             return clarify("Indica un producto por mensaje y una cantidad entera al principio.")
         if leading:
-            amount = int(leading[1])
+            amount = _package_count(leading[1])
             description = leading[2]
-            if amount <= 0:
-                return clarify("Indica una cantidad positiva de envases.")
+            if amount is None:
+                return clarify("Indica una cantidad entera positiva de envases dentro del rango permitido.")
             if diaper_reference(description) and not re.match(
                 r"^(paquetes?|envases?)\b", normalized(description)
             ):

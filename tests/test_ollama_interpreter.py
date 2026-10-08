@@ -393,7 +393,7 @@ def test_dialogue_none_is_explicit_and_slash_skips_http():
 
     interpreter = OllamaInterpreter(transport=httpx.MockTransport(capture))
     result = asyncio.run(interpreter.parse_with_dialogue("mi lista", [], [], None))
-    assert result.action == "list"
+    assert result.action == "clarify"
     context = json.loads(json.loads(requests[0].content)["messages"][1]["content"])
     assert context == {"text": "mi lista", "lines": [], "products": [], "dialogue": None}
     result = asyncio.run(interpreter.parse_with_dialogue("/lista", [], [], None))

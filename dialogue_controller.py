@@ -16,9 +16,13 @@ from dialogue import (
     expired,
     parse_answer,
 )
+from dialogue_additions import answer_addition, begin_addition
+from dialogue_increments import answer_increment, begin_increment
+from dialogue_requests import classify_request, incremental_attempt, validate_request
+from dialogue_requests import literal_request as _literal_request
+from dialogue_requests import product_name as _product_name
 from domain import IncomingMessage, Intent, IntentLine, ListLine, utc
-from interpreter import clarify, diaper_reference, explicit_diaper_packs, normalized, parse_command
-from product_memory import identifiable_product_name
+from interpreter import diaper_reference, explicit_diaper_packs, parse_command
 
 CONTEXT_ALIASES = {"anade eso", "anadelo", "anadelo a mi lista"}
 
@@ -32,65 +36,16 @@ def closed_attempt(text: str) -> bool:
     } or re.fullmatch(r"[1-9][0-9]*(?: (?:envases|paquetes|botes|sacos))?", clean) is not None
 
 
-def product_name(text: str) -> str | None:
-    clean = normalized(text).strip().removeprefix("¿").removesuffix("?").strip()
-    match = re.fullmatch(r"(?:que sabes de (.+)|que (.+) vimos|tenemos ficha de (.+))", clean)
-    if not match:
-        return None
-    name = next(group for group in match.groups() if group is not None).strip()
-    if (not identifiable_product_name(name)
-            or re.search(r'\b(?:no|nunca|si|o|u|y|cuando)\b|[?¿!¡.,;:"«»“”<>/\\]|https?\b|\n', name)
-            or re.search(r"\b\d+\s+(?:paquetes?|botes?|sacos?|envases?|unidades?)\b", name)):
-        return None
-    return name
-
-
 def literal_request(text: str) -> tuple[str, str] | None:
-    """Recognize the existing whole-message grammar, retaining original product data."""
-    match = re.fullmatch(r"(ahora|necesito|quiero|me hace falta|me hacen falta)\s+(.+)", normalized(text))
-    if not match:
-        return None
-    requested = match[2].removesuffix(" por favor")
-    if re.search(
-        r'\b(no|nunca|si|o|u|y|cuando|gracias)\b|\b(?:en caso de|a menos que|por favor)\b|[?¿!¡.,;:"«»“”<>\\]|https?\b|\n',
-        requested,
-    ):
-        return None
-    without_qualifiers = re.sub(r"\b(?:tipo|talla|etapa)\s+[1-9]\d*\b", "", requested)
-    if re.search(r"\d", without_qualifiers):
-        return None
-    # Split only the recognized prefix, never normalize/reconstruct the product name.
-    original = text.strip().split(maxsplit=len(match[1].split()))[-1]
-    if match[2].endswith(" por favor"):
-        original = original.rsplit(" ", 2)[0]
-    return ("mention_product" if match[1] == "ahora" else "add", original)
+    return _literal_request(text)
+
+
+def product_name(text: str) -> str | None:
+    return _product_name(text)
 
 
 def validate_model(text: str, intent: Intent, lines: list[ListLine]) -> Intent:
-    if intent.action in {"buy", "resume", "remove", "set_quantity", "status"}:
-        return clarify("Usa un comando explícito para esa operación.")
-    if intent.action in {"add", "mention_product"}:
-        request = literal_request(text)
-        if request is None or intent.action != request[0]:
-            return clarify()
-        if len(intent.lines) != 1 or intent.order_id is not None or intent.question is not None:
-            return clarify()
-        line = intent.lines[0]
-        if not line.description or canonical_name(line.description) != canonical_name(request[1]):
-            return clarify("No puedo omitir características del producto.")
-        if line.line_id is not None or line.quantity is not None or line.url is not None:
-            return clarify()
-    if intent.action == "product_query":
-        requested = product_name(text)
-        if (requested is None or len(intent.lines) != 1 or intent.order_id is not None
-                or intent.question is not None or intent.lines[0].line_id is not None
-                or intent.lines[0].quantity is not None or intent.lines[0].url is not None
-                or not intent.lines[0].description
-                or canonical_name(intent.lines[0].description) != canonical_name(requested)):
-            return clarify("Aclara el producto con una pregunta completa.")
-    if intent.action == "clarify":
-        return clarify("Aclara el producto o la acción.")
-    return intent
+    return validate_request(text, intent, lines)
 
 
 def ref(line: ListLine) -> LineRef:
@@ -99,6 +54,18 @@ def ref(line: ListLine) -> LineRef:
 
 def question_prompt(state: DialogueState, lines: list[ListLine]) -> str:
     name = state.focus.description if state.focus else "el producto"
+    if state.question == "add_quantity":
+        return f"¿Cuántos {state.focus.unit} de {name} quieres añadir? Todavía no está en la lista."
+    if state.question == "increment_quantity":
+        return f"¿Cuántos {state.focus.unit} adicionales de {name} quieres añadir?"
+    if state.question == "confirm_increment":
+        return (f"¿Confirmas añadir {state.additional_quantity} {state.focus.unit} a {name}? "
+                f"Pasaría de {state.base_quantity} a {state.proposal_quantity} {state.focus.unit}. Sí o no.")
+    if state.question in {"increment_missing", "increment_unknown"}:
+        reason = (f"No hay una entrada guardada de {name}." if state.question == "increment_missing"
+                  else f"La cantidad guardada de {name} es desconocida; no se puede incrementar.")
+        labels = {"add": "añadir otra línea", "change_quantity": "cambiar cantidad (total)"}
+        return reason + " " + "; ".join(f"{i}: {labels[key]}" for i, key in enumerate(state.options, 1)) + ". O cancelar."
     if state.question == "quantity":
         return f"Indica la cantidad de {state.focus.unit} para {name}."
     if state.question == "duplicate_choice":
@@ -138,6 +105,13 @@ def reduce_dialogue(
     lines: list[ListLine], reserved_ids: frozenset[str], *, now: datetime,
 ) -> DialogueDecision:
     utc(now)
+    request = classify_request(message.text)
+    if request is not None and request.action == "greet":
+        # No row-dependent validation or TTL transition on a pure social turn.
+        # Expiry/stale/reservation checks still run on the next shopping transition.
+        owned = state if state and (state.user_id, state.chat_id) == (message.user_id, message.chat_id) else None
+        return DialogueDecision(mutation=None, legacy_intent=None, state=owned, reply_kind="greeting",
+                                prompt="¡Hola! ¿Qué necesitas para tu lista?")
     was_expired = state is not None and expired(state, now)
     if state and (expired(state, now) or (state.user_id, state.chat_id) != (message.user_id, message.chat_id)):
         state = None
@@ -145,7 +119,13 @@ def reduce_dialogue(
     references = (() if not state else (*state.candidates, *([state.target] if state.target else []),
                   *([state.focus.line] if state.focus and state.focus.line else [])))
     stale = any(r.id not in rows or ref(rows[r.id]) != r for r in references)
-    if stale:
+    if state and state.pending_kind == "increment" and state.target and not stale:
+        current = rows[state.target.id]
+        stale = (current.quantity != state.base_quantity
+                 or canonical_name(current.description) != canonical_name(state.focus.description))
+    reserved_increment = bool(state and state.pending_kind == "increment" and state.target
+                              and state.target.id in reserved_ids)
+    if stale or reserved_increment:
         state = None
 
     def decision(kind="clarify", *, mutation=None, legacy=None, prompt=None, reason="generic"):
@@ -162,15 +142,11 @@ def reduce_dialogue(
                               updated_at=now, expires_at=now + DIALOGUE_TTL, **kwargs)
 
     def add_focus():
-        matches = [ref(l) for l in lines if canonical_name(l.description) == canonical_name(state.focus.description)]
-        if matches and not state.duplicate_confirmed:
-            renew(question="duplicate_choice", options=("change_quantity", "add"),
-                  candidates=tuple(matches), target=None)
-            return decision(prompt=question_prompt(state, lines))
-        renew(question="quantity" if state.proposal_quantity is None else None,
-              options=(), candidates=(), target=None)
-        return decision("added", mutation=DialogueMutation(kind="add", description=state.focus.description,
-                        quantity=state.proposal_quantity, unit=state.focus.unit))
+        nonlocal state
+        state = state.model_copy(update={"target": None})
+        result = begin_addition(state, lines, now=now)
+        return result.model_copy(update={"prompt": question_prompt(result.state, lines)
+                                       if result.state.question else None})
 
     def replace_focus():
         matches = tuple(ref(l) for l in lines if l.id != state.target.id
@@ -185,7 +161,14 @@ def reduce_dialogue(
         ))
 
     clean = canonical_name(message.text)
-    command = parse_command(message.text, lines)
+    # Source grammar, not a model action or the legacy add parser, authorizes this branch.
+    if request is not None and request.action == "increment":
+        result = begin_increment(ProductMention(description=request.description,
+            source_update_id=message.update_id), lines, reserved_ids,
+            user_id=message.user_id, chat_id=message.chat_id, now=now)
+        return result.model_copy(update={"prompt": question_prompt(result.state, lines)
+                                       if result.state and result.state.question else result.prompt})
+    command = None if incremental_attempt(message.text) else parse_command(message.text, lines)
     intent = command if command is not None else proposal
     if command is None and intent is not None:
         intent = validate_model(message.text, intent, lines)
@@ -205,9 +188,19 @@ def reduce_dialogue(
     if stale and not priority and (intent is None or intent.action == "clarify"):
         return decision(prompt="La lista ha cambiado; revisa el producto y vuelve a indicarlo.",
                         reason="stale")
+    if reserved_increment and not priority and (intent is None or intent.action == "clarify"):
+        return decision(prompt="La línea está reservada; revisa la lista.", reason="reserved")
     if answer and state:
         if answer.kind == "select" and state.question != "select_line":
             answer = DialogueAnswer(kind=state.options[answer.selection - 1])
+        if state.pending_kind == "increment":
+            if (answer.kind == "quantity" and diaper_reference(state.focus.description)
+                    and not explicit_diaper_packs(message.text)):
+                return decision(prompt="Indica paquetes/envases de pañales explícitamente.", reason="diaper_unit")
+            result = answer_increment(answer, state, lines, reserved_ids, now=now)
+            return result.model_copy(update={"prompt": question_prompt(result.state, lines)
+                if result.state and result.state.question and result.presentation_reason == "generic"
+                else result.prompt})
         if (state.target and state.target.id in reserved_ids
                 and state.question in {"add_or_replace", "confirm_replace", "replace_quantity", "replace_duplicate"}
                 and answer.kind != "add"):
@@ -217,17 +210,25 @@ def reduce_dialogue(
             if state.question == "duplicate_choice":
                 renew(duplicate_confirmed=True)
             return add_focus()
+        if answer.kind == "quantity" and state.question == "add_quantity":
+            if diaper_reference(state.focus.description) and not explicit_diaper_packs(message.text):
+                return decision(prompt="Indica paquetes/envases de pañales explícitamente.", reason="diaper_unit")
+            result = answer_addition(answer, state, lines, now=now)
+            return result.model_copy(update={"prompt": question_prompt(result.state, lines)
+                                           if result.state.question else None})
         if answer.kind == "change_quantity":
             if len(state.candidates) > 1:
-                renew(question="select_line", options=("change_quantity",))
+                renew(question="select_line", options=("change_quantity",), pending_kind=None)
             else:
                 target = state.candidates[0]
                 renew(question="quantity", target=target, candidates=(), options=(),
+                      pending_kind=None, duplicate_confirmed=False, proposal_quantity=None,
                       focus=state.focus.model_copy(update={"line": target}))
             return decision(prompt=question_prompt(state, lines))
         if answer.kind == "select" and state.question == "select_line":
             target = state.candidates[answer.selection - 1]
             renew(question="quantity", target=target, candidates=(), options=(),
+                  pending_kind=None, duplicate_confirmed=False, proposal_quantity=None,
                   focus=state.focus.model_copy(update={"line": target}))
             return decision(prompt=question_prompt(state, lines))
         if answer.kind == "quantity" and state.question == "quantity" and state.target:
@@ -271,6 +272,8 @@ def reduce_dialogue(
         return decision(prompt="Indica el producto y la acción explícitamente." if not state else question_prompt(state, lines),
                         reason="expired" if was_expired else "generic")
     if intent is None or intent.action == "clarify":
+        if command and command.question and "dentro del rango permitido" in command.question:
+            return decision(prompt=command.question, reason="quantity_range")
         if command and command.lines:
             fresh(None, question="remove_id", candidates=tuple(ref(rows[l.line_id]) for l in command.lines))
         return decision(prompt=question_prompt(state, lines) if state and state.question else
@@ -297,7 +300,8 @@ def reduce_dialogue(
                 focus = focus.model_copy(update={"unit": label})
         old_target = state.focus.line if state and state.focus else None
         if intent.action == "product_query":
-            fresh(focus)
+            if not state or (state.pending_kind is None and state.question is None):
+                fresh(focus)
             return decision("legacy", legacy=intent)
         if intent.action == "mention_product":
             fresh(focus, question="add_or_replace", target=old_target,

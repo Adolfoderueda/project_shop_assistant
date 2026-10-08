@@ -5,9 +5,10 @@ from datetime import datetime
 from uuid import uuid4
 
 from catalog import resolve_product
-from dialogue import DIALOGUE_TTL, DialogueState, LineRef, canonical_name, expired
+from dialogue import DIALOGUE_TTL, DialogueMutation, DialogueState, LineRef, canonical_name, expired
 from dialogue_controller import reduce_dialogue
 from dialogue_replies import render_dialogue_result
+from dialogue_requests import classify_request
 from domain import IncomingMessage, Intent, Reply
 
 
@@ -34,6 +35,13 @@ class DialogueRepository:
             proposal = Intent.model_validate_json(proposal.model_dump_json())
         message = IncomingMessage(**{k: source[k] for k in ("update_id", "user_id", "chat_id", "text")})
         state = self._read_dialogue_state(db, message.user_id, message.chat_id)
+        request = classify_request(message.text)
+        if request is not None and request.action == "greet":
+            # Keep validated inbox/state provenance and normal prepare/finalize,
+            # but neither inspect private rows/reservations nor rewrite context.
+            decision = reduce_dialogue(message, proposal, state, [], frozenset(), now=now)
+            reply = render_dialogue_result(decision, None, [], None)
+            return decision, None, None, [], None, [], reply
         before = self._lines(db)
         decision = reduce_dialogue(message, proposal, state, before, frozenset(
             r[0] for r in db.execute("SELECT line_id FROM reservations")
@@ -42,10 +50,14 @@ class DialogueRepository:
         legacy_reply = None
         observations = []
         mutation = decision.mutation
+        if mutation is not None:
+            mutation = DialogueMutation.model_validate_json(mutation.model_dump_json())
         original = next((l for l in before if mutation and mutation.target
                          and l.id == mutation.target.id), None)
         if mutation:
             if mutation.kind == "add":
+                if mutation.quantity is None:
+                    raise ValueError("Dialogue additions require a quantity")
                 line_id = str(uuid4())
                 db.execute("INSERT INTO list_lines VALUES (?,?,?,?,1,?)", (
                     line_id, resolve_product(mutation.description), mutation.description,
@@ -55,7 +67,7 @@ class DialogueRepository:
                 line_id = mutation.target.id
                 db.execute("UPDATE list_lines SET quantity=?,revision=revision+1 WHERE id=? AND revision=?",
                            (mutation.quantity, line_id, mutation.target.revision))
-            else:
+            elif mutation.kind == "replace":
                 final = decision.state
                 target = mutation.target
                 if (target is None or final is None or final.focus is None
@@ -83,16 +95,52 @@ class DialogueRepository:
                 )
                 if changed.rowcount != 1:
                     raise ValueError("Replacement must update exactly one current, unreserved line")
+            elif mutation.kind == "increment":
+                final = (DialogueState.model_validate_json(decision.state.model_dump_json())
+                         if decision.state else None)
+                target = mutation.target
+                if (target is None or final is None or final.focus is None
+                        or state is None or state.question != "confirm_increment" or expired(state, now)
+                        or state.pending_kind != "increment" or state.target != target
+                        or state.base_quantity != mutation.expected_base
+                        or state.additional_quantity != mutation.additional_quantity
+                        or state.proposal_quantity != mutation.quantity
+                        or final.pending_kind != "increment" or not final.increment_confirmed
+                        or final.question is not None or final.target != target
+                        or final.focus.line != target or final.focus.description != mutation.description
+                        or final.base_quantity != mutation.expected_base
+                        or final.additional_quantity != mutation.additional_quantity
+                        or final.proposal_quantity != mutation.quantity
+                        or mutation.expected_base + mutation.additional_quantity != mutation.quantity):
+                    raise ValueError("Increment requires confirmed origin, base, delta and total")
+                current = next((l for l in self._lines(db) if l.id == target.id), None)
+                if (current is None or current.revision != target.revision
+                        or current.quantity is None or current.quantity != mutation.expected_base
+                        or canonical_name(current.description) != canonical_name(mutation.description)
+                        or db.execute("SELECT 1 FROM reservations WHERE line_id=?", (target.id,)).fetchone()):
+                    raise ValueError("Increment origin changed or is reserved")
+                line_id = target.id
+                changed = db.execute(
+                    "UPDATE list_lines SET quantity=?,revision=revision+1 "
+                    "WHERE id=? AND revision=? AND quantity=? AND NOT EXISTS "
+                    "(SELECT 1 FROM reservations WHERE line_id=?)",
+                    (mutation.quantity, line_id, target.revision, mutation.expected_base, line_id),
+                )
+                if changed.rowcount != 1:
+                    raise ValueError("Increment must update exactly one current, unreserved line")
             affected = next(l for l in self._lines(db) if l.id == line_id)
             reference = LineRef(id=affected.id, revision=affected.revision)
             rebound = decision.state.model_copy(update={
                 "focus": decision.state.focus.model_copy(update={"line": reference}),
                 "target": reference if decision.state.question == "quantity" else None,
+                "pending_kind": None,
             })
-            if mutation.kind == "replace":
+            if mutation.kind in {"replace", "add", "increment"}:
                 rebound = rebound.model_copy(update={
                     "candidates": (), "proposal_quantity": None,
                     "replacement_confirmed": False, "duplicate_confirmed": False,
+                    "base_quantity": None, "additional_quantity": None,
+                    "increment_confirmed": False, "question": None, "options": (),
                 })
             decision = decision.model_copy(update={"state": rebound})
         elif decision.legacy_intent:
