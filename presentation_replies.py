@@ -2,6 +2,7 @@
 
 from dialogue import DialogueDecision, DialogueState
 from domain import ListLine, Reply
+from interpreter import diaper_reference
 from presentation import PresentationFact, PresentationOption, PresentationSnapshot
 from product_memory import ObservedProduct, identifiable_product_name
 
@@ -33,7 +34,10 @@ def _question(state: DialogueState, lines: list[ListLine]) -> tuple[str, list[st
     options = []
     if q in {"quantity", "replace_quantity"}:
         question = f"Indica la cantidad total de {unit} para {name}, no un incremento."
-        if q == "replace_quantity" and source and source.quantity is not None:
+        if diaper_reference(name):
+            question = (f"Indica la cantidad total de paquetes o envases para {name}, "
+                        "por ejemplo «2 paquetes», no un incremento.")
+        elif q == "replace_quantity" and source and source.quantity is not None:
             options.append(f"Conserva la cantidad: responde «conserva la cantidad» ({quantity_text(source.quantity, unit)}).")
     elif q == "duplicate_choice":
         question = f"Ya tienes entradas de {name}. ¿Quieres cambiar la cantidad total o añadir otra entrada?"
@@ -122,6 +126,12 @@ def build_presentation(
     if state and state.question and decision.presentation_reason == "generic":
         if kind == "clarify":
             kind = "question"
+        if state.question == "quantity" and state.target:
+            selected = next((l for l in lines if l.id == state.target.id
+                             and l.revision == state.target.revision), None)
+            if selected is not None and selected.quantity is not None:
+                facts.append(f"Entrada seleccionada: {selected.description}: "
+                             f"cantidad actual {quantity_text(selected.quantity, unit)}.")
         if state.question in {"duplicate_choice", "select_line", "remove_id", "replace_duplicate"}:
             rows = {l.id: l for l in lines}
             for i, reference in enumerate(state.candidates, 1):

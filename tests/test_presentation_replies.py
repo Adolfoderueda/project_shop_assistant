@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -170,3 +171,52 @@ def test_product_invalid_request_does_not_claim_backlog():
         legacy_intent=Intent(action="product_query", lines=[IntentLine(description="stock")]))
     result = build_presentation(decision, None, [], Reply(text="opaque"), observations=[], original=None)
     assert "anotado" not in result.fallback.text
+
+
+@pytest.mark.parametrize("destination", ["pañales talla 2", "Dodot talla 2", "pasta"])
+def test_advertised_replacement_quantity_answer_passes_reducer(destination):
+    s = state("replace_quantity", candidates=(), replacement_confirmed=True,
+              focus=ProductMention(description=destination, source_update_id=1))
+    result = snapshot(s)
+    is_diaper = destination != "pasta"
+    if is_diaper:
+        assert "conserva la cantidad" not in result.fallback.text.lower()
+        assert "cantidad total" in result.question
+        assert "paquetes" in result.question and "envases" in result.question
+        advertised = result.question
+    else:
+        advertised = next(o.text for o in result.options if "conserva la cantidad" in o.text)
+    answer = re.search("«([^»]+)»", advertised).group(1)
+    decision = reduce_dialogue(IncomingMessage(update_id=3, user_id=1, chat_id=2, text=answer),
+                               None, s, ROWS, frozenset(), now=NOW)
+    assert decision.reply_kind == "replaced"
+    assert decision.mutation.kind == "replace"
+    assert decision.mutation.description == destination
+    assert decision.mutation.quantity == (2 if is_diaper else 1)
+    if is_diaper:
+        rejected = reduce_dialogue(IncomingMessage(update_id=4, user_id=1, chat_id=2,
+            text="conserva la cantidad"), None, s, ROWS, frozenset(), now=NOW)
+        assert rejected.presentation_reason == "diaper_unit"
+        assert rejected.mutation is None and rejected.state == s
+
+
+def test_selected_second_duplicate_quantity_is_grounded():
+    s = state("select_line", options=("change_quantity",))
+    decision = reduce_dialogue(IncomingMessage(update_id=3, user_id=1, chat_id=2, text="2"),
+                               None, s, ROWS, frozenset(), now=NOW)
+    assert decision.state.question == "quantity"
+    assert decision.state.target == LineRef(id="private-b", revision=1)
+    result = build_presentation(decision, None, ROWS, None, observations=[], original=None)
+    assert len(result.facts) == 1
+    assert "arroz" in result.facts[0].text and "2 envases" in result.facts[0].text
+    assert "seleccionada" in result.facts[0].text
+    assert "1 envase" not in result.fallback.text
+    assert "private-" not in result.facts[0].text
+
+
+@pytest.mark.parametrize("rows", [ROWS[:1], [ROWS[1].model_copy(update={"revision": 2})]])
+def test_selected_quantity_fact_requires_matching_id_and_revision(rows):
+    s = state("quantity", candidates=(), target=LineRef(id="private-b", revision=1))
+    decision = DialogueDecision(mutation=None, legacy_intent=None, state=s, reply_kind="clarify")
+    result = build_presentation(decision, None, rows, None, observations=[], original=None)
+    assert result.facts == ()
