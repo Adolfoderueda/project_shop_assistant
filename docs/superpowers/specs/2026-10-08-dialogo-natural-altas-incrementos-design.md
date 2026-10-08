@@ -1,7 +1,7 @@
 # Diálogo natural: saludos, altas pendientes e incrementos confirmados
 
-Fecha: 2026-10-08. Estado: enfoque conversacional aprobado; especificación escrita
-pendiente de revisión. No autoriza todavía implementación, reinicio ni cambios
+Fecha: 2026-10-08. Estado: especificación escrita aprobada por el usuario;
+autoriza preparar el plan, no implementación, reinicio ni cambios
 en datos privados. Parte del código integrado en `feat/shop-assistant`, commit
 `0add91f`, no de una rama remota supuesta.
 
