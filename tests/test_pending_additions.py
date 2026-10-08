@@ -227,7 +227,7 @@ def test_v8_preserves_rows_and_prepared_v1(tmp_path):
     assert repo.apply_dialogue(30, None, "dry_run", now=datetime.now(UTC)) == prepared.snapshot.fallback
     assert repo.list_lines() == rows
     with sqlite3.connect(repo.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 8
-        db.execute("PRAGMA user_version=9")
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 9
+        db.execute("PRAGMA user_version=10")
     with pytest.raises(ValueError):
         repo.migrate()

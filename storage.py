@@ -19,6 +19,7 @@ from product_memory import (
     identifiable_product_name,
     matches_observation,
 )
+from shopping_agent.storage import AgentRepository
 
 OBSERVED_PRODUCTS = (
     ("amascotados-alpha-spirit-wild-fish-12kg", "amascotados", "dog-food",
@@ -39,7 +40,7 @@ OBSERVED_PRODUCTS = (
 )
 
 
-class Repository(CheckoutRepository, DialogueRepository, PresentationRepository):
+class Repository(CheckoutRepository, DialogueRepository, PresentationRepository, AgentRepository):
     def __init__(self, path: Path):
         self.path = Path(path)
 
@@ -65,7 +66,7 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository)
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 8:
+            if version > 9:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
@@ -83,6 +84,8 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository)
                 db.executescript((Path(__file__).parent / "migrations/007.sql").read_text())
             if version < 8:
                 db.executescript((Path(__file__).parent / "migrations/008.sql").read_text())
+            if version < 9:
+                db.executescript((Path(__file__).parent / "migrations/009.sql").read_text())
             db.executemany(
                 "INSERT OR IGNORE INTO observed_products "
                 "(id,store_id,product_id,title,url,observed_on,price_cents,availability,format_note) "
@@ -139,6 +142,25 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository)
             ).fetchone()
             if foreign_inbox or foreign_notices or missing_source or foreign_dialogue:
                 raise PermissionError("Stored work belongs to another owner; manual review required")
+            for table in ('agent_proposals', 'conversation_routes'):
+                if db.execute(f'SELECT 1 FROM {table} WHERE user_id!=? OR chat_id!=? LIMIT 1',
+                              (user_id, user_id)).fetchone():
+                    raise PermissionError('Stored agent work belongs to another owner')
+            for row in db.execute('SELECT * FROM conversation_routes WHERE command_update_id IS NOT NULL'):
+                try:
+                    if self._command_origin(db, row['user_id'], row['chat_id']) is None:
+                        raise ValueError('Invalid command provenance')
+                except (ValueError, KeyError) as error:
+                    raise PermissionError('Invalid retained command provenance') from error
+            for row in db.execute('SELECT * FROM agent_proposals'):
+                try:
+                    proposal = json.loads(row['proposal_json'])
+                    source = self._agent_source(db, proposal['source_update_id'])
+                    if ((source['user_id'], source['chat_id']) != (user_id, user_id)
+                            or self._agent_snapshot(db, source).proposal is None):
+                        raise ValueError('Invalid retained proposal')
+                except (ValueError, KeyError, TypeError) as error:
+                    raise PermissionError('Invalid retained agent provenance') from error
             for row in db.execute("SELECT update_id,user_id,chat_id FROM presentation_jobs"):
                 if (row["user_id"], row["chat_id"]) != (user_id, user_id):
                     raise PermissionError("Stored work belongs to another owner; manual review required")

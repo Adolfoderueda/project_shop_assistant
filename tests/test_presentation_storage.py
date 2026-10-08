@@ -60,8 +60,8 @@ def test_v6_upgrade_preserves_all_durable_work(tmp_path):
     repo.migrate()
     assert durable(repo) == before | {"dialogue_state": []}
     with sqlite3.connect(repo.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 8
-        db.execute("PRAGMA user_version=9")
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 9
+        db.execute("PRAGMA user_version=10")
     with pytest.raises(ValueError, match="newer"):
         repo.migrate()
 
