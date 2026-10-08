@@ -58,10 +58,10 @@ def test_v6_upgrade_preserves_all_durable_work(tmp_path):
     assert all(before[t] for t in before)
     repo.migrate()
     repo.migrate()
-    assert durable(repo) == before
+    assert durable(repo) == before | {"dialogue_state": []}
     with sqlite3.connect(repo.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 7
-        db.execute("PRAGMA user_version=8")
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 8
+        db.execute("PRAGMA user_version=9")
     with pytest.raises(ValueError, match="newer"):
         repo.migrate()
 
@@ -69,12 +69,12 @@ def test_v6_upgrade_preserves_all_durable_work(tmp_path):
 def test_prepare_commits_once_without_sendable_notice(repo):
     job = prepare_add(repo)
     assert isinstance(job, PreparedPresentation)
-    assert job.snapshot.kind == "updated"
+    assert job.snapshot.kind == "added"
     assert repo.list_lines()[0].quantity == 2
     assert repo.message_result(11)[1] is None
     assert len(repo.pending_notices()) == 1  # Only the previous question was finalized.
     assert Repository(repo.path).prepared_presentation(11) == job
-    assert repo.dialogue_state(7, 7, now=NOW).focus.line.revision == 2
+    assert repo.dialogue_state(7, 7, now=NOW).focus.line.revision == 1
 
 
 def test_prepare_replay_ignores_new_proposal(repo):

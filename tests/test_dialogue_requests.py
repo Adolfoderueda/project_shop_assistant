@@ -138,5 +138,9 @@ def test_legacy_ollama_increment_cannot_return_literal_add(method):
 def test_explicit_additions_keep_legacy_priority(text, name, quantity):
     message = IncomingMessage(update_id=1, user_id=1, chat_id=1, text=text)
     decision = reduce_dialogue(message, None, None, [], frozenset(), now=datetime(2026, 10, 8, tzinfo=UTC))
-    assert decision.mutation.kind == "add"
-    assert (decision.mutation.description, decision.mutation.quantity) == (name, quantity)
+    if quantity is None:
+        assert decision.mutation is None
+        assert (decision.state.focus.description, decision.state.question) == (name, "add_quantity")
+    else:
+        assert decision.mutation.kind == "add"
+        assert (decision.mutation.description, decision.mutation.quantity) == (name, quantity)

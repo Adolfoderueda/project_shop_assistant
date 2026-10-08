@@ -55,6 +55,8 @@ def test_duplicate_requires_choice_for_natural_and_slash_add(repo, clock, text):
     assert [l.quantity for l in repo.list_lines()] == [2]
     send(repo, text, proposal("arroz"), clock=clock)
     send(repo, "añadir otra línea", clock=clock)
+    assert len(repo.list_lines()) == 1
+    send(repo, "3", clock=clock)
     assert len(repo.list_lines()) == 2
 
 
@@ -62,6 +64,8 @@ def test_duplicate_requires_choice_for_natural_and_slash_add(repo, clock, text):
 def test_same_product_id_different_qualifier_not_duplicate(repo, clock, names):
     seed_line(repo, names[0], 1)
     send(repo, "necesito " + names[1], proposal(names[1]), clock=clock)
+    assert repo.dialogue_state(7, 7, now=clock()).question == "add_quantity"
+    send(repo, "2 paquetes", clock=clock)
     assert [l.description for l in repo.list_lines()] == list(names)
 
 
@@ -70,6 +74,8 @@ def test_contextual_alias_never_adds_pronoun(repo, clock):
     assert repo.list_lines() == []
     send(repo, "ahora pasta", proposal("pasta", "mention_product"), clock=clock)
     send(repo, "añade eso", clock=clock)
+    assert repo.list_lines() == []
+    send(repo, "2", clock=clock)
     assert [l.description for l in repo.list_lines()] == ["pasta"]
 
 
@@ -95,15 +101,16 @@ def test_expiry_and_restart(repo, clock, seconds, quantity):
     clock.advance(seconds)
     from storage import Repository
     send(Repository(repo.path), "2", clock=clock)
-    assert repo.list_lines()[0].quantity == quantity
+    assert [l.quantity for l in repo.list_lines()] == ([] if quantity is None else [quantity])
 
 
 @pytest.mark.parametrize("interrupt", ["cancelar", "¿qué sabes de pasta?"])
-def test_cancel_and_unrelated_topic_do_not_apply_old_quantity(repo, clock, interrupt):
+def test_cancel_discards_but_product_query_preserves_pending_quantity(repo, clock, interrupt):
     send(repo, "necesito arroz", proposal("arroz"), clock=clock)
     send(repo, interrupt, proposal("pasta", "product_query"), clock=clock)
     send(repo, "2", clock=clock)
-    assert repo.list_lines()[0].quantity is None
+    assert [(l.description, l.quantity) for l in repo.list_lines()] == (
+        [] if interrupt == "cancelar" else [("arroz", 2)])
 
 
 def test_options_and_quantity_numbers_cannot_cross(repo, clock):
@@ -128,7 +135,7 @@ def test_natural_replies_hide_ids_but_slash_list_keeps_them(repo, clock):
 def test_diapers_still_need_explicit_packs(repo, clock):
     send(repo, "necesito pañales", proposal("pañales"), clock=clock)
     send(repo, "2", clock=clock)
-    assert repo.list_lines()[0].quantity is None
+    assert repo.list_lines() == []
     send(repo, "2 paquetes", clock=clock)
     assert repo.list_lines()[0].quantity == 2
 
@@ -136,8 +143,12 @@ def test_diapers_still_need_explicit_packs(repo, clock):
 @pytest.mark.parametrize("name", ["Dodot talla 4", "Blemil etapa 2"])
 def test_numeric_product_qualifier_is_preserved_not_quantity(repo, clock, name):
     send(repo, "necesito " + name, proposal(name), clock=clock)
+    assert repo.list_lines() == []
+    state = repo.dialogue_state(7, 7, now=clock())
+    assert (state.focus.description, state.proposal_quantity) == (name, None)
+    send(repo, "2 paquetes", clock=clock)
     line = repo.list_lines()[0]
-    assert (line.description, line.quantity, line.product_id) == (name, None, None)
+    assert (line.description, line.quantity, line.product_id) == (name, 2, None)
 
 
 def test_replay_does_not_renew_state(repo, clock):
@@ -211,6 +222,7 @@ def test_model_offline_does_not_block_ambiguous_closed_answers(repo, clock):
 
 def test_new_proposal_replaces_stale_question(repo, clock):
     send(repo, "necesito arroz", proposal("arroz"), clock=clock)
+    send(repo, "2", clock=clock)
     line = repo.list_lines()[0]
     with sqlite3.connect(repo.path) as db:
         db.execute("DELETE FROM list_lines WHERE id=?", (line.id,))
@@ -232,7 +244,7 @@ def test_dialogue_write_and_state_roll_back_when_outbox_fails(repo, clock):
     clock.advance(30)
     with pytest.raises(sqlite3.IntegrityError):
         send(repo, "2", clock=clock)
-    assert repo.list_lines()[0].quantity is None
+    assert repo.list_lines() == []
     assert repo.dialogue_state(7, 7, now=clock()) == before
 
 
@@ -259,31 +271,33 @@ def test_repository_reparses_slash_and_rejects_model_destructive_authority(repo,
         message = IncomingMessage(update_id=number, user_id=7, chat_id=7, text=text)
         repo.ingest_batch([message], number + 1)
         repo.apply_dialogue(number, Intent(action="buy"), "dry_run", now=clock())
-    assert [l.description for l in repo.list_lines()] == ["pasta"]
+    assert repo.list_lines() == []
+    assert repo.dialogue_state(7, 7, now=clock()).focus.description == "pasta"
     assert order_count(repo) == 0
 
 
 def test_optional_dialogue_route_receives_current_question(repo, clock):
     class Contextual:
         async def parse_with_dialogue(self, text, lines, products, state):
-            assert state.focus.description == "arroz" and state.question == "quantity"
+            assert state.focus.description == "arroz" and state.question == "add_quantity"
             return Intent(action="mention_product", lines=[IntentLine(description="pasta")])
 
     send(repo, "necesito arroz", proposal("arroz"), clock=clock)
     reply = send(repo, "ahora pasta", Contextual(), clock=clock)
     assert "añadir pasta" in reply.text
-    assert len(repo.list_lines()) == 1
+    assert len(repo.list_lines()) == 0
 
 
 def test_repository_replay_ignores_new_invalid_proposal(repo, clock):
     original = send(repo, "/anadir arroz", clock=clock, update_id=1)
     malformed = Intent(action="add").model_copy(update={"lines": "invalid"})
     assert repo.apply_dialogue(1, malformed, "dry_run", now=clock()) == original
-    assert len(repo.list_lines()) == 1
+    assert len(repo.list_lines()) == 0
 
 
 def test_pending_compatibility_does_not_return_stale_line(repo):
-    send(repo, "/anadir arroz")
+    seed_line(repo, "arroz")
+    send(repo, "/comprar")
     assert repo.pending_clarification(7) is not None
     with sqlite3.connect(repo.path) as db:
         db.execute("UPDATE list_lines SET revision=revision+1")
@@ -309,6 +323,7 @@ def local_model(content):
 
 def test_mention_product_is_proposal_not_mutation(repo, clock):
     send(repo, "necesito arroz", proposal("arroz"), clock=clock)
+    send(repo, "2", clock=clock)
     before = repo.list_lines()
     reply = send(repo, "ahora Dodot talla 4", local_model(
         '{"action":"mention_product","lines":[{"description":"Dodot talla 4"}]}',
@@ -317,8 +332,10 @@ def test_mention_product_is_proposal_not_mutation(repo, clock):
     assert "añadir Dodot talla 4" in reply.text
     assert repo.dialogue_state(7, 7, now=clock()).focus.description == "Dodot talla 4"
     send(repo, "añádelo", clock=clock)
+    assert repo.list_lines() == before
+    send(repo, "2 paquetes", clock=clock)
     assert [line.description for line in repo.list_lines()] == ["arroz", "Dodot talla 4"]
-    assert repo.list_lines()[1].quantity is None
+    assert repo.list_lines()[1].quantity == 2
     assert order_count(repo) == 0
 
 
@@ -348,6 +365,7 @@ def test_answers_and_slash_commands_skip_ollama(repo, clock):
 @pytest.mark.parametrize("action", ["set_quantity", "remove", "buy"])
 def test_model_destructive_action_with_live_focus_is_rejected(repo, clock, action):
     send(repo, "necesito arroz", proposal("arroz"), clock=clock)
+    send(repo, "2", clock=clock)
     before = repo.list_lines()
     state = repo.dialogue_state(7, 7, now=clock())
     model = local_model(json.dumps({"action": action, "lines": [{

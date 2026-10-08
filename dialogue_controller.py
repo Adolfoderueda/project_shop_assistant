@@ -16,6 +16,7 @@ from dialogue import (
     expired,
     parse_answer,
 )
+from dialogue_additions import answer_addition, begin_addition
 from dialogue_requests import classify_request, validate_request
 from dialogue_requests import literal_request as _literal_request
 from dialogue_requests import product_name as _product_name
@@ -52,6 +53,14 @@ def ref(line: ListLine) -> LineRef:
 
 def question_prompt(state: DialogueState, lines: list[ListLine]) -> str:
     name = state.focus.description if state.focus else "el producto"
+    if state.question == "add_quantity":
+        return f"¿Cuántos {state.focus.unit} de {name} quieres añadir? Todavía no está en la lista."
+    if state.question == "increment_quantity":
+        return f"¿Cuántos {state.focus.unit} adicionales de {name} quieres añadir?"
+    if state.question == "confirm_increment":
+        return f"¿Confirmas incrementar {name} de {state.base_quantity} a {state.proposal_quantity} {state.focus.unit}?"
+    if state.question in {"increment_missing", "increment_unknown"}:
+        return f"No puedo incrementar {name} sin una cantidad guardada conocida. Elige una acción o cancela."
     if state.question == "quantity":
         return f"Indica la cantidad de {state.focus.unit} para {name}."
     if state.question == "duplicate_choice":
@@ -115,15 +124,11 @@ def reduce_dialogue(
                               updated_at=now, expires_at=now + DIALOGUE_TTL, **kwargs)
 
     def add_focus():
-        matches = [ref(l) for l in lines if canonical_name(l.description) == canonical_name(state.focus.description)]
-        if matches and not state.duplicate_confirmed:
-            renew(question="duplicate_choice", options=("change_quantity", "add"),
-                  candidates=tuple(matches), target=None)
-            return decision(prompt=question_prompt(state, lines))
-        renew(question="quantity" if state.proposal_quantity is None else None,
-              options=(), candidates=(), target=None)
-        return decision("added", mutation=DialogueMutation(kind="add", description=state.focus.description,
-                        quantity=state.proposal_quantity, unit=state.focus.unit))
+        nonlocal state
+        state = state.model_copy(update={"target": None})
+        result = begin_addition(state, lines, now=now)
+        return result.model_copy(update={"prompt": question_prompt(result.state, lines)
+                                       if result.state.question else None})
 
     def replace_focus():
         matches = tuple(ref(l) for l in lines if l.id != state.target.id
@@ -175,17 +180,25 @@ def reduce_dialogue(
             if state.question == "duplicate_choice":
                 renew(duplicate_confirmed=True)
             return add_focus()
+        if answer.kind == "quantity" and state.question == "add_quantity":
+            if diaper_reference(state.focus.description) and not explicit_diaper_packs(message.text):
+                return decision(prompt="Indica paquetes/envases de pañales explícitamente.", reason="diaper_unit")
+            result = answer_addition(answer, state, lines, now=now)
+            return result.model_copy(update={"prompt": question_prompt(result.state, lines)
+                                           if result.state.question else None})
         if answer.kind == "change_quantity":
             if len(state.candidates) > 1:
-                renew(question="select_line", options=("change_quantity",))
+                renew(question="select_line", options=("change_quantity",), pending_kind=None)
             else:
                 target = state.candidates[0]
                 renew(question="quantity", target=target, candidates=(), options=(),
+                      pending_kind=None, duplicate_confirmed=False, proposal_quantity=None,
                       focus=state.focus.model_copy(update={"line": target}))
             return decision(prompt=question_prompt(state, lines))
         if answer.kind == "select" and state.question == "select_line":
             target = state.candidates[answer.selection - 1]
             renew(question="quantity", target=target, candidates=(), options=(),
+                  pending_kind=None, duplicate_confirmed=False, proposal_quantity=None,
                   focus=state.focus.model_copy(update={"line": target}))
             return decision(prompt=question_prompt(state, lines))
         if answer.kind == "quantity" and state.question == "quantity" and state.target:
@@ -237,6 +250,8 @@ def reduce_dialogue(
     if intent.action == "list":
         return decision("legacy" if clean == "/lista" else "natural_list",
                         legacy=intent if clean == "/lista" else None)
+    if intent.action == "greet":
+        return decision("greeting", prompt="¡Hola! ¿Qué necesitas para tu lista?")
     if command and intent.action == "set_quantity":
         target = rows.get(intent.lines[0].line_id)
         if target is None:
@@ -255,7 +270,8 @@ def reduce_dialogue(
                 focus = focus.model_copy(update={"unit": label})
         old_target = state.focus.line if state and state.focus else None
         if intent.action == "product_query":
-            fresh(focus)
+            if not state or (state.pending_kind is None and state.question is None):
+                fresh(focus)
             return decision("legacy", legacy=intent)
         if intent.action == "mention_product":
             fresh(focus, question="add_or_replace", target=old_target,

@@ -76,7 +76,8 @@ def test_disabled_runtime_recovers_prepared_without_model(tmp_path, monkeypatch)
         asyncio.run(run(configured(repo, "commands_only"), repo=repo, recovery=Recovery(),
                         checkout=Checkout(), transport=TelegramIO(bot, repo, 7), sleep=stop))
     assert repo.message_result(10)[1] == job.snapshot.fallback
-    assert len(repo.list_lines()) == 1 and repo.list_lines()[0].revision == 1
+    assert repo.list_lines() == []
+    assert repo.dialogue_state(7, 7, now=NOW).question == "add_quantity"
     assert order_count(repo) == 0 and len(bot.sent) == 1
 
 

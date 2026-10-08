@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from conversation import Conversation
 from dialogue import DialogueAnswer, DialogueMutation, DialogueState, parse_answer
 from domain import Intent, IntentLine
-from tests.dialogue_support import Clock, make_repo, propose, send
+from tests.dialogue_support import Clock, make_repo, propose, seed_line, send
 from tests.fakes import FakeInterpreter
 
 
@@ -34,7 +34,7 @@ def test_overflow_answer_completes_clarification_without_changes(tmp_path, repla
     notices = repo.pending_notices()
     clock.advance(30)
     reply = send(repo, "9223372036854775808" + suffix, clock=clock)
-    assert reply.text.startswith("Indica la cantidad de envases para ")
+    assert reply.text.startswith("Indica la cantidad de envases para " if replacement else "¿Cuántos envases de arroz")
     assert repo.list_lines() == rows
     assert repo.dialogue_state(7, 7, now=clock()) == state
     assert repo.pending_messages() == []
@@ -71,10 +71,11 @@ def test_maximum_sqlite_quantity_is_persisted(tmp_path, replacement):
 def test_command_quantity_overflow_preserves_pending_dialogue(tmp_path, command):
     repo = make_repo(tmp_path)
     clock = Clock(datetime(2026, 10, 1, tzinfo=UTC))
+    existing = seed_line(repo, "avena", 1)
     state = pending_quantity(repo, clock, False)
     rows = repo.list_lines()
     clock.advance(30)
-    reply = send(repo, command.format(id=rows[0].id), clock=clock)
+    reply = send(repo, command.format(id=existing.id), clock=clock)
     assert "cantidad entera" in reply.text
     assert repo.list_lines() == rows
     assert repo.dialogue_state(7, 7, now=clock()) == state

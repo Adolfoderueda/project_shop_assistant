@@ -8,7 +8,7 @@ from product_memory import ObservedProduct, identifiable_product_name
 
 REASONS = {
     "generic": "Aclara el producto o la acción concreta. No he cambiado la lista.",
-    "expired": "La propuesta ha caducado. Indica de nuevo el producto y la acción.",
+    "expired": "El contexto anterior ha caducado; repite la petición.",
     "stale": "La lista ha cambiado. Revisa el producto y vuelve a indicarlo.",
     "reserved": "La entrada está reservada. Revisa la lista; no he cambiado esa entrada.",
     "quantity_range": "Indica una cantidad entera de envases dentro del rango permitido.",
@@ -32,7 +32,20 @@ def _question(state: DialogueState, lines: list[ListLine]) -> tuple[str, list[st
     source_name = source.description if source else "el producto de origen"
     q = state.question
     options = []
-    if q in {"quantity", "replace_quantity"}:
+    if q == "add_quantity":
+        question = f"¿Cuántos {unit} de {name} quieres añadir? Todavía no está en la lista."
+    elif q == "increment_quantity":
+        question = f"¿Cuántos {unit} adicionales de {name} quieres añadir?"
+    elif q == "confirm_increment":
+        question = (f"¿Confirmas añadir {quantity_text(state.additional_quantity, unit)} a {name}? "
+                    f"Pasaría de {state.base_quantity} a {quantity_text(state.proposal_quantity, unit)}.")
+        options.append("Sí: confirma el incremento. No: rechaza el incremento.")
+    elif q in {"increment_missing", "increment_unknown"}:
+        question = (f"No hay una entrada guardada de {name}." if q == "increment_missing" else
+                    f"La cantidad guardada de {name} es desconocida; no se puede incrementar.")
+        labels = {"add": "Añadir otra entrada", "change_quantity": "Cambiar cantidad total"}
+        options.extend(f"{i}: {labels[action]}" for i, action in enumerate(state.options, 1))
+    elif q in {"quantity", "replace_quantity"}:
         question = f"Indica la cantidad total de {unit} para {name}, no un incremento."
         if diaper_reference(name):
             question = (f"Indica la cantidad total de paquetes o envases para {name}, "
@@ -77,8 +90,8 @@ def build_presentation(
     kind = "clarify"
     state = decision.state
     unit = state.focus.unit if state and state.focus else "envases"
-    if affected is not None and decision.reply_kind in {"added", "updated", "replaced"}:
-        kind = decision.reply_kind
+    if affected is not None and decision.reply_kind in {"added", "updated", "replaced", "incremented"}:
+        kind = "updated" if decision.reply_kind == "incremented" else decision.reply_kind
         details = f"{affected.description}: {quantity_text(affected.quantity, unit)}."
         if kind == "replaced":
             if original is None:
@@ -122,6 +135,8 @@ def build_presentation(
     elif decision.reply_kind == "cancelled":
         kind = "cancelled"
         facts.append(REASONS[decision.presentation_reason])
+    elif decision.reply_kind == "greeting":
+        facts.append("¡Hola! ¿Qué necesitas para tu lista?")
 
     if state and state.question and decision.presentation_reason == "generic":
         if kind == "clarify":

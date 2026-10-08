@@ -46,6 +46,8 @@ class DialogueRepository:
                          and l.id == mutation.target.id), None)
         if mutation:
             if mutation.kind == "add":
+                if mutation.quantity is None:
+                    raise ValueError("Dialogue additions require a quantity")
                 line_id = str(uuid4())
                 db.execute("INSERT INTO list_lines VALUES (?,?,?,?,1,?)", (
                     line_id, resolve_product(mutation.description), mutation.description,
@@ -55,7 +57,7 @@ class DialogueRepository:
                 line_id = mutation.target.id
                 db.execute("UPDATE list_lines SET quantity=?,revision=revision+1 WHERE id=? AND revision=?",
                            (mutation.quantity, line_id, mutation.target.revision))
-            else:
+            elif mutation.kind == "replace":
                 final = decision.state
                 target = mutation.target
                 if (target is None or final is None or final.focus is None
@@ -83,13 +85,16 @@ class DialogueRepository:
                 )
                 if changed.rowcount != 1:
                     raise ValueError("Replacement must update exactly one current, unreserved line")
+            else:
+                raise ValueError("Increment execution is not implemented yet")
             affected = next(l for l in self._lines(db) if l.id == line_id)
             reference = LineRef(id=affected.id, revision=affected.revision)
             rebound = decision.state.model_copy(update={
                 "focus": decision.state.focus.model_copy(update={"line": reference}),
                 "target": reference if decision.state.question == "quantity" else None,
+                "pending_kind": None,
             })
-            if mutation.kind == "replace":
+            if mutation.kind in {"replace", "add"}:
                 rebound = rebound.model_copy(update={
                     "candidates": (), "proposal_quantity": None,
                     "replacement_confirmed": False, "duplicate_confirmed": False,
