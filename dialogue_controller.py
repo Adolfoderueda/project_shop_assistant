@@ -16,9 +16,11 @@ from dialogue import (
     expired,
     parse_answer,
 )
+from dialogue_requests import classify_request, validate_request
+from dialogue_requests import literal_request as _literal_request
+from dialogue_requests import product_name as _product_name
 from domain import IncomingMessage, Intent, IntentLine, ListLine, utc
-from interpreter import clarify, diaper_reference, explicit_diaper_packs, normalized, parse_command
-from product_memory import identifiable_product_name
+from interpreter import diaper_reference, explicit_diaper_packs, parse_command
 
 CONTEXT_ALIASES = {"anade eso", "anadelo", "anadelo a mi lista"}
 
@@ -32,65 +34,16 @@ def closed_attempt(text: str) -> bool:
     } or re.fullmatch(r"[1-9][0-9]*(?: (?:envases|paquetes|botes|sacos))?", clean) is not None
 
 
-def product_name(text: str) -> str | None:
-    clean = normalized(text).strip().removeprefix("¿").removesuffix("?").strip()
-    match = re.fullmatch(r"(?:que sabes de (.+)|que (.+) vimos|tenemos ficha de (.+))", clean)
-    if not match:
-        return None
-    name = next(group for group in match.groups() if group is not None).strip()
-    if (not identifiable_product_name(name)
-            or re.search(r'\b(?:no|nunca|si|o|u|y|cuando)\b|[?¿!¡.,;:"«»“”<>/\\]|https?\b|\n', name)
-            or re.search(r"\b\d+\s+(?:paquetes?|botes?|sacos?|envases?|unidades?)\b", name)):
-        return None
-    return name
-
-
 def literal_request(text: str) -> tuple[str, str] | None:
-    """Recognize the existing whole-message grammar, retaining original product data."""
-    match = re.fullmatch(r"(ahora|necesito|quiero|me hace falta|me hacen falta)\s+(.+)", normalized(text))
-    if not match:
-        return None
-    requested = match[2].removesuffix(" por favor")
-    if re.search(
-        r'\b(no|nunca|si|o|u|y|cuando|gracias)\b|\b(?:en caso de|a menos que|por favor)\b|[?¿!¡.,;:"«»“”<>\\]|https?\b|\n',
-        requested,
-    ):
-        return None
-    without_qualifiers = re.sub(r"\b(?:tipo|talla|etapa)\s+[1-9]\d*\b", "", requested)
-    if re.search(r"\d", without_qualifiers):
-        return None
-    # Split only the recognized prefix, never normalize/reconstruct the product name.
-    original = text.strip().split(maxsplit=len(match[1].split()))[-1]
-    if match[2].endswith(" por favor"):
-        original = original.rsplit(" ", 2)[0]
-    return ("mention_product" if match[1] == "ahora" else "add", original)
+    return _literal_request(text)
+
+
+def product_name(text: str) -> str | None:
+    return _product_name(text)
 
 
 def validate_model(text: str, intent: Intent, lines: list[ListLine]) -> Intent:
-    if intent.action in {"buy", "resume", "remove", "set_quantity", "status"}:
-        return clarify("Usa un comando explícito para esa operación.")
-    if intent.action in {"add", "mention_product"}:
-        request = literal_request(text)
-        if request is None or intent.action != request[0]:
-            return clarify()
-        if len(intent.lines) != 1 or intent.order_id is not None or intent.question is not None:
-            return clarify()
-        line = intent.lines[0]
-        if not line.description or canonical_name(line.description) != canonical_name(request[1]):
-            return clarify("No puedo omitir características del producto.")
-        if line.line_id is not None or line.quantity is not None or line.url is not None:
-            return clarify()
-    if intent.action == "product_query":
-        requested = product_name(text)
-        if (requested is None or len(intent.lines) != 1 or intent.order_id is not None
-                or intent.question is not None or intent.lines[0].line_id is not None
-                or intent.lines[0].quantity is not None or intent.lines[0].url is not None
-                or not intent.lines[0].description
-                or canonical_name(intent.lines[0].description) != canonical_name(requested)):
-            return clarify("Aclara el producto con una pregunta completa.")
-    if intent.action == "clarify":
-        return clarify("Aclara el producto o la acción.")
-    return intent
+    return validate_request(text, intent, lines)
 
 
 def ref(line: ListLine) -> LineRef:
@@ -185,6 +138,11 @@ def reduce_dialogue(
         ))
 
     clean = canonical_name(message.text)
+    request = classify_request(message.text)
+    # Until the increment reducer exists, do not let the legacy natural-add
+    # parser turn "añade más X" into a literal "más X" addition.
+    if request is not None and request.action == "increment":
+        return decision(prompt="Aclara el producto o la acción concreta.")
     command = parse_command(message.text, lines)
     intent = command if command is not None else proposal
     if command is None and intent is not None:

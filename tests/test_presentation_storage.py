@@ -101,7 +101,7 @@ def test_snapshot_uses_transaction_rows_not_old_context(repo):
     with repo._connection(write=True) as db:
         db.execute("UPDATE list_lines SET quantity=8 WHERE id=?", (line.id,))
         db.execute("UPDATE observed_products SET price_cents=1234 WHERE product_id='diapers'")
-    ingest(repo, "mi lista")
+    ingest(repo, "dame mi lista")
     job = repo.prepare_dialogue(10, Intent(action="list"), "dry_run", now=NOW)
     assert "8 envases" in job.snapshot.facts[0].text
     ingest(repo, "qué sabes de Dodot talla 3", 11)
