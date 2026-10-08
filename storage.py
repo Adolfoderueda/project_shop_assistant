@@ -3,15 +3,43 @@
 import json
 import sqlite3
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from catalog import PRODUCT_RULES, resolve_product
 from checkout_storage import CheckoutRepository
+from dialogue import expired
+from dialogue_storage import DialogueRepository
 from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
+from presentation_storage import PresentationRepository
+from product_memory import (
+    ObservedProduct,
+    _record_missing_product,
+    identifiable_product_name,
+    matches_observation,
+)
+
+OBSERVED_PRODUCTS = (
+    ("amascotados-alpha-spirit-wild-fish-12kg", "amascotados", "dog-food",
+     "Alpha Spirit Wild Fish 12 Kg",
+     "https://www.amascotados.com/alpha-spirit/2883-alpha-spirit-seco-only-fish-12-kg-8436586310295.html",
+     "2026-09-27", 6399, True, "12 kg; GTIN no verificado independientemente"),
+    ("charro-blemil-optimum-evolution-1-800g", "charro", "formula",
+     "Blemil Optimum Evolution 1 800 g",
+     "https://www.charrodesdecasa.com/leches/20209-blemil-optimum-evolution-1-800-gr-8426594127534.html",
+     "2026-09-27", 2515, None, "800 g; referencia no verificada"),
+    ("nappy-dodot-talla-3-186", "nappy", "diapers", "Dodot talla 3 186 unidades",
+     "https://nappy.es/dodot/6035-panales-talla-3-bebe-seco-dodot.html",
+     "2026-09-27", 4687, True, "186 unidades"),
+    ("mercadona-dodot-sensitive-talla-3-56", "mercadona", "diapers",
+     "Dodot Sensitive talla 3 paquete 56",
+     "https://tienda.mercadona.es/product/52879/panales-bebe-talla-3-6-10-kg-dodot-sensitive-paquete",
+     "2026-09-28", 1695, None, "56 unidades; CP 28023"),
+)
 
 
-class Repository(CheckoutRepository):
+class Repository(CheckoutRepository, DialogueRepository, PresentationRepository):
     def __init__(self, path: Path):
         self.path = Path(path)
 
@@ -37,7 +65,7 @@ class Repository(CheckoutRepository):
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 4:
+            if version > 7:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
@@ -47,10 +75,48 @@ class Repository(CheckoutRepository):
                 db.executescript((Path(__file__).parent / "migrations/003.sql").read_text())
             if version < 4:
                 db.executescript((Path(__file__).parent / "migrations/004.sql").read_text())
+            if version < 5:
+                db.executescript((Path(__file__).parent / "migrations/005.sql").read_text())
+            if version < 6:
+                db.executescript((Path(__file__).parent / "migrations/006.sql").read_text())
+            if version < 7:
+                db.executescript((Path(__file__).parent / "migrations/007.sql").read_text())
+            db.executemany(
+                "INSERT OR IGNORE INTO observed_products "
+                "(id,store_id,product_id,title,url,observed_on,price_cents,availability,format_note) "
+                "VALUES (?,?,?,?,?,?,?,?,?)", OBSERVED_PRODUCTS,
+            )
             db.executemany(
                 "INSERT OR IGNORE INTO products VALUES (?, ?)",
                 [(r.id, r.model_dump_json()) for r in PRODUCT_RULES],
             )
+
+    def find_products(self, query: str, limit: int = 5) -> list[ObservedProduct]:
+        with self._connection() as db:
+            return self._find_products(db, query, limit)
+
+    @staticmethod
+    def _find_products(db, query: str, limit: int = 5) -> list[ObservedProduct]:
+        if limit <= 0:
+            return []
+        results = []
+        for row in db.execute(
+            "SELECT id,store_id,product_id,title,url,observed_on,price_cents,"
+            "availability,format_note FROM observed_products ORDER BY id"
+        ):
+            values = dict(row)
+            if values["availability"] is not None:
+                values["availability"] = bool(values["availability"])
+            product = ObservedProduct(**values)
+            if matches_observation(query, product):
+                results.append(product)
+                if len(results) == limit:
+                    break
+        return results
+
+    def product_requests(self) -> list[str]:
+        with self._connection() as db:
+            return [row[0] for row in db.execute("SELECT name FROM product_requests ORDER BY name")]
 
     def assert_authorized_owner(self, user_id: int) -> None:
         """Fail closed on retained work from another identity before recovery or dispatch."""
@@ -65,8 +131,16 @@ class Repository(CheckoutRepository):
             missing_source = db.execute(
                 "SELECT 1 FROM orders o LEFT JOIN inbox i ON i.update_id=o.source_update_id "
                 "WHERE i.update_id IS NULL LIMIT 1").fetchone()
-            if foreign_inbox or foreign_notices or missing_source:
+            foreign_dialogue = db.execute(
+                "SELECT 1 FROM dialogue_state WHERE user_id!=? OR chat_id!=? "
+                "OR user_id IS NULL OR chat_id IS NULL LIMIT 1", (user_id, user_id),
+            ).fetchone()
+            if foreign_inbox or foreign_notices or missing_source or foreign_dialogue:
                 raise PermissionError("Stored work belongs to another owner; manual review required")
+            for row in db.execute("SELECT update_id,user_id,chat_id FROM presentation_jobs"):
+                if (row["user_id"], row["chat_id"]) != (user_id, user_id):
+                    raise PermissionError("Stored work belongs to another owner; manual review required")
+                self._read_prepared(db, row["update_id"])
 
     def verify_formula(self, gtin: str) -> None:
         """Persist a manually cross-checked reference, without changing the baked-in catalog."""
@@ -163,14 +237,25 @@ class Repository(CheckoutRepository):
 
     def pending_clarification(self, user_id: int) -> Intent | None:
         with self._connection() as db:
-            row = db.execute(
-                "SELECT intent_json FROM clarifications WHERE user_id=?", (user_id,)
-            ).fetchone()
-            return Intent.model_validate_json(row[0]) if row else None
+            revisions = {l.id: l.revision for l in self._lines(db)}
+            for row in db.execute("SELECT chat_id FROM dialogue_state WHERE user_id=?", (user_id,)):
+                state = self._read_dialogue_state(db, user_id, row[0])
+                if state is None or expired(state, datetime.now(UTC)):
+                    continue
+                refs = (*state.candidates, *((state.target,) if state.target else ()))
+                if any(revisions.get(r.id) != r.revision for r in refs):
+                    continue
+                if state.question == "quantity" and state.target:
+                    return Intent(action="set_quantity", lines=[IntentLine(line_id=state.target.id)])
+                if state.question == "remove_id":
+                    return Intent(action="remove", lines=[IntentLine(line_id=r.id) for r in state.candidates])
+            return None
 
     def apply_intent(
         self, update_id: int, intent: Intent, mode: str, *, conversation=False
     ) -> Reply:
+        if conversation:
+            return self.apply_dialogue(update_id, intent, mode, now=datetime.now(UTC))
         if mode not in ("dry_run", "live"):
             raise ValueError("Invalid mode")
         with self._connection(write=True) as db:
@@ -180,27 +265,6 @@ class Repository(CheckoutRepository):
             if source["completed"]:
                 return Reply.model_validate_json(source["reply_json"])
             reply = self._apply(db, update_id, intent, mode)
-            if conversation and intent.action in ("add", "buy", "set_quantity", "remove"):
-                db.execute("DELETE FROM clarifications WHERE user_id=?", (source["user_id"],))
-                missing = [l for l in self._lines(db) if l.quantity is None]
-                if missing:
-                    target = missing[0]
-                    pending = Intent(action="set_quantity", lines=[IntentLine(line_id=target.id)])
-                    db.execute(
-                        "INSERT INTO clarifications VALUES (?,?)",
-                        (source["user_id"], pending.model_dump_json()),
-                    )
-                    reply = Reply(
-                        text=reply.text + f" Indica la cantidad de envases para "
-                        f"{target.description} ({target.id}).",
-                        order_id=reply.order_id,
-                    )
-            if conversation and intent.action == "clarify" and intent.lines:
-                pending = Intent(action="remove", lines=intent.lines)
-                db.execute(
-                    "INSERT OR REPLACE INTO clarifications VALUES (?,?)",
-                    (source["user_id"], pending.model_dump_json()),
-                )
             payload = reply.model_dump_json()
             db.execute(
                 "UPDATE inbox SET completed=1,reply_json=? WHERE update_id=?", (payload, update_id)
@@ -212,6 +276,34 @@ class Repository(CheckoutRepository):
             return reply
 
     def _apply(self, db, update_id, intent, mode):
+        if intent.action == "product_query":
+            if (len(intent.lines) != 1 or not intent.lines[0].description
+                    or intent.lines[0].line_id is not None
+                    or intent.lines[0].quantity is not None
+                    or intent.lines[0].url is not None):
+                return Reply(text="Aclara el producto que buscas.")
+            name = intent.lines[0].description
+            if not identifiable_product_name(name):
+                return Reply(text="Aclara el producto que buscas.")
+            # Read from this same transaction, not an earlier model context snapshot.
+            products = self._find_products(db, name)
+            if not products:
+                _record_missing_product(db, name)
+                return Reply(text=f"No tenemos ficha observada de {name}; lo he anotado para revisar.")
+            details = []
+            for product in products:
+                price = (f"{product.price_cents // 100},{product.price_cents % 100:02d} €"
+                         if product.price_cents is not None else "precio no observado")
+                stock = ("stock no observado" if product.availability is None
+                         else "stock observado disponible" if product.availability
+                         else "stock observado no disponible")
+                details.append(
+                    f"{product.title} — fuente {product.store_id} ({product.url}); "
+                    f"observado {product.observed_on}; "
+                    f"precio observado {price}; {stock}; "
+                    f"{product.format_note or 'sin detalle de formato'}"
+                )
+            return Reply(text="\n".join(details) + "\nDatos históricos: precio y stock no actuales.")
         if intent.action == "add":
             if not intent.lines or any(not line.description for line in intent.lines):
                 return Reply(text="Indica qué producto quieres añadir.")

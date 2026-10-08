@@ -1,117 +1,92 @@
 """Conversation boundary. Registers orders, never executes or retries payment."""
 
-import re
+from collections.abc import Callable
+from datetime import UTC, datetime
 
-from domain import IncomingMessage, Intent, IntentLine, Reply
-from interpreter import (
-    Interpreter,
-    clarify,
-    diaper_reference,
-    explicit_diaper_packs,
-    normalized,
-    parse_command,
-    purchase_authorized,
-    quantity,
-)
+from dialogue import parse_answer
+from dialogue_controller import closed_attempt, product_name, validate_model
+from domain import IncomingMessage, Intent, Reply
+from interpreter import Interpreter, clarify, parse_command, purchase_authorized
+from presentation import PreparedPresentation, ReplyWriter
+from presentation_validation import validate_draft, within_budget
 from storage import Repository
 
 
 class Conversation:
-    def __init__(self, repo: Repository, interpreter: Interpreter):
+    def __init__(
+        self, repo: Repository, interpreter: Interpreter,
+        *, clock: Callable[[], datetime] | None = None,
+        reply_writer: ReplyWriter | None = None,
+    ):
         self.repo = repo
         self.interpreter = interpreter
+        self.clock = clock or (lambda: datetime.now(UTC))
+        self.reply_writer = reply_writer
 
     async def handle(self, message: IncomingMessage, mode: str) -> Reply:
-        # Consume only the durable inbox text, not a caller-supplied replacement.
         stored, reply = self.repo.message_result(message.update_id)
         if stored != message:
             raise ValueError("Message does not match durable inbox")
         if reply is not None:
             return reply
+        # Recover the committed transition before reading current context or
+        # interpreting anything, even if generation was disabled after restart.
+        prepared = self.repo.prepared_presentation(message.update_id)
+        if prepared is not None:
+            return await self._present(prepared)
         lines = self.repo.list_lines()
+        now = self.clock()
+        state = self.repo.dialogue_state(message.user_id, message.chat_id, now=now)
+        priority = message.text.strip().startswith("/") or purchase_authorized(message.text)
+        if not priority and (
+            parse_answer(message.text, state, now=now) is not None
+            or closed_attempt(message.text)
+        ):
+            return await self._apply(message, None, mode, now=now, priority=False)
         intent = parse_command(message.text, lines)
-        pending = self.repo.pending_clarification(message.user_id)
-        if (
-            intent is None
-            and pending
-            and pending.action == "set_quantity"
-            and quantity(message.text) is not None
-        ):
-            target = next((l for l in lines if l.id == pending.lines[0].line_id), None)
-            if (
-                target
-                and diaper_reference(target.description)
-                and not explicit_diaper_packs(message.text)
-            ):
-                intent = clarify(
-                    "Indica paquetes de pañales explícitamente, no piezas ni unidades."
-                )
-            else:
-                intent = Intent(
-                    action="set_quantity",
-                    lines=[
-                        IntentLine(
-                            line_id=pending.lines[0].line_id, quantity=quantity(message.text)
-                        )
-                    ],
-                )
-        if (
-            intent is None
-            and pending
-            and pending.action == "remove"
-            and message.text.strip() in {l.line_id for l in pending.lines}
-        ):
-            intent = Intent(action="remove", lines=[IntentLine(line_id=message.text.strip())])
         if intent is None:
+            requested = product_name(message.text)
+            products = self.repo.find_products(requested) if requested is not None else []
             try:
-                intent = await self.interpreter.parse(message.text, lines)
-                intent = Intent.model_validate(intent.model_dump())
+                dialogue = getattr(self.interpreter, "parse_with_dialogue", None)
+                contextual = getattr(self.interpreter, "parse_with_context", None)
+                if callable(dialogue):
+                    intent = await dialogue(message.text, lines, products, state)
+                elif callable(contextual):
+                    intent = await contextual(message.text, lines, products)
+                else:
+                    intent = await self.interpreter.parse(message.text, lines)
+                intent = Intent.model_validate_json(intent.model_dump_json())
             except Exception:  # noqa: BLE001 -- untrusted interpreter boundary, fail closed
                 intent = clarify()
-            intent = self._validate_model(message.text, intent, lines)
-        ids = {l.id for l in lines}
-        if intent.action in ("remove", "set_quantity") and (
-            not intent.lines or any(l.line_id not in ids for l in intent.lines)
-        ):
-            intent = clarify("Indica un ID existente de /lista.")
-        if intent.action in ("status", "resume"):
-            try:
-                self.repo.get_order(intent.order_id)
-            except (KeyError, TypeError):
-                intent = clarify("Indica un ID de orden existente.")
-        if intent.action == "buy" and not purchase_authorized(message.text):
-            intent = clarify("No se ha autorizado ninguna compra. Usa /comprar para la lista.")
-        return self.repo.apply_intent(message.update_id, intent, mode, conversation=True)
+        # The repository reparses commands and validates proposals against durable
+        # text/current rows in its transaction. No HTTP occurs in that transaction.
+        return await self._apply(message, intent, mode, now=now, priority=priority)
 
-    @staticmethod
-    def _validate_model(text, intent, lines):
-        if intent.action in ("buy", "resume", "remove", "set_quantity"):
-            # Destructive actions require the deterministic route, not an LLM guess.
-            return clarify("Usa /comprar, /continuar <id>, /quitar <id> o /cantidad <id> <n>.")
-        if intent.action == "add":
-            clean = normalized(text)
-            if re.search(r'\b(no|nunca|si|o|u|y|cuando)\b|\b(?:en caso de|a menos que)\b|["«»“”>]|\n', clean):
-                return clarify()
-            if len(intent.lines) != 1:
-                return clarify()
-            # Remove only a closed set of request prefixes, never product qualifiers.
-            # Substring matching lets a model turn 'pienso de pollo' into the fish alias.
-            requested = re.sub(r"^(?:necesito|quiero|me hace falta|me hacen falta)\s+", "", clean)
-            for line in intent.lines:
-                if not line.description or normalized(line.description) != requested:
-                    return clarify(
-                        "No puedo omitir características del producto. "
-                        "Usa /anadir con la descripción completa."
-                    )
-                # A model cannot manufacture, omit or reinterpret explicit quantities.
-                without_product_type = re.sub(r"\btipo\s+\d+\b", "", clean)
-                if line.quantity is not None or re.search(r"\d", without_product_type):
-                    return clarify(
-                        "Indica producto y cantidad con /anadir <n> <envases> de <producto>."
-                    )
-                if line.url and line.url not in text:
-                    return clarify()
-        if intent.action == "clarify":
-            # Only deterministic ambiguity resolution may persist candidate IDs.
-            return clarify(intent.question or "Aclara el producto o usa un comando.")
-        return intent
+    async def _apply(
+        self, message: IncomingMessage, intent: Intent | None, mode: str,
+        *, now: datetime, priority: bool,
+    ) -> Reply:
+        if self.reply_writer is None or priority:
+            return self.repo.apply_dialogue(message.update_id, intent, mode, now=now)
+        prepared = self.repo.prepare_dialogue(message.update_id, intent, mode, now=now)
+        if isinstance(prepared, Reply):
+            return prepared  # Operational replies remain deterministic.
+        return await self._present(prepared)
+
+    async def _present(self, prepared: PreparedPresentation) -> Reply:
+        snapshot = prepared.snapshot
+        reply = snapshot.fallback
+        if self.reply_writer is not None and within_budget(snapshot):
+            try:
+                draft = await self.reply_writer.draft(snapshot)
+                if draft is not None:
+                    reply = validate_draft(snapshot, draft) or snapshot.fallback
+            except Exception:  # noqa: BLE001 -- untrusted writer boundary, fail closed
+                # CancelledError is a BaseException: leave the durable job pending.
+                reply = snapshot.fallback
+        # SQLite/provenance failures are not model failures and must propagate.
+        return self.repo.finalize_presentation(prepared.update_id, reply)
+
+    _product_name = staticmethod(product_name)
+    _validate_model = staticmethod(validate_model)

@@ -164,6 +164,42 @@ def test_openai_contract_and_errors():
         assert client.calls[0]["timeout"] > 0
 
 
+def test_contextual_interpreter_receives_only_relevant_observations(repo):
+    class ContextInterpreter:
+        def __init__(self):
+            self.calls = []
+
+        async def parse(self, text, lines):
+            raise AssertionError("context route required")
+
+        async def parse_with_context(self, text, lines, products):
+            self.calls.append((text, lines, products))
+            return Intent(action="product_query", lines=[IntentLine(description="pañales")])
+
+    interpreter = ContextInterpreter()
+    reply = send(repo, "¿qué pañales vimos?", interpreter)
+    assert "2026-09-" in reply.text
+    assert len(interpreter.calls) == 1
+    text, lines, products = interpreter.calls[0]
+    assert text == "¿qué pañales vimos?"
+    assert lines == []
+    assert 1 <= len(products) <= 5
+    assert all(product.product_id == "diapers" for product in products)
+    assert all(product.observed_on.startswith("2026-09-") for product in products)
+    assert repo.product_requests() == []
+
+
+def test_contextual_interpreter_gets_no_observations_on_unrecognized_query(repo):
+    class ContextInterpreter:
+        async def parse_with_context(self, text, lines, products):
+            assert products == []
+            return Intent(action="list")
+
+    assert "vacía" in send(repo, "¿qué hay en mi lista?", ContextInterpreter()).text
+    # Legacy fake and OpenAI still use their existing two-argument parse.
+    assert send(repo, "¿qué hay en mi lista?", FakeInterpreter(Intent(action="list"))).text
+
+
 def test_forged_ids_and_model_quantity_do_not_mutate(repo):
     send(
         repo,
@@ -422,6 +458,66 @@ def test_model_destructive_intents_never_mutate_list_or_create_order(repo, actio
     reply = send(repo, "por favor revisa el arroz", FakeInterpreter(intent))
     assert reply.order_id is None
     assert repo.list_lines() == before
+    assert orders(repo) == 0
+
+
+@pytest.mark.parametrize(
+    "text,description",
+    [
+        ("¿qué hay en mi lista?", "¿qué hay en mi lista?"),
+        ("¿qué sabes de arroz?", "¿qué sabes de arroz?"),
+        ("arroz", "arroz"),
+        ("hola arroz", "hola arroz"),
+        ("necesito arroz por favor", "arroz por favor"),
+        ("necesito arroz, ¿qué hay en mi lista?", "arroz, ¿qué hay en mi lista?"),
+    ],
+)
+def test_model_add_requires_explicit_affirmative_request(repo, text, description):
+    reply = send(repo, text, FakeInterpreter(Intent(action="add", lines=[IntentLine(description=description)])))
+    assert repo.list_lines() == []
+    assert reply.order_id is None
+    assert "añadido" not in reply.text.lower()
+
+
+@pytest.mark.parametrize("prefix", ["necesito", "quiero", "me hace falta", "me hacen falta"])
+def test_model_add_accepts_closed_affirmative_request(repo, prefix):
+    send(repo, f"{prefix} arroz integral", FakeInterpreter(Intent(action="add", lines=[IntentLine(description="arroz integral")])))
+    assert [line.description for line in repo.list_lines()] == ["arroz integral"]
+
+
+@pytest.mark.parametrize("prefix", ["necesito", "quiero", "me hace falta", "me hacen falta"])
+def test_model_add_accepts_only_bounded_polite_suffix(repo, prefix):
+    reply = send(
+        repo, f"{prefix} arroz integral por favor",
+        FakeInterpreter(Intent(action="add", lines=[IntentLine(description="arroz integral")])),
+    )
+    assert [line.description for line in repo.list_lines()] == ["arroz integral"]
+    assert repo.list_lines()[0].quantity is None
+    assert reply.order_id is None
+    assert orders(repo) == 0
+
+
+@pytest.mark.parametrize(
+    "text,description",
+    [
+        ("necesito arroz por favor", "arroz por favor"),
+        ("¿necesito arroz por favor?", "arroz"),
+        ("no necesito arroz por favor", "arroz"),
+        ("necesito arroz si hay oferta por favor", "arroz si hay oferta"),
+        ("necesito arroz o pasta por favor", "arroz o pasta"),
+        ("necesito arroz por favor y pasta", "arroz por favor y pasta"),
+        ("necesito por favor arroz", "por favor arroz"),
+        ("necesito arroz por favor por favor", "arroz por favor"),
+        ("necesito pienso de pollo por favor", "pienso"),
+    ],
+)
+def test_politeness_does_not_relax_affirmative_product_validation(repo, text, description):
+    reply = send(
+        repo, text,
+        FakeInterpreter(Intent(action="add", lines=[IntentLine(description=description)])),
+    )
+    assert repo.list_lines() == []
+    assert reply.order_id is None
     assert orders(repo) == 0
 
 

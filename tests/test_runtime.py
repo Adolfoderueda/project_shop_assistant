@@ -208,6 +208,7 @@ def test_runtime_ollama_failure_keeps_commands_working_without_openai_fallback(t
     import httpx
 
     import ollama_interpreter
+    import ollama_replies
     from domain import IncomingMessage
     from storage import Repository
 
@@ -221,8 +222,19 @@ def test_runtime_ollama_failure_keeps_commands_working_without_openai_fallback(t
                                                  "openai_api_key": "unused-key",
                                                  "openai_model": "old"})
     clients = []
+    requests = []
     real_client = httpx.AsyncClient
-    transport = httpx.MockTransport(lambda _: httpx.Response(503))
+
+    def unavailable(request):
+        requests.append(request)
+        return httpx.Response(503)
+
+    transport = httpx.MockTransport(unavailable)
+
+    async def forbidden_network(*_args, **_kwargs):
+        pytest.fail("runtime failure regression must never use real HTTP")
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", forbidden_network)
 
     def client(**kwargs):
         result = real_client(**{**kwargs, "transport": transport})
@@ -232,6 +244,8 @@ def test_runtime_ollama_failure_keeps_commands_working_without_openai_fallback(t
     # A local server fault must not trigger a remote provider or stop subsequent commands.
     monkeypatch.setattr(ollama_interpreter, "httpx", SimpleNamespace(AsyncClient=client,
                                                                     Timeout=httpx.Timeout))
+    monkeypatch.setattr(ollama_replies, "httpx", SimpleNamespace(AsyncClient=client,
+                                                                Timeout=httpx.Timeout))
 
     class Recovery:
         async def recover(self): pass
@@ -248,7 +262,13 @@ def test_runtime_ollama_failure_keeps_commands_working_without_openai_fallback(t
                         transport=IO()))
     assert len(repo.pending_notices()) == 2
     assert repo.telegram_offset() == 3
-    assert len(clients) == 1 and clients[0].is_closed
+    assert len(clients) == 2 and all(c.is_closed for c in clients)
+    assert len(requests) == 2
+    assert all(str(r.url) == "http://127.0.0.1:11434/api/chat" for r in requests)
+    assert repo.message_result(1)[1] == repo.prepared_presentation(1).snapshot.fallback
+    assert repo.prepared_presentation(1).snapshot.kind == "clarify"
+    assert repo.prepared_presentation(2) is None  # Slash command never drafts.
+    assert repo.list_lines() == [] and repo.pending_orders() == []
 
 
 def test_runtime_closes_legacy_openai_client_on_shutdown(tmp_path, monkeypatch):
