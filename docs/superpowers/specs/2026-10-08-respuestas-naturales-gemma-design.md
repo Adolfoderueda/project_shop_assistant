@@ -1,7 +1,7 @@
 # Respuestas conversacionales redactadas por Gemma
 
-Fecha: 2026-10-08. Estado: diseño conversacional aprobado; pendiente revisión
-del usuario de esta especificación escrita. No autoriza todavía implementación.
+Fecha: 2026-10-08. Estado: especificación escrita aprobada por el usuario.
+La aprobación autoriza preparar el plan, no implementarlo ni activar el bot.
 
 ## Objetivo y alcance aprobado
 
