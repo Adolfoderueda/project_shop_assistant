@@ -6,6 +6,7 @@ import pytest
 
 from dialogue import MAX_QUANTITY, LineRef
 from shopping_agent.contracts import (
+    AgentProposal,
     CompleteProposal,
     ItemInput,
     ItemPatch,
@@ -227,6 +228,30 @@ def test_closed_diaper_quantity_supplies_required_unit():
     pending = adds(ItemInput(description="pañales", quantity=2))
     ready = answer_proposal(message("2 paquetes", 11), snapshot(pending.proposal), now=NOW)
     assert ready.reason == "reviewed" and ready.proposal.items[0].unit == "paquetes"
+
+
+@pytest.mark.parametrize("kind", ["set_quantity", "increment"])
+@pytest.mark.parametrize("multiple", [False, True])
+def test_qualifier_only_diaper_query_accepts_closed_pack_quantity(kind, multiple):
+    rows = (line("a", "pañales talla 4", 2),)
+    if multiple:
+        rows = (*rows, line("b", "pañales Dodot talla 4", 3))
+    pending = prepare_proposal(message("dos de talla 4"),
+        ProposeChange(kind=kind, query="talla 4", quantity=2), snapshot(lines=rows), now=NOW)
+    if multiple:
+        pending = answer_proposal(message("1", 11), snapshot(pending.proposal, rows), now=NOW)
+    assert pending.reason == "diaper_unit"
+    assert pending.proposal.items[0].unit is None
+    # The selected-product requirement must survive the shared serialization boundary.
+    restored = AgentProposal.model_validate_json(pending.proposal.model_dump_json())
+    parsed = parse_control("2 paquetes", restored, now=NOW)
+    assert parsed is not None and (parsed.kind, parsed.quantity, parsed.unit) == ("quantity", 2, "paquetes")
+    ready = answer_proposal(message("2 paquetes", 12), snapshot(restored, rows), now=NOW)
+    assert ready.reason == "reviewed" and ready.mutations == ()
+    assert ready.proposal.items[0].unit == "paquetes"
+    confirmed = answer_proposal(message("sí", 13), snapshot(ready.proposal, rows), now=NOW)
+    assert len(confirmed.mutations) == 1 and confirmed.mutations[0].unit == "paquetes"
+    assert confirmed.mutations[0].quantity == (4 if kind == "increment" else 2)
 
 
 def test_duplicate_closed_total_choice_then_selection():

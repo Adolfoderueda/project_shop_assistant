@@ -70,7 +70,8 @@ def _output_name(item, rows):
 
 def _internal(items, rows):
     names = {item.position: canonical_name(_output_name(item, rows)) for item in items}
-    return tuple(_copy(item, internal_conflicts=tuple(
+    return tuple(_copy(item, requires_explicit_unit=diaper_reference(_output_name(item, rows)),
+        internal_conflicts=tuple(
         position for position, name in names.items()
         if position != item.position and name == names[item.position])) for item in items)
 
@@ -251,9 +252,13 @@ def complete_proposal(message: IncomingMessage, args: CompleteProposal, snapshot
     return _finish(proposal, message, snapshot)
 
 
+def _missing_unit(item):
+    return (item.requires_explicit_unit or diaper_reference(item.replacement or item.description)) and (
+        item.unit not in {"envases", "paquetes"})
+
+
 def _question(proposal):
-    unresolved = [item for item in proposal.items if not item.complete or (
-        diaper_reference(item.replacement or item.description) and item.unit not in {"envases", "paquetes"})]
+    unresolved = [item for item in proposal.items if not item.complete or _missing_unit(item)]
     if len(unresolved) != 1:
         return None, None
     item = unresolved[0]
@@ -268,8 +273,7 @@ def _question(proposal):
         return item, "duplicate"
     if item.kind == "replace" and (item.conflict_signatures or item.internal_conflicts) and item.duplicate_decision is None:
         return item, "replacement_duplicate"
-    if item.quantity is None or (
-            diaper_reference(item.replacement or item.description) and item.unit not in {"envases", "paquetes"}):
+    if item.quantity is None or _missing_unit(item):
         return item, "quantity"
     return None, None
 

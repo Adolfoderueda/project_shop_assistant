@@ -92,6 +92,8 @@ class ProposalItem(Model):
     conflict_signatures: tuple[LineRef, ...] = ()
     # Positions of canonically conflicting outputs in this same batch.
     internal_conflicts: tuple[Position, ...] = ()
+    # Application-derived from the resolved output product, not the model query.
+    requires_explicit_unit: bool = False
 
     @property
     def complete(self) -> bool:
