@@ -1,5 +1,28 @@
 # Progreso del asistente de compras
 
+## 2026-10-08 — Task6: redacción, probe/evidencia (calidad REAL FAIL)
+
+- Probe opt-in de veinte escenarios independientes, SQLite temporal inventada,
+  contratos subprocess0/1/2, sentinel privado sin lectura, limpieza y gate que
+  exige drafts aceptados en clases fundamentales. Caso cantidad conocida usa
+  alias existente sin slash «añade 2 arroz», no cantidad interpretada por Gemma.
+- **Tres runs REALES exit1: accepted0/fallback20 cada uno** (18 rechazos reales
+  y2 fallos inyectados). Facts/opciones/filas/inbox/outbox/replay/TTL900/zeroorders
+  pasaron; la calidad de generación no. No usar el respaldo claro para dar PASS
+  aparente. Ejemplo JSON agregado al prompt tras RED no arregló el modelo; se
+  revirtió sin cambiar gramática ni validador. Se necesita ruling antes de ampliar
+  o condicionar la gramática de salida. No se afirma aceptación de Telegram.
+- Libertad actual: lead de lista cerrada, orden/agrupación/composición; textos
+  factuales, preguntas y opciones de aplicación. No todos los mensajes son texto
+  libre generado. Recuperación preparada evita repetir acciones/renovar TTL.
+- **740 full passed in179.86s**, sin filtros/skips/plugins externos. Ruff detectó
+  `check=False` ausente en test subprocess; corregido explícitamente. Verificación
+  posterior: **4 subprocess passed in36.65s**, Ruff limpio y diff sin errores.
+  Evidencia,
+  métricas y veinte mensajes: `prueba-respuestas-gemma-2026-10-08.md`.
+- Sin privados, Telegram, tiendas, pedidos, descarga, reinicios, ACL, merge/push.
+  Servicio existente conservado; no se forzó unload.
+
 ## 2026-10-01 — Task 6, corrección de aceptación (fix round 1)
 
 - Los tres fallos reales anteriores requerían corregir la funcionalidad, no solo
