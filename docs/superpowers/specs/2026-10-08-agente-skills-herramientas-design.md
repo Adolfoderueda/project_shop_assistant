@@ -1,7 +1,8 @@
 # Agente de compras con skills y herramientas
 
-Fecha: 2026-10-08. Estado: diseño conversacional aprobado; especificación escrita
-pendiente de revisión del usuario. No autoriza todavía implementación, activación,
+Fecha: 2026-10-08. Estado: especificación escrita aprobada por el usuario;
+adaptación de ejemplos externos aprobada posteriormente. Autoriza preparar el
+plan, no todavía implementación, activación,
 reinicio, publicación ni cambios en datos privados. Base: `feat/shop-assistant`,
 commit `28af475`.
 
@@ -58,6 +59,15 @@ al preparar el contexto del agente: consultar; altas y cantidades; cambios e
 incrementos; resolver o cancelar propuestas. Explican procedimientos y ejemplos,
 no enumeran frases admitidas. Son instrucciones de la aplicación, no documentos
 aportados por el usuario. No se cargan skills desde URLs o rutas elegidas por Gemma.
+
+Reutilización aprobada: adaptar ejemplos de varios productos y aclaración de
+`ajeenkya/shopping-list-skill`, licencia MIT, revisión
+`e37617947cd8e8aa095c5a358c9005bb2ac1c6fd`. Incluir atribución y licencia de los
+fragmentos adaptados. Escribir los procedimientos propios para nuestras herramientas
+y confirmaciones; no precargar la skill original completa. Excluir escritura de
+JSON por el agente, fusión automática, cantidades ausentes guardadas y archivo
+automático. No instalar OpenClaw, AnyList, Trello ni sus CLIs. No se ha demostrado
+compatibilidad con Gemma de los ejemplos adaptados hasta probarlos en el producto.
 
 **Agente:** interpreta el mensaje original y el contexto conversacional acotado,
 elige herramientas y propone argumentos. No concede permisos, confirma cambios,
@@ -225,6 +235,6 @@ real se autorizan después y no se sustituyen por pruebas simuladas.
 
 ## 9. Siguiente puerta de aprobación
 
-Revisión del usuario de esta especificación escrita. Solo después se prepara el
-plan de implementación y se elige su método de ejecución. Todavía no hay tareas
-de producto ejecutadas para este diseño.
+Especificación revisada y aprobada en conversación; reutilización híbrida aprobada
+con «ok lets do it». Se prepara el plan de implementación para revisión y elección
+del método de ejecución. Todavía no hay tareas de producto ejecutadas para este diseño.
