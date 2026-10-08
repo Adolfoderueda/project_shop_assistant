@@ -117,7 +117,12 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
             if conversation is None:
                 interpreter = _CommandsOnly()
                 reply_writer = None
-                if settings.model_provider == "ollama":
+                if settings.conversation_engine == "skills_agent":
+                    from shopping_agent.conversation import AgentConversation
+                    from shopping_agent.ollama import OllamaShoppingAgent
+                    conversation = AgentConversation(
+                        repo, OllamaShoppingAgent(settings.agent_model), Conversation(repo, interpreter))
+                elif settings.model_provider == "ollama":
                     from ollama_interpreter import OllamaInterpreter
                     from ollama_replies import OllamaReplyWriter
                     interpreter = OllamaInterpreter(settings.ollama_model)
@@ -134,7 +139,9 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                     logger.warning("Model not configured: commands-only mode; use /lista or /anadir")
                 else:
                     logger.warning("OpenAI model incomplete: commands-only mode")
-                conversation = Conversation(repo, interpreter, reply_writer=reply_writer)
+                if conversation is None:
+                    conversation = Conversation(repo, interpreter, reply_writer=reply_writer,
+                                                synchronize_route=True)
             await recovery.recover()  # Abandoned attempts must be reconciled before new work.
             logger.info("Recovery finished; worker ready")
             retry_delay = 1

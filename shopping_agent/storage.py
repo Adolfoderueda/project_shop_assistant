@@ -1,6 +1,7 @@
 """Agent persistence. Only durable inbox controls can commit list mutations."""
 
 import json
+import logging
 import sqlite3
 from datetime import datetime
 from typing import Literal
@@ -163,6 +164,11 @@ class AgentRepository:
             proposal = None
             reply = Reply(text=f'Lote guardado: {len(decision.mutations)} cambios confirmados. La lista se ha actualizado.')
         self._write_agent_proposal(db, source, proposal)
+        if proposal is not None:
+            db.execute('DELETE FROM dialogue_state WHERE user_id=? AND chat_id=?',
+                       (source['user_id'], source['chat_id']))
+            db.execute('UPDATE conversation_routes SET command_update_id=NULL WHERE user_id=? AND chat_id=?',
+                       (source['user_id'], source['chat_id']))
         return self._complete_reply(db, source, reply)
 
     def apply_agent_operation(self, update_id: int, name: str, arguments: dict,
@@ -359,15 +365,27 @@ class AgentRepository:
             if previous is not None and previous['route'] == route:
                 return False
             command = None
-            if previous is None and route == 'agent':
+            if route == 'agent':
                 try:
                     command = self._command_origin(db, user_id, chat_id)
                 except (ValueError, KeyError):
                     pass
+            discarded = db.execute('SELECT 1 FROM agent_proposals WHERE user_id=? AND chat_id=?',
+                                   (user_id, chat_id)).fetchone() is not None
+            preserve_legacy = previous is None and route == 'legacy' and not discarded
+            if command is None and not preserve_legacy:
+                discarded = discarded or self._read_dialogue_state(db, user_id, chat_id) is not None
             db.execute('DELETE FROM agent_proposals WHERE user_id=? AND chat_id=?', (user_id, chat_id))
-            if command is None:
+            if command is None and not preserve_legacy:
                 db.execute('DELETE FROM dialogue_state WHERE user_id=? AND chat_id=?', (user_id, chat_id))
             db.execute('INSERT INTO conversation_routes VALUES (?,?,?,?) ON CONFLICT(user_id,chat_id) '
                        'DO UPDATE SET route=excluded.route,command_update_id=excluded.command_update_id',
-                       (user_id, chat_id, route, command.update_id if command else None))
+                        (user_id, chat_id, route, command.update_id if command else None))
+            if discarded:
+                logging.getLogger('runtime').warning('Incompatible conversation memory discarded; review a new proposal before confirming')
             return True
+
+    def revoke_agent_proposals(self) -> None:
+        """Explicit local switches revoke permissions even without intervening turns."""
+        with self._connection(write=True) as db:
+            db.execute('DELETE FROM agent_proposals')
