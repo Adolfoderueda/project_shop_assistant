@@ -72,6 +72,10 @@ class DialogueDecision(Model):
     legacy_intent: Intent | None
     state: DialogueState | None
     prompt: str | None = None
+    presentation_reason: Literal[
+        "generic", "expired", "stale", "reserved", "quantity_range", "diaper_unit",
+        "no_pending", "cancelled_pending",
+    ] = "generic"
     reply_kind: Literal[
         "clarify", "added", "updated", "replaced", "cancelled", "natural_list", "legacy",
     ]

@@ -138,6 +138,7 @@ def reduce_dialogue(
     lines: list[ListLine], reserved_ids: frozenset[str], *, now: datetime,
 ) -> DialogueDecision:
     utc(now)
+    was_expired = state is not None and expired(state, now)
     if state and (expired(state, now) or (state.user_id, state.chat_id) != (message.user_id, message.chat_id)):
         state = None
     rows = {l.id: l for l in lines}
@@ -147,9 +148,9 @@ def reduce_dialogue(
     if stale:
         state = None
 
-    def decision(kind="clarify", *, mutation=None, legacy=None, prompt=None):
+    def decision(kind="clarify", *, mutation=None, legacy=None, prompt=None, reason="generic"):
         return DialogueDecision(mutation=mutation, legacy_intent=legacy, state=state,
-                                reply_kind=kind, prompt=prompt)
+                                reply_kind=kind, prompt=prompt, presentation_reason=reason)
 
     def renew(**changes):
         nonlocal state
@@ -191,16 +192,19 @@ def reduce_dialogue(
     if intent is not None and any(
         line.quantity is not None and line.quantity > MAX_QUANTITY for line in intent.lines
     ):
-        return decision(prompt="Indica una cantidad entera de envases dentro del rango permitido.")
+        return decision(prompt="Indica una cantidad entera de envases dentro del rango permitido.",
+                        reason="quantity_range")
     priority = message.text.strip().startswith("/") or (command and command.action == "buy")
     answer = None if priority else parse_answer(message.text, state, now=now)
     if answer and answer.kind == "cancel":
         had_state = state is not None
         state = None
         return decision("cancelled", prompt=("Propuesta cancelada; no he deshecho líneas ya guardadas."
-                        if had_state else "No hay propuesta pendiente."))
+                        if had_state else "No hay propuesta pendiente."),
+                        reason="cancelled_pending" if had_state else "no_pending")
     if stale and not priority and (intent is None or intent.action == "clarify"):
-        return decision(prompt="La lista ha cambiado; revisa el producto y vuelve a indicarlo.")
+        return decision(prompt="La lista ha cambiado; revisa el producto y vuelve a indicarlo.",
+                        reason="stale")
     if answer and state:
         if answer.kind == "select" and state.question != "select_line":
             answer = DialogueAnswer(kind=state.options[answer.selection - 1])
@@ -208,7 +212,7 @@ def reduce_dialogue(
                 and state.question in {"add_or_replace", "confirm_replace", "replace_quantity", "replace_duplicate"}
                 and answer.kind != "add"):
             state = None
-            return decision(prompt="La línea está reservada; revisa la lista.")
+            return decision(prompt="La línea está reservada; revisa la lista.", reason="reserved")
         if answer.kind == "add" and state.focus:
             if state.question == "duplicate_choice":
                 renew(duplicate_confirmed=True)
@@ -229,9 +233,9 @@ def reduce_dialogue(
         if answer.kind == "quantity" and state.question == "quantity" and state.target:
             if state.target.id in reserved_ids:
                 state = None
-                return decision(prompt="La línea está reservada; revisa la lista.")
+                return decision(prompt="La línea está reservada; revisa la lista.", reason="reserved")
             if diaper_reference(state.focus.description) and not explicit_diaper_packs(message.text):
-                return decision(prompt="Indica paquetes/envases de pañales explícitamente.")
+                return decision(prompt="Indica paquetes/envases de pañales explícitamente.", reason="diaper_unit")
             unit = answer.unit or state.focus.unit
             renew(question=None, focus=state.focus.model_copy(update={"unit": unit}),
                   candidates=(), options=(), proposal_quantity=None)
@@ -253,7 +257,7 @@ def reduce_dialogue(
             if quantity is None:
                 return decision(prompt=question_prompt(state, lines))
             if diaper_reference(state.focus.description) and not explicit_diaper_packs(message.text):
-                return decision(prompt="Indica paquetes/envases de pañales explícitamente.")
+                return decision(prompt="Indica paquetes/envases de pañales explícitamente.", reason="diaper_unit")
             renew(proposal_quantity=quantity, focus=state.focus.model_copy(update={
                 "unit": answer.unit or state.focus.unit,
             }))
@@ -264,12 +268,14 @@ def reduce_dialogue(
             return replace_focus()
         return decision(prompt=question_prompt(state, lines))
     if clean in CONTEXT_ALIASES:
-        return decision(prompt="Indica el producto y la acción explícitamente." if not state else question_prompt(state, lines))
+        return decision(prompt="Indica el producto y la acción explícitamente." if not state else question_prompt(state, lines),
+                        reason="expired" if was_expired else "generic")
     if intent is None or intent.action == "clarify":
         if command and command.lines:
             fresh(None, question="remove_id", candidates=tuple(ref(rows[l.line_id]) for l in command.lines))
         return decision(prompt=question_prompt(state, lines) if state and state.question else
-                        (intent.question if command and intent else "Aclara el producto o la acción concreta."))
+                        (intent.question if command and intent else "Aclara el producto o la acción concreta."),
+                        reason="expired" if was_expired else "generic")
     if intent.action == "list":
         return decision("legacy" if clean == "/lista" else "natural_list",
                         legacy=intent if clean == "/lista" else None)
