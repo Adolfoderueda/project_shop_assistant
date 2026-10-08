@@ -42,6 +42,44 @@ def test_catalog_is_exactly_seven_and_has_no_commit_purchase_sql():
     assert not any(word in json.dumps(definitions) for word in ('comprar', 'confirmar', 'sql'))
 
 
+def test_native_schemas_inline_local_refs_without_changing_contracts():
+    from shopping_agent.tools import CONTRACTS, tool_definitions
+
+    def resolved(value, definitions):
+        if isinstance(value, list):
+            return [resolved(v, definitions) for v in value]
+        if not isinstance(value, dict):
+            return value
+        if '$ref' in value:
+            return resolved(definitions[value['$ref'].removeprefix('#/$defs/')], definitions)
+        return {key: resolved(v, definitions) for key, v in value.items() if key != '$defs'}
+
+    for entry in tool_definitions():
+        function = entry['function']
+        original = CONTRACTS[function['name']].model_json_schema()
+        exposed = function['parameters']
+        assert '$ref' not in json.dumps(exposed)
+        assert '$defs' not in json.dumps(exposed)
+        assert exposed == resolved(original, original.get('$defs', {}))
+    adds = next(d['function']['parameters'] for d in tool_definitions()
+                if d['function']['name'] == 'proponer_altas')
+    item = adds['properties']['items']['items']
+    assert item['required'] == ['description']
+    assert item['additionalProperties'] is False
+    assert item['properties']['description']['maxLength'] == 160
+    assert item['properties']['quantity']['anyOf'][0]['exclusiveMinimum'] == 0
+    assert item['properties']['quantity']['anyOf'][0]['maximum'] == 9223372036854775807
+
+
+def test_nested_item_name_still_rejected_by_real_validator(repo):
+    dispatcher = tools(repo)
+    with pytest.raises(ValueError):
+        dispatcher.validate_calls((ToolCall(name='proponer_altas', arguments={
+            'items': [{'item_name': 'arroz', 'quantity': 2}]}),))
+    assert not repo.list_lines()
+    assert repo.message_result(1)[1] is None
+
+
 @pytest.mark.parametrize('call', [
     ToolCall(name='sql', arguments={}),
     ToolCall(name='consultar_lista', arguments={'user_id': 7}),

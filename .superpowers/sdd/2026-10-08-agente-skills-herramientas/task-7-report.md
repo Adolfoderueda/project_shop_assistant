@@ -119,3 +119,117 @@ review/follow-up rather than deploying a partial diagnostic fix.
 - Global Ruff baseline errors and real semantic quality are blockers.
 - Independent controller review still required; no subagents spawned, no
   merge/push/activation. Commit is evidence/tests, NOT acceptance approval.
+
+---
+
+## Fix round 1 — schema/harness fixes verified, acceptance still FAIL
+
+Full fix report and all-case tables:
+`docs/superpowers/evidence/2026-10-08-skills-agent/fix-round-1.md`.
+This section supersedes the original lint blocker and production-follow-up status;
+all original failed traces/frozen artifacts remain unchanged.
+
+### Changes implemented
+
+- Inlined identical local `$defs/$ref` schemas in existing tool_definitions.
+  Runtime contracts/validation/permissions unchanged; item_name still rejected.
+- Proposal reply oracle now independently verifies displayed known/pending
+  quantities, requested additional amounts and arithmetic, not only names/prompt.
+- Ledger captures raw malformed response text and decode failure, returning the
+  unchanged HTTP response to the real runner so invalid_model/evidence survive.
+- Retained two separately tested skill improvements: active-draft patch recipe
+  in propuestas and requested-quantity slot in cambios. Four fixed skills remain
+  204/307/106/366 words; no phrase catalog or confirmation authority.
+- Actual production-source file hashes added to metadata.
+- Self-review expiry regression: permission oracle now compares parsed instants,
+  not lexical Z/+00:00 spellings, and denies the exact TTL boundary.
+- Reproducible synthetic-setup/fresh-real-context diagnostic script/evidence.
+- Mechanically fixed the seven earlier-task branch Ruff diagnostics (six fixes)
+  in tools.py, test_agent_conversation.py and test_agent_runtime.py. These were
+  this branch's responsibility, not an indefinitely acceptable baseline blocker.
+
+### TDD RED/GREEN and commands
+
+Regressions first: proposal-reply quantity None/2 and arithmetic mutations,
+malformed HTTP body retention, schema-equivalence/no-reference and strict
+item_name rejection. Command selecting these tests in test_agent_probe/tools:
+five expected RED failures and one existing strict-validator PASS. Corrected one
+test's schema dialect assumption (exclusiveMinimum 0, not minimum 1); constraints
+remain exactly equivalent. GREEN probe/end-to-end 34 passed (39.35s), tools/Ollama
+65 passed (4.11s). Original isolated actual E4B shape failure remains RED evidence.
+
+Final focused covering probe/end_to_end/tools/ollama/skills/conversation/runtime:
+**123 passed in 78.79s**, exit 0. Full suite after final expiry correction:
+**1202 passed in 361.11s**, exit 0. Global Ruff **PASS**, exit 0; diff checks PASS.
+Earlier pre-self-review verification was 122 focused / 1201 full-suite passing;
+the expiry regression then showed one RED failure (15 deselected), was fixed,
+and both focused/full and the frozen real artifacts were freshly rerun. The
+second full-suite run was necessary after that final correctness change, not
+an iteration loop of full-suite runs during skill wording experiments.
+Exact commands/output are recorded in fix-round-1.md; no other suite run is
+silently omitted. No wheel/distribution build or installation attempted.
+
+### Evidence-backed real progression / bounded hypotheses
+
+Schema-only change with original skills: 13 real failed steps (previously 22),
+retained `fix1-schema-only-real.jsonl`. No prompt/schema bundle in that experiment.
+
+H1 conditional active-draft recipe: six micro cases had 0/5 each before edit;
+four improved to 5/5, two remained 0/5. H2 explicit quantity slot: ambiguous
+increment/replacement/unknown-base each improved from 0/5 to 5/5. Both retained.
+Each sample is a fresh real E4B conversation after explicitly labelled simulated
+tool/repository setup, not a natural parser; full original real matrix remains
+the acceptance gate.
+
+H3 duplicate JSON slot example initially looked improved in simplified micro
+fixtures, but failed the full original-context trace. Corrected fixtures to
+match actual original messages, units, rows and intervening yes, and ran five
+fresh samples with/without example: both 0/5 internal duplicate. Reverted the
+unproven example. H4 query-scope recipe (separate variable after clear H1/H2
+improvement) stayed 0/5 and introduced a wrong duplicate capture/early changed-row
+commit in its full matrix; its safety failure is retained honestly. Entire H4
+addition reverted. No fifth hypothesis or further prompt tweaking; no catalogue,
+framework, alias, second parser, model download/context expansion or authority.
+
+### Final frozen acceptance (completed foreground, no pending verification)
+
+`fix1-final-offline.jsonl`: **76/76 PASS**, real quality NOT_TESTED.
+`fix1-final-real-1.jsonl` and `fix1-final-real-2.jsonl`: **each FAIL / exit 1**,
+50/53 real steps pass, three fail; 23/23 separately labelled simulated boundary
+steps pass. Equal skills/schemas/prompts/oracles/script and actual production
+hashes confirmed; model/parameters unchanged. Every final real safety, budget
+and complete snapshot/context check passes, but does not override semantic FAIL.
+
+Remaining exact failures in both frozen runs:
+1. explicit update 2: saved-list inquiry incorrectly calls consultar_propuesta,
+   showing draft items while saved rows are empty (action/interpretation/reply FAIL).
+2. internal_duplicate update 3: completar patches repeat quantity/unit but omit
+   duplicate_decision separate for both positions; controller leaves review unset.
+3. internal_duplicate update 4: ensuing yes correctly cannot commit, so required
+   completed-flow state/reply FAIL. Neither tested duplicate example nor scope
+   recipe fixed their exact contexts reliably; stop instead of loosening oracle.
+
+Final observed real max context 14,106 bytes of messages+tools; full controller
+snapshots/candidates retained. First final request 28,945.447 ms, native load
+27.685 s (cold-like); second pass first 353.038 ms (warm-like). Subsequent medians
+337.496/346.758 ms, maxima 898.307/892.457 ms. No timing or
+global quality percentage promised; original cold-like observations retained.
+
+### Exact changed source/test files and review concerns
+
+Production: shopping_agent/tools.py (schema exposure + import order),
+shopping_agent/skills/propuestas.md, shopping_agent/skills/cambios.md.
+Harness: scripts/probe_skills_agent.py.
+Tests: tests/test_agent_probe.py, tests/test_agent_tools.py;
+tests/test_agent_conversation.py and tests/test_agent_runtime.py mechanical lint
+only (import order/spacing, unused import, redundant return; no expectations lost).
+Reports: this appended report, evidence README/fix-round-1.md, new fix1 JSONLs
+and skill_micro_probe.py. consultar/altas skills have no retained change.
+
+Schema expansion assumes current fixed contracts are acyclic/local, deliberately
+not a generic schema framework. Diagnostic micro fixtures are not equivalent to
+real full flows; the corrected exact-context H3 result demonstrates this limit.
+Rejected H4 wrong-tool/write outcome is visible, not advertised as safe. Final
+configuration improved markedly but real semantic acceptance remains BLOCKED.
+No deploy/activation/private data/external effects/subagents; controller review
+and a bounded decision on remaining two interpretation limits are required.

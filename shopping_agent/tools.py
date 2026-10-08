@@ -11,7 +11,7 @@ from domain import IncomingMessage, Model, Reply, utc
 from shopping_agent.contracts import Description, ProposalDecision, ToolCall, ToolResult
 from shopping_agent.proposals import _revalidate
 from shopping_agent.replies import render_proposal
-from shopping_agent.storage import EmptyArguments, OPERATION_CONTRACTS, _raw_json
+from shopping_agent.storage import OPERATION_CONTRACTS, EmptyArguments, _raw_json
 from storage import Repository
 
 
@@ -37,9 +37,29 @@ DESCRIPTIONS = {
 
 
 def tool_definitions() -> list[dict]:
+    def exposed_schema(contract):
+        schema = contract.model_json_schema()
+        definitions = schema.pop('$defs', {})
+
+        def inline(value):
+            if isinstance(value, list):
+                return [inline(item) for item in value]
+            if not isinstance(value, dict):
+                return value
+            if '$ref' in value:
+                # Our fixed, acyclic contracts only use local model definitions.
+                reference = value['$ref']
+                if not reference.startswith('#/$defs/'):
+                    raise ValueError('Only local tool schema references are supported')
+                return {**inline(definitions[reference.removeprefix('#/$defs/')]),
+                        **inline({key: item for key, item in value.items() if key != '$ref'})}
+            return {key: inline(item) for key, item in value.items()}
+
+        return inline(schema)
+
     return [{'type': 'function', 'function': {
         'name': name, 'description': DESCRIPTIONS[name],
-        'parameters': contract.model_json_schema(),
+        'parameters': exposed_schema(contract),
     }} for name, contract in CONTRACTS.items()]
 
 

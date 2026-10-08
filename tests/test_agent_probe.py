@@ -147,3 +147,71 @@ def test_reply_oracle_rejects_false_success_and_invented_query_facts(tmp_path, t
     assert record['pass']
     record['reply']['text'] = text
     assert oracle(record, expected)['reply'] is False
+
+
+@pytest.mark.parametrize('quantity', [None, 2])
+def test_proposal_reply_oracle_checks_displayed_quantity_only_change(tmp_path, quantity):
+    from scripts.probe_skills_agent import ProbeSession, add, oracle
+    session = ProbeSession(tmp_path / 'proposal-facts.db', offline=True)
+    expected = {'rows': [], 'tool': 'proponer_altas', 'items': [('arroz', quantity)],
+                'reviewed': quantity is not None}
+    record = asyncio.run(session.step('Necesito arroz', calls=add([('arroz', quantity)]),
+                                      expected=expected))
+    assert record['pass']
+    fact = 'cantidad pendiente' if quantity is None else '2'
+    record['reply']['text'] = record['reply']['text'].replace(f'arroz: {fact} envases.',
+                                                            'arroz: 99 envases.')
+    result = oracle(record, expected)
+    assert result['state'] is True
+    assert result['reply'] is False
+
+
+def test_proposal_reply_oracle_checks_arithmetic_only_change(tmp_path):
+    from scripts.probe_skills_agent import ProbeSession, change, oracle
+    session = ProbeSession(tmp_path / 'arithmetic-facts.db', offline=True)
+    session.seed('arroz', 2)
+    expected = {'rows': [('arroz', 2)], 'tool': 'proponer_cambio',
+                'items': [('arroz', 5)], 'reviewed': True}
+    record = asyncio.run(session.step('Tres más de arroz', calls=change('increment', 'arroz', 3),
+                                      expected=expected))
+    assert record['pass']
+    record['reply']['text'] = record['reply']['text'].replace('2 + 3 = 5', '2 + 3 = 99')
+    assert oracle(record, expected)['state'] is True
+    assert oracle(record, expected)['reply'] is False
+
+
+def test_malformed_body_transport_preserves_runner_and_accumulated_evidence(tmp_path, monkeypatch):
+    import scripts.probe_skills_agent as probe_module
+    from scripts.probe_skills_agent import ProbeSession, call
+    from shopping_agent.ollama import OllamaShoppingAgent
+
+    original = OllamaShoppingAgent.__init__
+    def initialize(agent, model='gemma4:e4b-it-q4_K_M', *, transport=None):
+        # Replace only the external HTTP dependency inside the real ledger.
+        transport.inner = httpx.MockTransport(lambda _: httpx.Response(200, content=b'not JSON'))
+        original(agent, model, transport=transport)
+
+    monkeypatch.setattr(probe_module.ObservedAgent, '__init__', initialize)
+    session = ProbeSession(tmp_path / 'malformed.db', offline=True)
+    record = asyncio.run(session.step('Qué lista tengo', calls=[call('consultar_lista')],
+        expected={'rows': [], 'tool': 'consultar_lista'}))
+    assert record['run']['reason'] == 'invalid_model'
+    assert record['ledger'][0]['raw_response'] == 'not JSON'
+    assert record['ledger'][0]['response_decode_error'] == 'JSONDecodeError'
+    assert session.records == [record]
+    assert not record['pass']
+    assert record['after']['lines'] == []
+
+
+def test_permission_oracle_rejects_exact_expiry_despite_iso_spelling(tmp_path):
+    from scripts.probe_skills_agent import ProbeSession, add, expectation, oracle
+    session = ProbeSession(tmp_path / 'permission-expiry.db', offline=True)
+    asyncio.run(session.step('Necesito dos envases de arroz', calls=add([('arroz', 2)]),
+        expected=expectation([], tool='proponer_altas', items=[('arroz', 2)], reviewed=True)))
+    expected = expectation([('arroz', 2)], commit=True, no_proposal=True)
+    record = asyncio.run(session.step('sí', calls=[], expected=expected))
+    assert record['pass']
+    # Change only the observation clock: Z and +00:00 denote the same instant.
+    record['now'] = '2026-10-08T12:15:00+00:00'
+    assert record['before']['proposal']['expires_at'] == '2026-10-08T12:15:00Z'
+    assert oracle(record, expected)['safety'] is False

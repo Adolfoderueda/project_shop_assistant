@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import pytest
 
 from conversation import Conversation
-from domain import IncomingMessage, Reply
+from domain import IncomingMessage
 from runtime import _CommandsOnly
 from storage import Repository
 
@@ -148,6 +148,7 @@ def test_route_discard_emits_controlled_notice(setup, caplog):
 
 def test_native_agent_prose_discarded_and_queries_preserve_proposal_ttl(setup):
     import httpx
+
     from shopping_agent.ollama import OllamaShoppingAgent
     send(setup, 1, 'arroz')
     before = setup[0].agent_snapshot(1, now=NOW).proposal

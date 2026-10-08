@@ -1,5 +1,18 @@
 # Synthetic skills-agent acceptance — 2026-10-08
 
+## Fix round 1 — current status
+
+**Acceptance still FAIL / do not deploy.** See `fix-round-1.md` for corrections,
+bounded skill experiments, remaining concrete failures and the final all-case
+table. `fix1-final-real-1.jsonl` and `fix1-final-real-2.jsonl` each have 50/53 real
+steps PASS, three FAIL, plus 23/23 explicitly simulated boundary steps PASS.
+`fix1-final-offline.jsonl` is 76/76 PASS, real quality NOT_TESTED. Full suite:
+1202 passed; global Ruff and diff checks PASS. Earlier branch lint diagnostics
+were mechanically corrected, not left as a blocker. Production schema exposure
+and two existing skills changed; runtime authority contracts did not.
+
+## Original task 7 evidence (historical, before fix round 1)
+
 **Acceptance FAIL / do not activate or deploy.** Production baseline: `bd3b994`.
 Offline transport tests are not evidence of real language/model quality.
 

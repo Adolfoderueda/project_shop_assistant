@@ -8,6 +8,7 @@ from config import Settings, load_settings, save_settings
 from domain import IncomingMessage
 from runtime import ProcessLock
 from storage import Repository
+
 NOW = datetime(2026, 10, 8, tzinfo=UTC)
 
 
@@ -74,9 +75,9 @@ def test_failed_save_cannot_restore_permission(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize('engine', ['legacy', 'skills_agent'])
 def test_runtime_constructs_only_selected_engine(tmp_path, monkeypatch, engine):
-    import runtime
     import conversation
     import ollama_replies
+    import runtime
     import shopping_agent.conversation
     import shopping_agent.ollama
 
@@ -92,7 +93,6 @@ def test_runtime_constructs_only_selected_engine(tmp_path, monkeypatch, engine):
 
     def writer(model):
         constructed.append(('writer', model))
-        return None
 
     def agent(model):
         constructed.append(('agent', model))

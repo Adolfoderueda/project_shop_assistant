@@ -1,5 +1,21 @@
 # Cambios e incrementos
 
+## Construir los argumentos
+
+Para una modificación de filas guardadas, identifica `kind`, `query` y la cantidad
+**expresada por el usuario** antes de resolver candidatos. Si especifica un número
+de envases/paquetes, `quantity` lleva ese número y `unit` la unidad indicada.
+Estos campos se conservan aunque falte seleccionar origen o su cantidad base sea
+desconocida: la aplicación resuelve la selección y hace la aritmética después.
+Si el número no está expresado, `quantity` queda pendiente, no se inventa.
+
+En `increment`, quantity es el adicional solicitado. En `set_quantity` y `replace`,
+quantity es el total solicitado para la salida. `replace` incluye también
+`replacement`. Ejemplo: sustituir leche entera por cuatro envases de leche de avena:
+```json
+{"kind":"replace","query":"leche entera","replacement":"leche de avena","quantity":4,"unit":"envases"}
+```
+
 Usa `proponer_cambio`: kind="increment" suma una cantidad adicional;
 kind="set_quantity" propone un total explícito; kind="replace" necesita query
 del producto de origen y replacement del destino. No confundas total con delta.

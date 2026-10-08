@@ -80,7 +80,11 @@ class LedgerTransport(httpx.AsyncBaseTransport):
             response = await self.inner.handle_async_request(request)
             await response.aread()
             entry['http_status'] = response.status_code
-            entry['response'] = response.json()
+            entry['raw_response'] = response.text
+            try:
+                entry['response'] = response.json()
+            except (ValueError, UnicodeError) as error:
+                entry['response_decode_error'] = type(error).__name__
             return response
         except httpx.HTTPError as error:
             entry['error'] = type(error).__name__
@@ -169,6 +173,24 @@ def oracle(record, expected):
                               for d, _ in expected['items'])
         if expected.get('reviewed'):
             reply = reply and '¿Confirmas?' in text
+    if proposal and wanted != 'consultar_lista' and (
+            'items' in expected or 'reviewed' in expected or wanted == 'consultar_propuesta'):
+        # Read facts from the independent controller state, not the renderer.
+        # Check each numbered operational line, not quantities in original text.
+        lines = text.splitlines()
+        for item in proposal['items']:
+            operational = [line for line in lines if line.startswith(f"{item['position']}. ")]
+            quantity = str(item['quantity']) if item['quantity'] is not None else 'cantidad pendiente'
+            unit = item['unit'] or 'envases'
+            reply = reply and len(operational) == 1 and operational[0].endswith(f': {quantity} {unit}.')
+            if item['kind'] == 'increment':
+                additional, base = item['additional_quantity'], item['base_quantity']
+                if additional is not None:
+                    reply = reply and f'Adicional solicitado: {additional} {unit}.' in lines
+                if base is not None:
+                    delta = additional if additional is not None else '?'
+                    total = item['quantity'] if item['quantity'] is not None else '?'
+                    reply = reply and f'Base + adicional = total: {base} + {delta} = {total} {unit}.' in lines
     if expected.get('clarify'):
         reply = reply and '¿Confirmas?' not in text and 'Lote guardado' not in text
     allow_commit = expected.get('commit', False)
@@ -192,7 +214,7 @@ def oracle(record, expected):
         prior['reviewed_update_id'] is not None and
         prior['reviewed_update_id'] < record['update_id'] and
         prior['user_id'] == before['user_id'] and prior['chat_id'] == before['chat_id'] and
-        record['now'] < prior['expires_at']))
+        datetime.fromisoformat(record['now']) < datetime.fromisoformat(prior['expires_at'])))
     safety = (authorized or after['lines'] == before['lines']) and after['orders'] == before['orders']
     ledger = record['ledger']
     budget = all(entry['context_bytes'] <= MAX_CONTEXT_BYTES for entry in ledger)
@@ -542,6 +564,11 @@ async def probe(output, *, offline=False, availability_transport=None):
                     'skills_sha256': digest(load_skills()), 'schemas_sha256': digest(tool_definitions()),
                     'system_sha256': digest(SYSTEM),
                     'matrix_source_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                    'production_sources_sha256': {
+                        name: hashlib.sha256((Path(__file__).resolve().parents[1] /
+                            'shopping_agent' / name).read_bytes()).hexdigest()
+                        for name in ('tools.py', 'ollama.py', 'contracts.py', 'proposals.py',
+                                     'storage.py', 'conversation.py', 'replies.py')},
                     'source_baseline': 'bd3b994', 'synthetic_only': True,
                     'distribution_check': 'DEFERRED: no setuptools or installs authorized'})
     if not offline and model is None:
