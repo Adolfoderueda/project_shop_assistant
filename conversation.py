@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from dialogue import parse_answer
 from dialogue_controller import closed_attempt, product_name, validate_model
+from dialogue_requests import classify_request
 from domain import IncomingMessage, Intent, Reply
 from interpreter import Interpreter, clarify, parse_command, purchase_authorized
 from presentation import PreparedPresentation, ReplyWriter
@@ -43,7 +44,13 @@ class Conversation:
             or closed_attempt(message.text)
         ):
             return await self._apply(message, None, mode, now=now, priority=False)
-        intent = parse_command(message.text, lines)
+        request = None if priority else classify_request(message.text)
+        if request is not None and request.action == "greet":
+            # A complete social turn is source-authorized, never a model query.
+            return await self._apply(message, Intent(action="greet"), mode, now=now, priority=False)
+        # Natural increments must not fall into the legacy "añade <product>" alias.
+        intent = (None if request is not None and request.action == "increment"
+                  else parse_command(message.text, lines))
         if intent is None:
             requested = product_name(message.text)
             products = self.repo.find_products(requested) if requested is not None else []

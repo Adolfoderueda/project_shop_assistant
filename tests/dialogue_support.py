@@ -48,13 +48,14 @@ def seed_line(
 
 def send(
     repo: Repository, text: str, interpreter=None, *, clock=None, update_id=None, user_id=7,
+    reply_writer=None,
 ) -> Reply:
     if update_id is None:
         update_id = _next_update(repo)
     message = IncomingMessage(update_id=update_id, user_id=user_id, chat_id=7, text=text)
     repo.ingest_batch([message], update_id + 1)
     kwargs = {} if clock is None else {"clock": clock}
-    conversation = Conversation(repo, interpreter or FakeInterpreter(), **kwargs)
+    conversation = Conversation(repo, interpreter or FakeInterpreter(), reply_writer=reply_writer, **kwargs)
     return asyncio.run(conversation.handle(message, "dry_run"))
 
 
@@ -63,13 +64,14 @@ def order_count(repo: Repository) -> int:
         return db.execute("SELECT count(*) FROM orders").fetchone()[0]
 
 
-def dialogue_parts(path, bot, clock, interpreter=None):
+def dialogue_parts(path, bot, clock, interpreter=None, *, reply_writer=None):
     from tests.fakes import FakeStore
     from tests.test_end_to_end import components
 
     store = FakeStore("test", [])
     parts = list(components(path, bot, store))
-    parts[3] = Conversation(parts[1], interpreter or FakeInterpreter(), clock=clock)
+    parts[3] = Conversation(parts[1], interpreter or FakeInterpreter(), clock=clock,
+                            reply_writer=reply_writer)
 
     async def forbidden(*args, **kwargs):
         raise AssertionError("Dialogue integration must not invoke checkout/store operations")
