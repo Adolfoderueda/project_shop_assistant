@@ -24,6 +24,10 @@ def render_dialogue_result(
             text += f" {affected.quantity} {unit}."
         if decision.reply_kind == "replaced":
             text = f"He sustituido la línea por {affected.description}: {affected.quantity} {unit}."
+        if decision.reply_kind == "incremented":
+            mutation = decision.mutation
+            text = (f"He añadido {mutation.additional_quantity} {unit} a {affected.description}: "
+                    f"de {mutation.expected_base} a {affected.quantity} {unit}.")
         if decision.state and decision.state.question:
             text += " " + question_prompt(decision.state, lines)
         return Reply(text=text)

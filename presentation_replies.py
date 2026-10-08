@@ -99,6 +99,12 @@ def build_presentation(
             facts.append(f"He sustituido {original.description} por {details}")
         elif kind == "added":
             facts.append(f"He añadido {details}")
+        elif decision.reply_kind == "incremented":
+            if original is None or decision.mutation is None:
+                raise ValueError("Increment presentation requires the original row and operands")
+            facts.append(f"He añadido {quantity_text(decision.mutation.additional_quantity, unit)} "
+                         f"a {affected.description}: de {original.quantity} a "
+                         f"{quantity_text(affected.quantity, unit)}.")
         else:
             facts.append(f"He actualizado la cantidad total de {details}")
     elif decision.reply_kind == "natural_list" or (

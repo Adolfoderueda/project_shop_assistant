@@ -70,6 +70,14 @@ class DialogueState(Model):
             raise ValueError("Saved total quantity must not be a pending addition or increment")
         if self.question in {"increment_quantity", "confirm_increment", "increment_missing", "increment_unknown"} and self.pending_kind != "increment":
             raise ValueError("Increment question requires a pending increment")
+        if self.pending_kind == "increment":
+            if self.focus is None:
+                raise ValueError("Pending increment requires a product focus")
+            if self.question in {"increment_quantity", "increment_unknown"}:
+                if self.target is None or self.focus.line != self.target:
+                    raise ValueError("Increment quantity requires a selected saved reference")
+                if (self.question == "increment_quantity") != (self.base_quantity is not None):
+                    raise ValueError("Increment quantity question must match the known or unknown base")
         if self.pending_kind != "increment" and (self.base_quantity is not None
                 or self.additional_quantity is not None or self.increment_confirmed):
             raise ValueError("Increment fields require a pending increment")

@@ -59,8 +59,10 @@ def test_increment_contract_and_closed_answers():
 @pytest.mark.parametrize("question", ["increment_missing", "increment_unknown"])
 def test_new_increment_choices_use_existing_action_keys(question):
     now = datetime(2026, 10, 8, tzinfo=UTC)
+    target = LineRef(id="saved", revision=1) if question == "increment_unknown" else None
     state = DialogueState(user_id=7, chat_id=7, pending_kind="increment", question=question,
-        focus=ProductMention(description="arroz", source_update_id=1), options=("add", "change_quantity"),
+        target=target, focus=ProductMention(description="arroz", source_update_id=1, line=target),
+        options=("add", "change_quantity"),
         updated_at=now, expires_at=now + DIALOGUE_TTL)
     assert parse_answer("1", state, now=now).selection == 1
     assert parse_answer("añádelo", state, now=now).kind == "add"

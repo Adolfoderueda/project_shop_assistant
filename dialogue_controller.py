@@ -17,6 +17,7 @@ from dialogue import (
     parse_answer,
 )
 from dialogue_additions import answer_addition, begin_addition
+from dialogue_increments import answer_increment, begin_increment
 from dialogue_requests import classify_request, validate_request
 from dialogue_requests import literal_request as _literal_request
 from dialogue_requests import product_name as _product_name
@@ -58,9 +59,13 @@ def question_prompt(state: DialogueState, lines: list[ListLine]) -> str:
     if state.question == "increment_quantity":
         return f"¿Cuántos {state.focus.unit} adicionales de {name} quieres añadir?"
     if state.question == "confirm_increment":
-        return f"¿Confirmas incrementar {name} de {state.base_quantity} a {state.proposal_quantity} {state.focus.unit}?"
+        return (f"¿Confirmas añadir {state.additional_quantity} {state.focus.unit} a {name}? "
+                f"Pasaría de {state.base_quantity} a {state.proposal_quantity} {state.focus.unit}. Sí o no.")
     if state.question in {"increment_missing", "increment_unknown"}:
-        return f"No puedo incrementar {name} sin una cantidad guardada conocida. Elige una acción o cancela."
+        reason = (f"No hay una entrada guardada de {name}." if state.question == "increment_missing"
+                  else f"La cantidad guardada de {name} es desconocida; no se puede incrementar.")
+        labels = {"add": "añadir otra línea", "change_quantity": "cambiar cantidad (total)"}
+        return reason + " " + "; ".join(f"{i}: {labels[key]}" for i, key in enumerate(state.options, 1)) + ". O cancelar."
     if state.question == "quantity":
         return f"Indica la cantidad de {state.focus.unit} para {name}."
     if state.question == "duplicate_choice":
@@ -107,7 +112,13 @@ def reduce_dialogue(
     references = (() if not state else (*state.candidates, *([state.target] if state.target else []),
                   *([state.focus.line] if state.focus and state.focus.line else [])))
     stale = any(r.id not in rows or ref(rows[r.id]) != r for r in references)
-    if stale:
+    if state and state.pending_kind == "increment" and state.target and not stale:
+        current = rows[state.target.id]
+        stale = (current.quantity != state.base_quantity
+                 or canonical_name(current.description) != canonical_name(state.focus.description))
+    reserved_increment = bool(state and state.pending_kind == "increment" and state.target
+                              and state.target.id in reserved_ids)
+    if stale or reserved_increment:
         state = None
 
     def decision(kind="clarify", *, mutation=None, legacy=None, prompt=None, reason="generic"):
@@ -144,10 +155,13 @@ def reduce_dialogue(
 
     clean = canonical_name(message.text)
     request = classify_request(message.text)
-    # Until the increment reducer exists, do not let the legacy natural-add
-    # parser turn "añade más X" into a literal "más X" addition.
+    # Source grammar, not a model action or the legacy add parser, authorizes this branch.
     if request is not None and request.action == "increment":
-        return decision(prompt="Aclara el producto o la acción concreta.")
+        result = begin_increment(ProductMention(description=request.description,
+            source_update_id=message.update_id), lines, reserved_ids,
+            user_id=message.user_id, chat_id=message.chat_id, now=now)
+        return result.model_copy(update={"prompt": question_prompt(result.state, lines)
+                                       if result.state and result.state.question else result.prompt})
     command = parse_command(message.text, lines)
     intent = command if command is not None else proposal
     if command is None and intent is not None:
@@ -168,9 +182,19 @@ def reduce_dialogue(
     if stale and not priority and (intent is None or intent.action == "clarify"):
         return decision(prompt="La lista ha cambiado; revisa el producto y vuelve a indicarlo.",
                         reason="stale")
+    if reserved_increment and not priority and (intent is None or intent.action == "clarify"):
+        return decision(prompt="La línea está reservada; revisa la lista.", reason="reserved")
     if answer and state:
         if answer.kind == "select" and state.question != "select_line":
             answer = DialogueAnswer(kind=state.options[answer.selection - 1])
+        if state.pending_kind == "increment":
+            if (answer.kind == "quantity" and diaper_reference(state.focus.description)
+                    and not explicit_diaper_packs(message.text)):
+                return decision(prompt="Indica paquetes/envases de pañales explícitamente.", reason="diaper_unit")
+            result = answer_increment(answer, state, lines, reserved_ids, now=now)
+            return result.model_copy(update={"prompt": question_prompt(result.state, lines)
+                if result.state and result.state.question and result.presentation_reason == "generic"
+                else result.prompt})
         if (state.target and state.target.id in reserved_ids
                 and state.question in {"add_or_replace", "confirm_replace", "replace_quantity", "replace_duplicate"}
                 and answer.kind != "add"):
@@ -242,6 +266,8 @@ def reduce_dialogue(
         return decision(prompt="Indica el producto y la acción explícitamente." if not state else question_prompt(state, lines),
                         reason="expired" if was_expired else "generic")
     if intent is None or intent.action == "clarify":
+        if command and command.question and "dentro del rango permitido" in command.question:
+            return decision(prompt=command.question, reason="quantity_range")
         if command and command.lines:
             fresh(None, question="remove_id", candidates=tuple(ref(rows[l.line_id]) for l in command.lines))
         return decision(prompt=question_prompt(state, lines) if state and state.question else
