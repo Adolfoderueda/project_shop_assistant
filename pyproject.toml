@@ -13,7 +13,13 @@ dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
 
 [tool.setuptools]
 py-modules = ["config", "domain", "dialogue", "dialogue_requests", "dialogue_additions", "dialogue_increments", "dialogue_controller", "dialogue_replies", "dialogue_storage", "presentation", "presentation_phrases", "presentation_replies", "presentation_validation", "presentation_storage", "storage", "catalog", "restrictions", "conversation", "interpreter", "ollama_interpreter", "ollama_replies", "telegram_io", "offers", "checkout", "checkout_storage", "recovery", "runtime", "cli"]
-packages = ["stores", "shop_assistant"]
+packages = ["stores", "shop_assistant", "shopping_agent"]
+
+[tool.setuptools.package-data]
+shopping_agent = ["skills/*.md"]
+
+[tool.setuptools.data-files]
+"third_party/shopping-list-skill" = ["third_party/shopping-list-skill/LICENSE", "third_party/shopping-list-skill/NOTICE.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
