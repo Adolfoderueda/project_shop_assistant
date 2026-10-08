@@ -243,6 +243,39 @@ No cambiar el proveedor/configuración ni reiniciar el bot a partir de esta prue
 La receta `-P`/`PYTHONPATH` y la protección ACL anteriores siguen vigentes; solo
 usar esa receta con autorización privada independiente, sin `/comprar`.
 
+## Diálogo natural, altas pendientes e incrementos (08-10-2026)
+
+- «hols», «hola que tal» y «hola» saludan sin consultar la lista.
+- «necesito avena» pregunta cantidad y **no guarda ninguna fila** hasta responder
+  una cantidad válida. Consultar lista/saludar no completa ni renueva el alta.
+- «quiero más arroz» propone un incremento, nunca añade «más arroz». Con dos
+  entradas ofrece selección; después pregunta envases adicionales y confirma
+  cantidad guardada + adicional = total. Solo «sí» guarda; «no»/«cancelar» descartan
+  la propuesta, no deshacen filas. Una reserva/revisión cambiada/caducidad exige
+  nueva petición. No se suman entre entradas ni se consolidan variantes.
+- TTL900 de transiciones válidas; generación, saludo, consulta y replay no renuevan.
+  Reiniciar Conversation conserva la propuesta. Presentaciones v1 históricas
+  preparadas se recuperan sin rehacer su acción; nuevos actos usan presentación v2
+  sin cabecera genérica, con variantes cerradas y hechos de aplicación.
+
+Probe opt-in, solo Gemma local existente y SQLite inventada temporal:
+
+```powershell
+$env:PYTHONPATH=$PWD.Path
+powershell.exe -NoProfile -File scripts/Probe-NaturalDialogue.ps1 -Python ../../.venv/Scripts/python.exe
+powershell.exe -NoProfile -File scripts/Probe-NaturalDialogue.ps1 -Offline -Python ../../.venv/Scripts/python.exe
+```
+
+Exit0=expectativas y calidadPASS,1=FAIL,2=servicio/modelo ausente (pendiente).
+Default busca `.venv` o `../../.venv`; Python usa `-P`. Offline prueba el contrato,
+no el modelo. No carga settings/DB privados ni llama Telegram/tiendas/compra,
+instala/descarga/reinicia/unload/controla el bot. No ejecutar durante trabajo
+sensible: comparte Ollama. Dos muestras reales PASS conservadas; el run final
+tiene34/34 pasos, interpretación12/12, writer33/33 aceptados y0 respaldos/órdenes.
+No demuestra fiabilidad general ni aceptación de Telegram privado. Ver
+`docs/superpowers/prueba-dialogo-natural-2026-10-08.md` y sus raw exactos.
+La lista privada existente **no se limpia ni consolida automáticamente**.
+
 ## Redacción grounded de respuestas (08-10-2026; muestra aislada corregida)
 
 Con proveedor Ollama, Conversation prepara el resultado y un trabajo durable en

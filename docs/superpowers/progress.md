@@ -1,5 +1,25 @@
 # Progreso del asistente de compras
 
+## 2026-10-08 — Diálogo natural Task6 (REAL PASS; Telegram pendiente)
+
+- Probe opt-in con proveedores reales de interpretación y redacción, Conversation,
+  seis SQLite inventadas y oráculo independiente de las secuencias exactas A/B/C.
+  Saludos/cierres/respuestas deterministas etiquetados; no FakeInterpreter real.
+- Dos capturas reales preservadas:34/34 pasos, intérprete12/12 compatible,
+  writer33/33 aceptados,0 fallback,0 órdenes, exit0 y limpieza. Segundo run añade
+  reloj avanzado, TTL900 exacto, replay30s después sin llamadas/renovación y restart
+  entre delta/confirm. Reserva/revisión cambiada no guardan bajo el sí antiguo.
+- Calidad exige interpretación+writer reales en add/increment/list y aceptación
+  por todos los actos redactados; tests de fallback-only e intent buy malicioso
+  impiden PASS aparente. Facts/opciones/cantidades siguen fijos de aplicación;
+  Gemma elige variantes cerradas por acto, no prosa libre factual.
+- RED subprocess7 fallos por script ausente; GREEN7/7. Suite plain910 passed
+  in294.99s, Ruff limpio. Sin privados/Telegram/tiendas/compras/ACL/procesos,
+  instalación/descarga/reinicio/unload/merge/push. Telegram sigue no aceptado.
+- Evidencia: `prueba-dialogo-natural-2026-10-08.md` y dos JSONL raw versionados.
+  Se conservan los históricos de fallos anteriores; no fue necesario tocar codecs,
+  gramática, guardas ni producción para este task.
+
 ## 2026-10-08 — Task6 reparación autorizada (muestra REAL PASS, Telegram pendiente)
 
 - Base15b586f; schema condicionado al snapshot con roles/tokens completos,
