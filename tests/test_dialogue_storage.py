@@ -55,7 +55,7 @@ def test_v5_upgrade_preserves_list_orders_offset_and_observations(tmp_path):
     assert repo.get_order(reply.order_id) == order
     assert repo.telegram_offset() == 42
     with sqlite3.connect(repo.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 7
         assert db.execute("SELECT count(*) FROM observed_products").fetchone()[0] == 4
 
 
@@ -152,6 +152,6 @@ def test_write_clear_and_rollback_use_callers_transaction(repo, state):
 
 def test_future_schema_is_rejected(repo):
     with sqlite3.connect(repo.path) as db:
-        db.execute("PRAGMA user_version=7")
+        db.execute("PRAGMA user_version=8")
     with pytest.raises(ValueError, match="newer"):
         repo.migrate()

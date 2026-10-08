@@ -12,7 +12,7 @@ dependencies = ["pydantic>=2.10,<3", "openai>=2.8,<3", "python-telegram-bot>=22.
 dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
 
 [tool.setuptools]
-py-modules = ["config", "domain", "dialogue", "dialogue_controller", "dialogue_replies", "dialogue_storage", "presentation", "presentation_replies", "presentation_validation", "storage", "catalog", "restrictions", "conversation", "interpreter", "ollama_interpreter", "telegram_io", "offers", "checkout", "checkout_storage", "recovery", "runtime", "cli"]
+py-modules = ["config", "domain", "dialogue", "dialogue_controller", "dialogue_replies", "dialogue_storage", "presentation", "presentation_replies", "presentation_validation", "presentation_storage", "storage", "catalog", "restrictions", "conversation", "interpreter", "ollama_interpreter", "telegram_io", "offers", "checkout", "checkout_storage", "recovery", "runtime", "cli"]
 packages = ["stores", "shop_assistant"]
 
 [tool.pytest.ini_options]

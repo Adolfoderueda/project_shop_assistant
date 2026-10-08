@@ -12,6 +12,7 @@ from checkout_storage import CheckoutRepository
 from dialogue import expired
 from dialogue_storage import DialogueRepository
 from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
+from presentation_storage import PresentationRepository
 from product_memory import (
     ObservedProduct,
     _record_missing_product,
@@ -38,7 +39,7 @@ OBSERVED_PRODUCTS = (
 )
 
 
-class Repository(CheckoutRepository, DialogueRepository):
+class Repository(CheckoutRepository, DialogueRepository, PresentationRepository):
     def __init__(self, path: Path):
         self.path = Path(path)
 
@@ -64,7 +65,7 @@ class Repository(CheckoutRepository, DialogueRepository):
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 6:
+            if version > 7:
                 raise ValueError("Database schema is newer than this application")
             if version == 0:
                 db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
@@ -78,6 +79,8 @@ class Repository(CheckoutRepository, DialogueRepository):
                 db.executescript((Path(__file__).parent / "migrations/005.sql").read_text())
             if version < 6:
                 db.executescript((Path(__file__).parent / "migrations/006.sql").read_text())
+            if version < 7:
+                db.executescript((Path(__file__).parent / "migrations/007.sql").read_text())
             db.executemany(
                 "INSERT OR IGNORE INTO observed_products "
                 "(id,store_id,product_id,title,url,observed_on,price_cents,availability,format_note) "
@@ -89,23 +92,27 @@ class Repository(CheckoutRepository, DialogueRepository):
             )
 
     def find_products(self, query: str, limit: int = 5) -> list[ObservedProduct]:
+        with self._connection() as db:
+            return self._find_products(db, query, limit)
+
+    @staticmethod
+    def _find_products(db, query: str, limit: int = 5) -> list[ObservedProduct]:
         if limit <= 0:
             return []
-        with self._connection() as db:
-            results = []
-            for row in db.execute(
-                "SELECT id,store_id,product_id,title,url,observed_on,price_cents,"
-                "availability,format_note FROM observed_products ORDER BY id"
-            ):
-                values = dict(row)
-                if values["availability"] is not None:
-                    values["availability"] = bool(values["availability"])
-                product = ObservedProduct(**values)
-                if matches_observation(query, product):
-                    results.append(product)
-                    if len(results) == limit:
-                        break
-            return results
+        results = []
+        for row in db.execute(
+            "SELECT id,store_id,product_id,title,url,observed_on,price_cents,"
+            "availability,format_note FROM observed_products ORDER BY id"
+        ):
+            values = dict(row)
+            if values["availability"] is not None:
+                values["availability"] = bool(values["availability"])
+            product = ObservedProduct(**values)
+            if matches_observation(query, product):
+                results.append(product)
+                if len(results) == limit:
+                    break
+        return results
 
     def product_requests(self) -> list[str]:
         with self._connection() as db:
@@ -130,6 +137,10 @@ class Repository(CheckoutRepository, DialogueRepository):
             ).fetchone()
             if foreign_inbox or foreign_notices or missing_source or foreign_dialogue:
                 raise PermissionError("Stored work belongs to another owner; manual review required")
+            for row in db.execute("SELECT update_id,user_id,chat_id FROM presentation_jobs"):
+                if (row["user_id"], row["chat_id"]) != (user_id, user_id):
+                    raise PermissionError("Stored work belongs to another owner; manual review required")
+                self._read_prepared(db, row["update_id"])
 
     def verify_formula(self, gtin: str) -> None:
         """Persist a manually cross-checked reference, without changing the baked-in catalog."""
@@ -275,19 +286,7 @@ class Repository(CheckoutRepository, DialogueRepository):
             if not identifiable_product_name(name):
                 return Reply(text="Aclara el producto que buscas.")
             # Read from this same transaction, not an earlier model context snapshot.
-            products = []
-            for row in db.execute(
-                "SELECT id,store_id,product_id,title,url,observed_on,price_cents,"
-                "availability,format_note FROM observed_products ORDER BY id"
-            ):
-                values = dict(row)
-                if values["availability"] is not None:
-                    values["availability"] = bool(values["availability"])
-                product = ObservedProduct(**values)
-                if matches_observation(name, product):
-                    products.append(product)
-                    if len(products) == 5:
-                        break
+            products = self._find_products(db, name)
             if not products:
                 _record_missing_product(db, name)
                 return Reply(text=f"No tenemos ficha observada de {name}; lo he anotado para revisar.")

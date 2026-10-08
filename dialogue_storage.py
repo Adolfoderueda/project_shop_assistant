@@ -16,81 +16,94 @@ class DialogueRepository:
         if mode not in ("dry_run", "live"):
             raise ValueError("Invalid mode")
         with self._connection(write=True) as db:
+            prepared = self._read_prepared(db, update_id)
             source = db.execute("SELECT * FROM inbox WHERE update_id=?", (update_id,)).fetchone()
             if source is None:
                 raise KeyError(update_id)
             if source["completed"]:
                 return Reply.model_validate_json(source["reply_json"])
-            if proposal is not None:
-                proposal = Intent.model_validate_json(proposal.model_dump_json())
-            message = IncomingMessage(**{k: source[k] for k in ("update_id", "user_id", "chat_id", "text")})
-            state = self._read_dialogue_state(db, message.user_id, message.chat_id)
-            decision = reduce_dialogue(message, proposal, state, self._lines(db), frozenset(
-                r[0] for r in db.execute("SELECT line_id FROM reservations")
-            ), now=now)
-            affected = None
-            legacy_reply = None
-            mutation = decision.mutation
-            if mutation:
-                if mutation.kind == "add":
-                    line_id = str(uuid4())
-                    db.execute("INSERT INTO list_lines VALUES (?,?,?,?,1,?)", (
-                        line_id, resolve_product(mutation.description), mutation.description,
-                        mutation.quantity, update_id,
-                    ))
-                elif mutation.kind == "set_quantity":
-                    line_id = mutation.target.id
-                    db.execute("UPDATE list_lines SET quantity=?,revision=revision+1 WHERE id=? AND revision=?",
-                               (mutation.quantity, line_id, mutation.target.revision))
-                else:
-                    final = decision.state
-                    target = mutation.target
-                    if (target is None or final is None or final.focus is None
-                            or not final.replacement_confirmed or final.target != target
-                            or final.question is not None or mutation.quantity is None
-                            or final.proposal_quantity != mutation.quantity
-                            or final.focus.description != mutation.description):
-                        raise ValueError("Replacement requires confirmed origin, destination and quantity")
-                    current = next((l for l in self._lines(db) if l.id == target.id), None)
-                    if (current is None or current.revision != target.revision
-                            or db.execute("SELECT 1 FROM reservations WHERE line_id=?", (target.id,)).fetchone()):
-                        raise ValueError("Replacement origin changed or is reserved")
-                    conflicts = tuple(LineRef(id=l.id, revision=l.revision) for l in self._lines(db)
-                                      if l.id != target.id and canonical_name(l.description)
-                                      == canonical_name(mutation.description))
-                    if conflicts != final.candidates or (conflicts and not final.duplicate_confirmed):
-                        raise ValueError("Replacement duplicate conflict requires explicit confirmation")
-                    line_id = target.id
-                    changed = db.execute(
-                        "UPDATE list_lines SET description=?,product_id=?,quantity=?,revision=revision+1 "
-                        "WHERE id=? AND revision=? AND NOT EXISTS "
-                        "(SELECT 1 FROM reservations WHERE line_id=?)",
-                        (mutation.description, resolve_product(mutation.description), mutation.quantity,
-                         line_id, target.revision, line_id),
-                    )
-                    if changed.rowcount != 1:
-                        raise ValueError("Replacement must update exactly one current, unreserved line")
-                affected = next(l for l in self._lines(db) if l.id == line_id)
-                reference = LineRef(id=affected.id, revision=affected.revision)
-                rebound = decision.state.model_copy(update={
-                    "focus": decision.state.focus.model_copy(update={"line": reference}),
-                    "target": reference if decision.state.question == "quantity" else None,
+            if prepared is not None:
+                return self._complete_reply(db, source, prepared.snapshot.fallback)
+            *_, reply = self._apply_dialogue(db, source, proposal, mode, now=now)
+            return self._complete_reply(db, source, reply)
+
+    def _apply_dialogue(self, db, source, proposal, mode, *, now):
+        """Apply once in the caller transaction and return typed presentation witnesses."""
+        update_id = source["update_id"]
+        if proposal is not None:
+            proposal = Intent.model_validate_json(proposal.model_dump_json())
+        message = IncomingMessage(**{k: source[k] for k in ("update_id", "user_id", "chat_id", "text")})
+        state = self._read_dialogue_state(db, message.user_id, message.chat_id)
+        before = self._lines(db)
+        decision = reduce_dialogue(message, proposal, state, before, frozenset(
+            r[0] for r in db.execute("SELECT line_id FROM reservations")
+        ), now=now)
+        affected = None
+        legacy_reply = None
+        observations = []
+        mutation = decision.mutation
+        original = next((l for l in before if mutation and mutation.target
+                         and l.id == mutation.target.id), None)
+        if mutation:
+            if mutation.kind == "add":
+                line_id = str(uuid4())
+                db.execute("INSERT INTO list_lines VALUES (?,?,?,?,1,?)", (
+                    line_id, resolve_product(mutation.description), mutation.description,
+                    mutation.quantity, update_id,
+                ))
+            elif mutation.kind == "set_quantity":
+                line_id = mutation.target.id
+                db.execute("UPDATE list_lines SET quantity=?,revision=revision+1 WHERE id=? AND revision=?",
+                           (mutation.quantity, line_id, mutation.target.revision))
+            else:
+                final = decision.state
+                target = mutation.target
+                if (target is None or final is None or final.focus is None
+                        or not final.replacement_confirmed or final.target != target
+                        or final.question is not None or mutation.quantity is None
+                        or final.proposal_quantity != mutation.quantity
+                        or final.focus.description != mutation.description):
+                    raise ValueError("Replacement requires confirmed origin, destination and quantity")
+                current = next((l for l in self._lines(db) if l.id == target.id), None)
+                if (current is None or current.revision != target.revision
+                        or db.execute("SELECT 1 FROM reservations WHERE line_id=?", (target.id,)).fetchone()):
+                    raise ValueError("Replacement origin changed or is reserved")
+                conflicts = tuple(LineRef(id=l.id, revision=l.revision) for l in self._lines(db)
+                                  if l.id != target.id and canonical_name(l.description)
+                                  == canonical_name(mutation.description))
+                if conflicts != final.candidates or (conflicts and not final.duplicate_confirmed):
+                    raise ValueError("Replacement duplicate conflict requires explicit confirmation")
+                line_id = target.id
+                changed = db.execute(
+                    "UPDATE list_lines SET description=?,product_id=?,quantity=?,revision=revision+1 "
+                    "WHERE id=? AND revision=? AND NOT EXISTS "
+                    "(SELECT 1 FROM reservations WHERE line_id=?)",
+                    (mutation.description, resolve_product(mutation.description), mutation.quantity,
+                     line_id, target.revision, line_id),
+                )
+                if changed.rowcount != 1:
+                    raise ValueError("Replacement must update exactly one current, unreserved line")
+            affected = next(l for l in self._lines(db) if l.id == line_id)
+            reference = LineRef(id=affected.id, revision=affected.revision)
+            rebound = decision.state.model_copy(update={
+                "focus": decision.state.focus.model_copy(update={"line": reference}),
+                "target": reference if decision.state.question == "quantity" else None,
+            })
+            if mutation.kind == "replace":
+                rebound = rebound.model_copy(update={
+                    "candidates": (), "proposal_quantity": None,
+                    "replacement_confirmed": False, "duplicate_confirmed": False,
                 })
-                if mutation.kind == "replace":
-                    rebound = rebound.model_copy(update={
-                        "candidates": (), "proposal_quantity": None,
-                        "replacement_confirmed": False, "duplicate_confirmed": False,
-                    })
-                decision = decision.model_copy(update={"state": rebound})
-            elif decision.legacy_intent:
-                legacy_reply = self._apply(db, update_id, decision.legacy_intent, mode)
-            self._write_dialogue_state(db, decision.state, message.user_id, message.chat_id)
-            reply = render_dialogue_result(decision, affected, self._lines(db), legacy_reply)
-            payload = reply.model_dump_json()
-            db.execute("UPDATE inbox SET completed=1,reply_json=? WHERE update_id=?", (payload, update_id))
-            db.execute("INSERT INTO outbox(id,update_id,chat_id,reply_json) VALUES (?,?,?,?)",
-                       (str(uuid4()), update_id, message.chat_id, payload))
-            return reply
+            decision = decision.model_copy(update={"state": rebound})
+        elif decision.legacy_intent:
+            legacy_reply = self._apply(db, update_id, decision.legacy_intent, mode)
+            intent = decision.legacy_intent
+            if intent.action == "product_query" and len(intent.lines) == 1 and intent.lines[0].description:
+                observations = self._find_products(db, intent.lines[0].description)
+        self._write_dialogue_state(db, decision.state, message.user_id, message.chat_id)
+        lines = self._lines(db)
+        reply = render_dialogue_result(decision, affected, lines, legacy_reply)
+        return decision, affected, original, lines, legacy_reply, observations, reply
 
     def dialogue_state(
         self, user_id: int, chat_id: int, *, now: datetime,

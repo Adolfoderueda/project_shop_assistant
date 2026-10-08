@@ -19,7 +19,7 @@ def repo(tmp_path):
 
 def test_fresh_migration_seeds_only_reviewed_historical_observations(repo):
     with sqlite3.connect(repo.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 7
         assert db.execute("SELECT count(*) FROM observed_products").fetchone()[0] == 4
         assert db.execute("SELECT count(*) FROM products").fetchone()[0] == 3
         assert "gtin" not in {row[1] for row in db.execute("PRAGMA table_info(observed_products)")}
@@ -63,7 +63,7 @@ def test_upgrade_from_v4_preserves_existing_state(tmp_path):
     repo.migrate()
     assert repo.telegram_offset() == 42
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 7
         assert db.execute("SELECT count(*) FROM observed_products").fetchone()[0] == 4
 
 
