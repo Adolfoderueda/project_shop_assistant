@@ -86,13 +86,14 @@ por separado en [la ronda final](docs/superpowers/evidence/2026-10-09-preguntas-
 Las migraciones SQL se declaran recursos del paquete `migrations`; sin backend de
 build instalado, la comprobación de un wheel realmente instalado sigue bloqueada.
 
-**No activar ni integrar:** la revisión final encontró un residual HIGH: `Cancelar`
-mediante callback autenticado borra la propuesta pero no crea un límite del historial
-de inferencia (el buscador sólo recorre mensajes). Repetir tres callbacks exitosos
-anteriores puede reintroducir sus destinatarios; un `2` posterior con salida nativa
-obsoleta puede crear una revisión nueva `huevos: 2`. Ese caso falta en la matriz v5;
-cero fallos de invariantes en los pasos ejecutados no demuestra seguridad total.
-Requiere seguimiento explícito, sin otra corrección en esta ronda. La regla conservadora
+**No activar ni integrar:** el residual HIGH de cancelación por callback documentado
+en la revisión v5 tiene una corrección local posterior, pendiente de revisión independiente:
+solo el consumo original de una opción tipada `cancel`, con procedencia y entrega
+validadas, delimita el historial. Replays anteriores no recuperan destinatarios
+cancelados, ni un replay de cancelación borra contexto nuevo. Véase
+[el informe correctivo](.superpowers/sdd/2026-10-09-callback-cancel-reset/report.md).
+No se repitió la evaluación nativa ni se modificó la evidencia archivada v5; esto
+no resuelve conjeturas del modelo desde entradas actuales. La regla conservadora
 de reinicio tras caducidad fue decisión del controlador, añade un turno y mantiene
 fallidas las expectativas originales de comodidad. Calidad real v5:42/102 acotadas,
 6/39 seguridad,0/24 libres; v4 INVALID por error de codificación; wheel no verificado.

@@ -428,9 +428,23 @@ class GuidedRepository:
         from interpreter import parse_command
 
         for source in db.execute('SELECT * FROM inbox WHERE user_id=? AND chat_id=? '
-                "AND completed=1 AND kind='message' ORDER BY update_id DESC", (user_id, chat_id)):
+                'AND completed=1 ORDER BY update_id DESC', (user_id, chat_id)):
             event = self._stored_event(source)
             reply = Reply.model_validate_json(source['reply_json'])
+            if isinstance(event, IncomingCallback):
+                token = db.execute('SELECT * FROM guided_tokens WHERE token=?', (event.data,)).fetchone()
+                # Validate the original consumption/offer/delivery chain, not the
+                # cached cancellation wording of a later replay. Corruption must
+                # not acquire reset authority or hide older provenance.
+                q = self._guided_token_row(db, token) if token is not None else None
+                if (q is not None and token['consumed_update_id'] == event.update_id
+                        and q.choices[token['choice_index']].kind == 'cancel'):
+                    if (reply != Reply(text=REASONS['cancelled'])
+                            or reply != Reply.model_validate_json(token['result_json'])
+                            or not self._committed_reply_matches(db, source, reply)):
+                        raise ValueError('History cancellation lacks committed result')
+                    return event.update_id
+                continue
             reset = canonical_name(event.text) == 'cancelar' and reply == Reply(text=REASONS['cancelled'])
             command = parse_command(event.text, self._lines(db)) if event.text.strip().startswith('/') else None
             # An incompatible explicit command isolates history even if its row
