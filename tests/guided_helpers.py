@@ -97,11 +97,13 @@ class PersistedCase:
                               'AND choice_index=?', (str(q.id), q.version, index)).fetchone()[0]
 
     def record_known_delivery(self, message_id=100):
+        from shopping_agent.guided_replies import render_question
+
         q = self.question()
         with self.repo._connection() as db:
             notice = db.execute('SELECT notice_id FROM guided_questions WHERE id=? AND version=?',
                                 (str(q.id), q.version)).fetchone()[0]
-        self.repo.record_delivery(notice, 7, message_id, sha256(q.text.encode('utf-8')).hexdigest())
+        self.repo.record_delivery(notice, 7, message_id, sha256(render_question(q).text.encode('utf-8')).hexdigest())
 
     def ingest_message(self, update_id, text):
         self.repo.ingest_events([message(update_id, text)], update_id + 1)

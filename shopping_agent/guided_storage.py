@@ -81,10 +81,11 @@ class GuidedRepository:
         return q
 
     def _guided_receipt(self, db, token, event, q):
-        self._delivery_notice(db, token['notice_id'], event.chat_id, event.message_id, _digest(q.text))
+        digest = _digest(render_question(q).text)
+        self._delivery_notice(db, token['notice_id'], event.chat_id, event.message_id, digest)
         return db.execute('SELECT 1 FROM telegram_deliveries WHERE notice_id=? AND chat_id=? '
             'AND message_id=? AND digest=?',
-            (token['notice_id'], event.chat_id, event.message_id, _digest(q.text))).fetchone() is not None
+            (token['notice_id'], event.chat_id, event.message_id, digest)).fetchone() is not None
 
     def _validate_guided_proposal(self, db, proposal, snapshot):
         original = self._agent_source(db, proposal.source_update_id)
@@ -238,7 +239,7 @@ class GuidedRepository:
                 if token is None:
                     raise ValueError('Missing offered text choice')
                 self._guided_token_row(db, token)
-            return self._commit_guided(db, source, state, decision, token=token)
+            return self._commit_guided(db, source, state, decision, token=token, now=now)
 
     def apply_guided_callback(self, update_id: int, *, now: datetime) -> Reply:
         utc(now)
@@ -272,11 +273,11 @@ class GuidedRepository:
                 return self._complete_reply(db, source, Reply(text='Pregunta anterior o entrega desconocida. '
                     'Responde a la pregunta vigente.'))
             if resend is not None:
-                return self._commit_guided(db, source, state, resend)
+                return self._commit_guided(db, source, state, resend, now=now)
             answer = ResolvedChoice(question_id=q.id, question_version=q.version,
                 choice_index=token['choice_index'], source_update_id=event.update_id)
             decision = reduce_guided(state, event, answer, now=now)
-            return self._commit_guided(db, source, state, decision, token=token)
+            return self._commit_guided(db, source, state, decision, token=token, now=now)
 
     @staticmethod
     def _resend_guided_question(state, event, now):
@@ -292,10 +293,18 @@ class GuidedRepository:
                              question=q, topic=state.topic, review=witness)
         return GuidedDecision(state=renewed, reply=render_question(q), reason='pending')
 
-    def _commit_guided(self, db, source, previous, decision, *, token=None):
+    def _commit_guided(self, db, source, previous, decision, *, token=None, now):
         state = decision.state
         proposal, q = state.snapshot.proposal, state.question
         reply = decision.reply
+        if (decision.reason != 'read' and q is not None and q == previous.question
+                and q.status == 'active' and now < q.expires_at
+                and reply.text == render_question(q).text):
+            # A new keyboard is a new authenticated offer, never an alias of an old notice.
+            decision = self._resend_guided_question(state, self._stored_event(source), now)
+            state = decision.state
+            proposal, q = state.snapshot.proposal, state.question
+            reply = decision.reply
         changed_question = q != previous.question
         if decision.reason == 'confirmed':
             if (decision.mutations == () or previous.review is None
@@ -323,15 +332,9 @@ class GuidedRepository:
         elif decision.mutations:
             raise ValueError('Intermediate mutations forbidden')
         buttons = None
-        if q is not None and q.status == 'active' and reply.text == render_question(q).text:
-            if not changed_question:
-                rows = db.execute('SELECT token,choice_index FROM guided_tokens WHERE question_id=? '
-                                  'AND question_version=? ORDER BY choice_index', (str(q.id), q.version)).fetchall()
-                if len(rows) != len(q.choices):
-                    raise ValueError('Missing offered choices')
-                buttons = tuple(InlineButton(label=c.label, token=r['token']) for c, r in zip(q.choices, rows, strict=True))
-            else:
-                buttons = tuple(InlineButton(label=c.label, token='q:' + secrets.token_urlsafe(16)) for c in q.choices)
+        if (decision.reason != 'read' and changed_question and q is not None and q.status == 'active'
+                and reply.text == render_question(q).text):
+            buttons = tuple(InlineButton(label=c.label, token='q:' + secrets.token_urlsafe(16)) for c in q.choices)
             reply = reply.model_copy(update={'keyboard': InlineKeyboard(rows=tuple((b,) for b in buttons))})
         self._complete_reply(db, source, reply)
         notice_id = db.execute('SELECT id FROM outbox WHERE update_id=?', (source['update_id'],)).fetchone()[0]

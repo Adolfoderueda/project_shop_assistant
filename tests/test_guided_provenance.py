@@ -234,3 +234,43 @@ def test_pending_topic_source_text_is_validated_during_owner_recovery(tmp_path):
     assert c.repo.guided_state(2, now=c.now).snapshot.proposal is None
     with pytest.raises(PermissionError):
         c.repo.assert_authorized_owner(7)
+
+
+def test_review_reoffer_witness_uses_actual_notice_not_original_delivery(tmp_path):
+    from datetime import timedelta
+    from hashlib import sha256
+
+    c = persisted_case(tmp_path, quantities=(1, 1, 1))
+    original = c.question()
+    c.record_known_delivery()
+    original_token = c.choice_token('confirm')
+    c.ingest_message(2, 'no entiendo')
+    reply = c.repo.apply_guided(2, None, expected_question_version=original.version,
+                               now=c.now + timedelta(minutes=1))
+    current = c.question()
+    assert current.version == original.version + 1
+    assert current.expires_at == original.expires_at
+    state = c.repo.guided_state(2, now=c.now)
+    assert state.review.delivered_message_id is None
+    with c.repo._connection() as db:
+        notice = db.execute('SELECT id FROM outbox WHERE update_id=2').fetchone()[0]
+        offered = db.execute('SELECT notice_id FROM guided_tokens WHERE token=?',
+                            (reply.keyboard.rows[0][0].token,)).fetchone()[0]
+    assert offered == notice == state.review.notice_id
+    assert state.review.source_update_id == 2
+    assert state.review.summary_digest == sha256(reply.text.encode('utf-8')).hexdigest()
+    c.ingest_callback(3, original_token)
+    c.repo.apply_guided_callback(3, now=c.now)
+    assert not c.repo.list_lines()
+    c.repo.record_delivery(notice, 7, 200, state.review.summary_digest)
+    c.repo.record_delivery(notice, 7, 200, state.review.summary_digest)
+    assert c.repo.guided_state(3, now=c.now).review.delivered_message_id == 200
+    token = reply.keyboard.rows[0][0].token
+    c.ingest_callback(4, token, message_id=200)
+    first = c.repo.apply_guided_callback(4, now=c.now + timedelta(minutes=1))
+    lines = c.repo.list_lines()
+    assert len(lines) == 3
+    c.ingest_callback(5, token, message_id=200)
+    assert c.repo.apply_guided_callback(5, now=c.now) == first
+    assert c.repo.list_lines() == lines
+    c.repo.assert_authorized_owner(7)

@@ -286,3 +286,71 @@ def test_callback_commit_never_uses_executable_legacy_message(tmp_path, monkeypa
     assert row['text'] == ''
     assert token in row['payload_json']
     assert c.repo.event_result(1)[0].text == 'huevos carne atun'
+
+
+def test_unchanged_clarification_keyboard_accepts_its_actual_recorded_delivery(tmp_path):
+    from hashlib import sha256
+
+    c = persisted_case(tmp_path)
+    previous = c.question()
+    c.ingest_message(2, 'no entiendo')
+    reply = c.repo.apply_guided(2, None, expected_question_version=previous.version,
+                               now=c.now + timedelta(minutes=1))
+    assert reply.text == c.repo.event_result(1)[1].text
+    with c.repo._connection() as db:
+        notice = db.execute('SELECT id FROM outbox WHERE update_id=2').fetchone()[0]
+    c.repo.record_delivery(notice, 7, 200, sha256(reply.text.encode('utf-8')).hexdigest())
+    token = reply.keyboard.rows[0][0].token
+    c.ingest_callback(3, token, message_id=200)
+    first = c.repo.apply_guided_callback(3, now=c.now + timedelta(minutes=1))
+    state = c.repo.guided_state(3, now=c.now)
+    assert state.snapshot.proposal.revision == 2
+    assert state.snapshot.proposal.expires_at == previous.expires_at
+    assert not c.repo.list_lines()
+    assert c.repo.apply_guided_callback(3, now=c.now) == first
+    c.ingest_callback(4, token, message_id=200)
+    assert c.repo.apply_guided_callback(4, now=c.now) == first
+    assert c.repo.guided_state(4, now=c.now).snapshot.proposal.revision == 2
+    c.repo.assert_authorized_owner(7)
+
+
+def test_clarification_reoffer_does_not_authorize_old_token_or_unknown_copy(tmp_path):
+    c = persisted_case(tmp_path)
+    c.record_known_delivery()
+    old_token = c.choice_token('one_each')
+    previous = c.question()
+    c.ingest_message(2, 'no entiendo')
+    reply = c.repo.apply_guided(2, None, expected_question_version=previous.version, now=c.now)
+    current = c.question()
+    assert current.version == previous.version + 1
+    assert current.expires_at == previous.expires_at
+    c.ingest_callback(3, old_token)
+    assert 'anterior' in c.repo.apply_guided_callback(3, now=c.now).text
+    assert c.repo.guided_state(3, now=c.now).snapshot.proposal.revision == 1
+    token = reply.keyboard.rows[0][0].token
+    c.ingest_callback(4, token, message_id=777)
+    reoffered = c.repo.apply_guided_callback(4, now=c.now)
+    assert reoffered.text == reply.text
+    assert c.repo.guided_state(4, now=c.now).snapshot.proposal.revision == 1
+    assert c.question().expires_at == previous.expires_at
+    c.record_known_delivery(message_id=200)
+    c.ingest_callback(5, c.choice_token('one_each'), message_id=200)
+    c.repo.apply_guided_callback(5, now=c.now + timedelta(minutes=16))
+    assert c.repo.guided_state(5, now=c.now).snapshot.proposal.revision == 1
+    assert not c.repo.list_lines()
+
+
+def test_read_turn_never_reoffers_unbound_buttons_or_renews_question(tmp_path):
+    from shopping_agent.guided_contracts import ReadCandidate
+
+    c = persisted_case(tmp_path, quantities=(1, 1, 1))
+    c.record_known_delivery()
+    before = c.repo.guided_state(1, now=c.now)
+    c.ingest_message(2, 'qué hay en la lista')
+    reply = c.repo.apply_guided(2, ReadCandidate(kind='list'), expected_question_version=c.question().version,
+                               now=c.now + timedelta(minutes=1))
+    assert reply.keyboard is None
+    after = c.repo.guided_state(2, now=c.now)
+    assert after.question == before.question
+    assert after.review == before.review
+    assert after.snapshot.proposal == before.snapshot.proposal
