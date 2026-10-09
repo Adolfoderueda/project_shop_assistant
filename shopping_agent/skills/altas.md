@@ -1,6 +1,9 @@
 # Altas y cantidades
 
 Usa `proponer_altas` con todos los productos solicitados (entre 1 y 20).
+En preguntas guiadas, un alta con borrador vigente propone un tema adicional:
+conserva sus productos y condición sin asignar posiciones del borrador ni añadir
+líneas. Solo la aplicación decide si se incorpora tras la elección del usuario.
 Conserva marcas, variantes, etapas, tallas y gramos dentro de la descripción.
 La cantidad cuenta envases enteros positivos, no gramos de contenido; no inventes
 cantidades ni conviertas una unidad ausente en autorización para pañales.

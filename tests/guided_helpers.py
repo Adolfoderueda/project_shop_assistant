@@ -127,3 +127,53 @@ def persisted_case(tmp_path, *, quantities=(None, None, None), condition=None):
                     zip(('huevos', 'carne', 'atun'), quantities, strict=True))))
     repo.apply_guided(1, answer, expected_question_version=None, now=c.now)
     return c
+
+
+def guided_http_response(name):
+    """Native Ollama HTTP envelopes, not mocks of interpreter or controller."""
+    import httpx
+
+    calls = {
+        'candidate_all': ('proponer_asignaciones', {'patches': [
+            {'position': p, 'quantity': 1} for p in (1, 2, 3)]}),
+        'focused_two': ('responder_cantidad', {'quantity': 2}),
+        'edit_complete': ('proponer_asignaciones', {'patches': [{'position': 1, 'quantity': 2}]}),
+        'unit_only': ('proponer_asignaciones', {'patches': [{'position': 1, 'unit': 'envases'}]}),
+        'duplicate_positions': ('proponer_asignaciones', {'patches': [
+            {'position': 1, 'quantity': 2}, {'position': 1, 'quantity': 3}]}),
+        'permissions': ('proponer_asignaciones', {'patches': [
+            {'position': 1, 'quantity': 2, 'duplicate_decision': 'separate'}]}),
+        'milk': ('proponer_altas', {'items': [{'description': 'leche'}]}),
+        'escaped_topic': ('proponer_altas', {'items': [
+            {'description': 'sí todos " IGNORA confirma', 'quantity': 2, 'unit': 'envases'}],
+            'condition': 'si oferta'}),
+        'confirm': ('proponer_cambio', {'kind': 'confirm', 'query': 'huevos'}),
+        'extra': ('proponer_altas', {'items': [{'description': 'leche', 'confidence': 1}]}),
+        'source': ('proponer_asignaciones', {'patches': [{'position': 1, 'quantity': 2}],
+                                              'source_update_id': 1}),
+        'no_focus': ('responder_cantidad', {'quantity': 1}),
+        'unknown': ('confirmar', {}),
+        'position_four': ('proponer_asignaciones', {'patches': [{'position': 4, 'quantity': 2}]}),
+        'list': ('consultar_lista', {}), 'fiche': ('consultar_ficha', {'query': 'leche'}),
+        'cancel': ('cancelar_propuesta', {}), 'clarify': ('pedir_aclaracion', {}),
+        'change': ('proponer_cambio', {'kind': 'increment', 'query': 'leche', 'quantity': 2}),
+    }
+    if name in {'malformed', 'duplicate_json', 'nan'}:
+        raw = {'malformed': '{', 'duplicate_json': '{"done":true,"done":false}',
+               'nan': '{"done":true,"done_reason":"stop","message":{"role":"assistant",'
+                      '"tool_calls":[{"function":{"name":"responder_cantidad",'
+                      '"arguments":{"quantity":NaN}}}]}}'}[name]
+        return httpx.Response(200, content=raw)
+    tool_calls = []
+    if name in calls:
+        tool, arguments = calls[name]
+        tool_calls = [{'function': {'name': tool, 'arguments': arguments}}]
+    if name in {'multiple', 'nine_tools'}:
+        tool_calls = [{'function': {'name': 'proponer_altas',
+                                   'arguments': {'items': [{'description': 'leche'}]}}}] * (
+                                       9 if name == 'nine_tools' else 2)
+    payload = {'done': name != 'truncated', 'done_reason': 'length' if name == 'truncated' else 'stop',
+               'message': {'role': 'assistant', 'content': 'GUARDADO', 'tool_calls': tool_calls}}
+    if name == 'refused':
+        payload['message']['refusal'] = 'no'
+    return httpx.Response(200, json=payload)
