@@ -1,0 +1,89 @@
+"""Frozen single-variable native-tool diagnosis; synthetic localhost inputs only."""
+
+import asyncio
+import base64
+import hashlib
+import json
+from pathlib import Path
+
+import httpx
+
+from shopping_agent.contracts import AgentSnapshot
+from shopping_agent.guided_contracts import GuidedState
+from shopping_agent.guided_ollama import GuidedOllamaAgent
+from shopping_agent.ollama import OllamaShoppingAgent, _assistant, _json
+from shopping_agent.tools import DESCRIPTIONS
+from tests.guided_helpers import message
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / 'docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v1.jsonl'
+INPUTS = ('huevos, carne y atun', 'leche dos', 'atun dos, huevos uno y carne')
+
+
+async def main():
+    # Capture actual runners' first requests without executing tools or opening a DB.
+    class Tools:
+        def __init__(self, event, snapshot):
+            self.message, self.snapshot = event, snapshot
+
+        def validate_calls(self, calls):
+            return calls
+
+    if OUT.exists():
+        raise FileExistsError(OUT)
+    requests = []
+    for text in INPUTS:
+        event = message(1, text)
+        snapshot = AgentSnapshot(user_id=7, chat_id=7, source_update_id=1, original_text=text)
+        captured = []
+
+        def capture(request):
+            captured.append(json.loads(request.content))
+            return httpx.Response(200, json={'done': True, 'done_reason': 'stop',
+                'message': {'role': 'assistant', 'content': ''}})
+
+        await GuidedOllamaAgent(transport=httpx.MockTransport(capture)).interpret(
+            event, GuidedState(snapshot=snapshot), ())
+        baseline = captured.pop()
+        descriptions = json.loads(_json(baseline))
+        for tool in descriptions['tools']:
+            name = tool['function']['name']
+            tool['function']['description'] = DESCRIPTIONS.get(name, 'Pedir una aclaración sin aplicar cambios.')
+        await OllamaShoppingAgent(transport=httpx.MockTransport(capture)).run(event, Tools(event, snapshot))
+        original = captured.pop()
+        for arm, request in (('guided-baseline', baseline), ('guided-descriptions', descriptions),
+                             ('original-agent', original)):
+            requests.append((text, arm, _json(request).encode()))
+    with OUT.open('x', encoding='utf-8', newline='\n') as output:
+        output.write(_json({'type': 'manifest', 'version': 1,
+            'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            'inputs': INPUTS, 'arms': ['guided-baseline', 'guided-descriptions', 'original-agent'],
+            'hypothesis': 'Missing function descriptions prevent reliable native emission; descriptions-only arm changes no schema, prompt, input or resource.',
+            'native_only': True, 'calls_per_input_arm': 1}) + '\n')
+        async with httpx.AsyncClient(base_url='http://127.0.0.1:11434', trust_env=False,
+                                     follow_redirects=False, timeout=120) as client:
+            tags = await client.get('/api/tags')
+            tags.raise_for_status()
+            output.write(_json({'type': 'tags', 'response': tags.text,
+                'response_base64': base64.b64encode(tags.content).decode()}) + '\n')
+            output.flush()
+            for text, arm, request in requests:
+                response = await client.post('/api/chat', content=request,
+                                             headers={'Content-Type': 'application/json'})
+                record = {'type': 'call', 'input': text, 'arm': arm, 'status': response.status_code,
+                    'request': request.decode(), 'request_base64': base64.b64encode(request).decode(),
+                    'request_sha256': hashlib.sha256(request).hexdigest(),
+                    'response': response.text, 'response_base64': base64.b64encode(response.content).decode(),
+                    'response_sha256': hashlib.sha256(response.content).hexdigest()}
+                try:
+                    _, calls = _assistant(response.json())
+                    record['native_tools'] = [c.model_dump(mode='json') for c in calls]
+                except ValueError as exc:
+                    record['envelope_error'] = str(exc)
+                output.write(_json(record) + '\n')
+                output.flush()
+                print(text, arm, record.get('native_tools', record.get('envelope_error')))
+
+
+if __name__ == '__main__':
+    asyncio.run(main())

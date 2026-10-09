@@ -9,9 +9,10 @@ from dialogue_requests import known_greeting
 from domain import IncomingCallback, IncomingEvent, Reply
 from interpreter import parse_command, purchase_authorized
 from shopping_agent.contracts import ToolCall
-from shopping_agent.guided_contracts import ChangeCandidate, ReadCandidate, TopicCandidate
+from shopping_agent.guided_contracts import ReadCandidate
 from shopping_agent.guided_controller import resolve_text_choice
 from shopping_agent.guided_ollama import GuidedOllamaAgent
+from shopping_agent.guided_storage import RESET_REQUIRED
 from shopping_agent.tools import AgentTools
 from storage import Repository
 
@@ -36,6 +37,14 @@ class GuidedConversation:
         prepared = self.repo.prepared_presentation(event.update_id)
         if prepared is not None:
             return await self.legacy._present(prepared)
+        if canonical_name(event.text) == 'cancelar':
+            return self.repo.apply_guided(event.update_id, None,
+                                          expected_question_version=None, now=now)
+        # Queries and genuine slash commands retain their deterministic route;
+        # free text cannot silently resurrect any expired guided or legacy recipient.
+        if (not event.text.strip().startswith('/') and not purchase_authorized(event.text)
+                and self.repo.guided_reset_required(event.update_id, now=now)):
+            return self.repo.complete_agent_reply(event.update_id, Reply(text=RESET_REQUIRED))
         self.repo.set_conversation_route(event.user_id, event.chat_id, 'agent', now=now)
         if event.text.strip().startswith('/') or purchase_authorized(event.text):
             command = parse_command(event.text, self.repo.list_lines())
@@ -66,6 +75,7 @@ class GuidedConversation:
             return self.repo.complete_agent_reply(event.update_id,
                 Reply(text='No puedo validar el contexto anterior. Aclara la petición; no se ha cambiado el borrador.'))
         result = await self.agent.interpret(event, state, history)
+        now = self.clock()  # Inference can outlive the durable question/proposal.
         answer = result.answer  # Inert failures remain the actual clarify candidate.
         if isinstance(answer, ReadCandidate):
             tools = AgentTools(self.repo, event, now=now)
@@ -73,9 +83,5 @@ class GuidedConversation:
                             arguments={} if answer.kind == 'list' else {'query': answer.query})
             call, = tools.validate_calls((call,))
             return self.repo.complete_agent_reply(event.update_id, tools.execute(call).reply)
-        if (isinstance(answer, (TopicCandidate, ChangeCandidate)) and state.snapshot.proposal is not None
-                and now >= state.snapshot.proposal.expires_at):
-            self.repo.revoke_guided(event.user_id, now=now)
-            version = None
         return self.repo.apply_guided(event.update_id, answer,
                                       expected_question_version=version, now=now)

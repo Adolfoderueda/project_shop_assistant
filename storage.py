@@ -4,6 +4,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from importlib.resources import files
 from pathlib import Path
 from uuid import uuid4
 
@@ -83,7 +84,7 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
             # statements ourselves so DDL, data and user_version roll back together.
             db.execute("BEGIN IMMEDIATE")
             for target in range(version + 1, 11):
-                script = (Path(__file__).parent / f"migrations/{target:03}.sql").read_text()
+                script = files('migrations').joinpath(f'{target:03}.sql').read_text(encoding='utf-8')
                 statement = ''
                 for line in script.splitlines(keepends=True):
                     statement += line
@@ -189,7 +190,6 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
 
     def _assert_guided_owner(self, db, user_id):
         from shopping_agent.guided_contracts import GuidedQuestion, PendingTopic
-        from shopping_agent.guided_replies import render_question
 
         try:
             for row in db.execute('SELECT * FROM inbox'):
@@ -220,8 +220,7 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
                         if (notice is None or notice['chat_id'] != user_id
                                 or notice['update_id'] != state.source_update_id
                                 or notice['reply_json'] != source['reply_json']
-                                or Reply.model_validate_json(notice['reply_json']).text
-                                != render_question(state).text):
+                                or self._guided_question_row(db, row) != state):
                             raise ValueError('Question notice mismatch')
                         questions[(row['id'], row['version'])] = (state, row['notice_id'])
                     else:

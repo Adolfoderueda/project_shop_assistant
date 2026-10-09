@@ -160,7 +160,8 @@ def next_question(state: GuidedState, event: IncomingEvent, *, now: datetime) ->
 
 
 def resolve_text_choice(message: IncomingMessage, question: GuidedQuestion) -> ResolvedChoice | None:
-    if question.status != 'active' or (message.user_id, message.chat_id) != (question.owner_id, question.chat_id):
+    if (question.status != 'active' or not review_fits(render_question(question))
+            or (message.user_id, message.chat_id) != (question.owner_id, question.chat_id)):
         return None
     clean = canonical_name(message.text)
     # Offered data wins over control words (a product may literally be called «no»).
@@ -196,6 +197,9 @@ def _decision(state, reason='pending', *, text=None, mutations=()):
             reply = Reply(text=REASONS.get(reason, 'Pendiente, sin guardar.'))
     else:
         reply = Reply(text=text)
+    if state.question and not review_fits(render_question(state.question)):
+        reply = Reply(text=TOO_LONG)
+        reason = 'too_long'
     return GuidedDecision(state=state, reply=reply, reason=reason, mutations=mutations)
 
 
@@ -327,6 +331,10 @@ def _live(state, event, now):
 def reduce_guided(state: GuidedState, event: IncomingEvent,
                   answer: GuidedAnswer | ResolvedChoice | None, *, now: datetime) -> GuidedDecision:
     utc(now)
+    if (isinstance(event, IncomingMessage) and canonical_name(event.text) == 'cancelar'
+            and (event.user_id, event.chat_id) == (state.snapshot.user_id, state.snapshot.chat_id)
+            and (answer is None or isinstance(answer, ControlCandidate) and answer.kind == 'cancel')):
+        return _decision(_state(state, proposal=None), 'cancelled')
     if not _live(state, event, now):
         expired = (state.snapshot.proposal and now >= state.snapshot.proposal.expires_at
                    or state.question and now >= state.question.expires_at)

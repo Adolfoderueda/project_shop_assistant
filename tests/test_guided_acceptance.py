@@ -93,6 +93,65 @@ def test_raw_invalid_envelope_cannot_be_laundered_as_validated_candidate():
     assert probe().verify_step(record, step)
 
 
+@pytest.mark.parametrize('damage', ['role', 'error', 'refusal', 'message_error', 'content'])
+def test_native_envelope_fields_are_independently_checked(damage):
+    import base64
+    import json
+    record, step = archived_step('shared', 3)
+    assert probe().verify_step(record, step) == []
+    call = record['http'][0]
+    response = json.loads(call['response'])
+    if damage == 'role':
+        response['message']['role'] = 'user'
+    elif damage in {'error', 'refusal'}:
+        response[damage] = 'forged'
+    elif damage == 'message_error':
+        response['message']['error'] = 'forged'
+    else:
+        response['message']['content'] = {'injected': 'data'}
+    call['response'] = json.dumps(response)
+    call['response_base64'] = base64.b64encode(call['response'].encode()).decode()
+    assert any('raw output invalid' in e for e in probe().verify_step(record, step))
+
+
+@pytest.mark.parametrize('response', [[], {'done': True, 'done_reason': 'stop', 'message': []}])
+def test_nonobject_native_envelope_fails_without_crashing(response):
+    import base64
+    import json
+    record, step = archived_step('shared', 3)
+    call = record['http'][0]
+    call['response'] = json.dumps(response)
+    call['response_base64'] = base64.b64encode(call['response'].encode()).decode()
+    assert probe().verify_step(record, step)
+
+
+def test_versioned_matrix_cli_does_not_reject_explicit_frozen_path(tmp_path):
+    invalid = tmp_path / 'invalid.jsonl'
+    invalid.write_text('{}\n', encoding='utf-8')
+    result = subprocess.run([sys.executable, '-P', str(ROOT / 'scripts/probe_guided_questions.py'),
+        '--matrix', str(EVIDENCE / 'matrix.json'), '--verify', str(invalid)],
+        capture_output=True, text=True, check=False)
+    assert result.returncode == 1
+    import json
+    assert json.loads(result.stdout)['errors']
+
+
+def test_new_runtime_manifest_never_uses_archive_hash_exemption():
+    module = probe()
+    manifest = {'script_hash': module.digest(ROOT / 'scripts/probe_guided_questions.py'),
+                'code_hashes': module.code_hashes()}
+    info, errors = module.verify_integrity(manifest, b'synthetic')
+    assert not errors and info['evaluation_scope'] == 'current execution source'
+    manifest['code_hashes']['storage.py'] = 'forged'
+    assert 'manifest mismatch: code_hashes' in module.verify_integrity(manifest, b'synthetic')[1]
+
+
+def test_reset_required_step_cannot_hide_native_inference():
+    record = copy.deepcopy(RECORD)
+    record['http'] = [{'request': '{}', 'response': '{}', 'status': 200}]
+    assert any('reset-required inference' in e for e in probe().verify_step(record, {**STEP, 'no_inference': True}))
+
+
 def test_complete_summary_digest_and_revision_cannot_be_forged():
     record = copy.deepcopy(RECORD)
     record['before']['question']['text'] = 'Truncated summary'

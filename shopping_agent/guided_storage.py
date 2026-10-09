@@ -6,6 +6,7 @@ from hashlib import sha256
 from uuid import uuid4
 
 from catalog import resolve_product
+from dialogue import canonical_name
 from domain import IncomingCallback, IncomingMessage, InlineButton, InlineKeyboard, Reply, utc
 from interpreter import diaper_reference, purchase_authorized
 from shopping_agent.contracts import AgentSnapshot, Contribution, GuidedProposal, Reservation
@@ -23,6 +24,11 @@ from shopping_agent.guided_contracts import (
 from shopping_agent.guided_controller import reduce_guided, resolve_text_choice
 from shopping_agent.guided_replies import render_question, render_review, review_fits
 from shopping_agent.proposals import prepare_proposal, revalidate_proposal
+from shopping_agent.replies import REASONS, TOO_LONG
+
+RESET_REQUIRED = 'La petición anterior ha caducado. Cancélala para iniciar una nueva.'
+CALLBACK_REJECTED = 'Pregunta anterior o entrega desconocida. Responde a la pregunta vigente.'
+CALLBACK_INACTIVE = 'Preguntas guiadas inactivas. Usa la conversación actual.'
 
 
 def _digest(text):
@@ -38,9 +44,12 @@ class GuidedRepository:
         source = self._agent_source(db, q.source_update_id)
         event = self._stored_event(source)
         notice = self._delivery_notice(db, row['notice_id'], q.chat_id, 1, 'validation')
+        reply = Reply.model_validate_json(notice['reply_json'])
+        full = render_question(q)
         if ((event.user_id, event.chat_id) != (q.owner_id, q.chat_id)
                 or notice['update_id'] != q.source_update_id
-                or Reply.model_validate_json(notice['reply_json']).text != render_question(q).text):
+                or reply.text != (full.text if review_fits(full) else TOO_LONG)
+                or not review_fits(full) and reply.keyboard is not None):
             raise ValueError('Question source/notice mismatch')
         return q
 
@@ -153,8 +162,9 @@ class GuidedRepository:
             if q is not None:
                 tokens = db.execute('SELECT * FROM guided_tokens WHERE question_id=? AND question_version=?',
                                     (str(q.id), q.version)).fetchall()
-                if (len(tokens) != len(q.choices)
-                        or {t['choice_index'] for t in tokens} != set(range(len(q.choices)))):
+                offered = review_fits(render_question(q))
+                if (len(tokens) != (len(q.choices) if offered else 0)
+                        or offered and {t['choice_index'] for t in tokens} != set(range(len(q.choices)))):
                     raise ValueError('Question choice set mismatch')
                 for token in tokens:
                     self._guided_token_row(db, token)
@@ -187,6 +197,20 @@ class GuidedRepository:
             db.execute('BEGIN')
             return self._guided_state(db, self._agent_source(db, update_id), now=now)
 
+    def _guided_reset_required(self, db, source, now):
+        state = self._guided_state(db, source, now=now)
+        legacy = self._read_dialogue_state(db, source['user_id'], source['chat_id'])
+        return bool(state.snapshot.proposal and now >= state.snapshot.proposal.expires_at
+            or state.question and now >= state.question.expires_at
+            or state.topic and now >= state.topic.expires_at
+            or legacy and now >= legacy.expires_at)
+
+    def guided_reset_required(self, update_id: int, *, now: datetime) -> bool:
+        utc(now)
+        with self._connection() as db:
+            db.execute('BEGIN')
+            return self._guided_reset_required(db, self._agent_source(db, update_id), now)
+
     def apply_guided(self, update_id: int, answer: GuidedAnswer | ResolvedChoice | None, *,
                      expected_question_version: int | None, now: datetime) -> Reply:
         utc(now)
@@ -205,6 +229,17 @@ class GuidedRepository:
                 return Reply.model_validate_json(source['reply_json'])
             if event.text.strip().startswith('/') or purchase_authorized(event.text):
                 raise ValueError('Deterministic commands cannot enter guided mutation')
+            if canonical_name(event.text) == 'cancelar':
+                # Independently authenticated application reset, including expired
+                # legacy/v1 recipients. The durable event/reply defines the history boundary.
+                self._revoke_guided(db, event.user_id)
+                key = (event.user_id, event.chat_id)
+                db.execute('DELETE FROM agent_proposals WHERE user_id=? AND chat_id=?', key)
+                db.execute('DELETE FROM dialogue_state WHERE user_id=? AND chat_id=?', key)
+                db.execute('UPDATE conversation_routes SET command_update_id=NULL WHERE user_id=? AND chat_id=?', key)
+                return self._complete_reply(db, source, Reply(text=REASONS['cancelled']))
+            if self._guided_reset_required(db, source, now):
+                return self._complete_reply(db, source, Reply(text=RESET_REQUIRED))
             state = self._guided_state(db, source, now=now)
             version = state.question.version if state.question else None
             if version != expected_question_version:
@@ -273,8 +308,7 @@ class GuidedRepository:
                         or state.snapshot.proposal is None or now >= state.snapshot.proposal.expires_at):
                     raise ValueError('Old question')
             except (ValueError, KeyError, TypeError):
-                return self._complete_reply(db, source, Reply(text='Pregunta anterior o entrega desconocida. '
-                    'Responde a la pregunta vigente.'))
+                return self._complete_reply(db, source, Reply(text=CALLBACK_REJECTED))
             if resend is not None:
                 return self._commit_guided(db, source, state, resend, now=now)
             answer = ResolvedChoice(question_id=q.id, question_version=q.version,
@@ -300,6 +334,9 @@ class GuidedRepository:
         state = decision.state
         proposal, q = state.snapshot.proposal, state.question
         reply = decision.reply
+        if q is not None and not review_fits(render_question(q)):
+            # Persist every question/candidate fact, but do not offer undeliverable choices.
+            reply = Reply(text=TOO_LONG)
         if (decision.reason != 'read' and q is not None and q == previous.question
                 and q.status == 'active' and now < q.expires_at
                 and reply.text == render_question(q).text):
@@ -346,11 +383,11 @@ class GuidedRepository:
             db.execute('UPDATE guided_questions SET question_json=? WHERE id=? AND version=?',
                        (old.model_dump_json(), str(old.id), old.version))
         if q is not None and changed_question and proposal is not None and q.status == 'active':
-            if buttons is None:
+            if buttons is None and review_fits(render_question(q)):
                 raise ValueError('New question requires its full notice')
             db.execute('INSERT INTO guided_questions VALUES (?,?,?,?,?,?,?)',
                 (str(q.id), q.version, q.owner_id, q.chat_id, q.source_update_id, notice_id, q.model_dump_json()))
-            for i, button in enumerate(buttons):
+            for i, button in enumerate(buttons or ()):
                 db.execute('INSERT INTO guided_tokens VALUES (?,?,?,?,?,?,?,NULL,NULL)',
                     (button.token, q.owner_id, q.chat_id, str(q.id), q.version, i, notice_id))
             if isinstance(proposal, GuidedProposal) and proposal.review:
@@ -391,16 +428,40 @@ class GuidedRepository:
         with self._connection() as db:
             db.execute('BEGIN')
             rows = db.execute('SELECT * FROM inbox WHERE user_id=? AND chat_id=? AND completed=1 '
-                              'ORDER BY update_id DESC LIMIT 3', (user_id, chat_id)).fetchall()
-            history = []
-            for source in reversed(rows):
+                              'ORDER BY update_id DESC', (user_id, chat_id))
+            pairs = []
+            for source in rows:
                 event = self._stored_event(source)
                 reply = Reply.model_validate_json(source['reply_json'])
                 if not self._committed_reply_matches(db, source, reply):
                     raise ValueError('History lacks committed reply')
                 if isinstance(event, IncomingCallback):
                     token = db.execute('SELECT * FROM guided_tokens WHERE token=?', (event.data,)).fetchone()
-                    q = self._guided_token_row(db, token)
+                    # Validate existing token provenance BEFORE classifying an outcome.
+                    # A corrupt successful choice is not a legitimate rejection.
+                    q = self._guided_token_row(db, token) if token is not None else None
+                    if reply == Reply(text=CALLBACK_REJECTED) or reply == Reply(text=CALLBACK_INACTIVE):
+                        if token is not None and token['consumed_update_id'] == event.update_id:
+                            raise ValueError('History rejection consumed a choice')
+                        continue
+                    if token is not None and token['consumed_update_id'] is None:
+                        offer = db.execute('SELECT * FROM guided_questions WHERE source_update_id=?',
+                                           (event.update_id,)).fetchone()
+                        if offer is not None:
+                            offered = self._guided_question_row(db, offer)
+                            fields = {'id', 'version', 'source_update_id', 'created_at', 'status'}
+                            if (offered.version == q.version + 1
+                                    and offered.model_dump(exclude=fields) == q.model_dump(exclude=fields)
+                                    and (event.user_id, event.chat_id) == (q.owner_id, q.chat_id)):
+                                offered_tokens = db.execute('SELECT * FROM guided_tokens WHERE question_id=?',
+                                                            (str(offered.id),)).fetchall()
+                                if {t['choice_index'] for t in offered_tokens} != set(range(len(offered.choices))):
+                                    raise ValueError('History reoffer lacks full choice set')
+                                for t in offered_tokens:
+                                    self._guided_token_row(db, t)
+                                continue  # Validated reoffer, not a selected answer.
+                    if q is None:
+                        raise ValueError('History callback lacks offered choice')
                     if ((q.owner_id, q.chat_id) != (user_id, chat_id)
                             or token['consumed_update_id'] is None
                             or not self._guided_receipt(db, token, event, q)
@@ -409,8 +470,17 @@ class GuidedRepository:
                     text = q.choices[token['choice_index']].label
                 else:
                     text = event.text
-                history.extend(({'role': 'user', 'content': text}, {'role': 'assistant', 'content': reply.text}))
-            return tuple(history)
+                    if canonical_name(text) == 'cancelar' and reply == Reply(text=REASONS['cancelled']):
+                        break  # Audit survives; expired recipients cannot cross this real reset.
+                    if text.strip().startswith('/'):
+                        from interpreter import parse_command
+                        command = parse_command(text, self._lines(db))
+                        if command is not None and command.action not in {'list', 'fiche', 'status'}:
+                            break  # A genuine deterministic fresh command starts a new segment.
+                pairs.append(({'role': 'user', 'content': text}, {'role': 'assistant', 'content': reply.text}))
+                if len(pairs) == 3:
+                    break
+            return tuple(entry for pair in reversed(pairs) for entry in pair)
 
     def revoke_guided(self, user_id: int, *, now: datetime) -> None:
         utc(now)

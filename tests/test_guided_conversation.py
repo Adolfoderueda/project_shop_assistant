@@ -149,13 +149,20 @@ def test_model_failure_and_invalid_history_are_inert(guided_session, monkeypatch
     assert s.saved() == []
 
 
-def test_expired_lista_and_new_request_do_not_reuse_old_permission(guided_session):
+def test_expired_lista_requires_explicit_reset_before_new_request(guided_session):
     s = guided_session
     s.propose(['huevos', 'carne', 'atun'])
     old = s.state().question
     s.now += timedelta(minutes=16)
     s.send('/lista')
     assert s.state().question == old
+    calls = len(s.calls)
+    reply = s.send('leche')
+    assert 'Cancélala' in reply.text
+    assert len(s.calls) == calls
+    s.send('Cancelar')
+    assert s.state().snapshot.proposal is None
+    assert s.repo.guided_history(7, 7) == ()
     s.new_topic('leche')
     assert s.pending_names() == ['leche']
     assert s.state().question.id != old.id

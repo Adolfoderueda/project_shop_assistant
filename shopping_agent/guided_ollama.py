@@ -26,6 +26,7 @@ from shopping_agent.ollama import (
     _assistant,
     _json,
 )
+from shopping_agent.skills import load_skills
 
 SYSTEM = """Interpreta la petición con una sola herramienta nativa, sin prosa.
 Solo propones datos: la aplicación controla identidad, alcance, preguntas y guardado.
@@ -213,7 +214,7 @@ class GuidedOllamaAgent:
             return finish('invalid')
         try:
             contracts, definitions = _definitions(state)
-            messages = [{'role': 'system', 'content': SYSTEM}, *_pairs(history),
+            messages = [{'role': 'system', 'content': SYSTEM + '\n\n' + load_skills()}, *_pairs(history),
                         {'role': 'user', 'content': event.text},
                         {'role': 'user', 'content': _json({
                             'untrusted_data': True, 'context': _context(state)})}]

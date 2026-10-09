@@ -54,6 +54,11 @@ controla preguntas persistentes, alcance, tema adicional y confirmación del res
 íntegro entregado. Seleccionar producto/grupo o añadir un tema **no guarda**. Consultas
 conservan el borrador; duplicados no se suman y cantidades desconocidas no son cero.
 Texto libre sigue disponible, pero un fallback no demuestra comprensión de E4B.
+Tras caducar una petición (también legacy), el texto libre requiere primero `Cancelar`
+o una nueva orden slash explícita. El reset conserva las líneas guardadas y el audit,
+pero excluye los destinatarios caducados del contexto de inferencia siguiente. Es un
+turno adicional deliberado; la comodidad anterior de reiniciar con «leche una» falla
+las expectativas originales y no se presenta como aceptación.
 
 La [matriz y evidencia sintética](docs/superpowers/evidence/2026-10-09-preguntas-guiadas/results.md)
 mantiene la aceptación bloqueada. No activar ni reiniciar Telegram con este candidato.
@@ -71,10 +76,15 @@ $env:PYTHONPATH=(Get-Location).Path
 Cada salida es inmutable; elegir una ruta nueva. `--verify` no llama al modelo y
 devuelve nonzero si faltan pasos, hay fallos, cambian hashes o expectativas no coinciden.
 Botones simulados/etiquetas ofrecidas no cuentan como comprensión del modelo.
-El verificador v3 revalida la evidencia v2 inmutable contra su commit Git archivado y
+El verificador v4 revalida la evidencia v2 inmutable contra su commit Git archivado y
 `archive-v2.json` (bytes/fin de línea exactos), separando el intérprete ejecutado del
 verificador actual. Requiere esos objetos Git locales; no descarga nada ni exime hashes
 de código. Revalidar historia no demuestra aceptación del runtime actual.
+La evaluación nueva usa `--matrix docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v3.json`
+tanto al ejecutar como al verificar. Sus resultados y diagnóstico nativo se registran
+por separado en [la ronda final](docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v3.md).
+Las migraciones SQL se declaran recursos del paquete `migrations`; sin backend de
+build instalado, la comprobación de un wheel realmente instalado sigue bloqueada.
 
 Para administración futura autorizada: `python -m shop_assistant questions-local status`
 no cambia permisos; `enable|disable` requiere el lock del worker detenido. Rollback:

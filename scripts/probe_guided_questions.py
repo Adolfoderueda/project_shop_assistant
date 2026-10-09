@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / 'docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix.json'
 TEMP = Path('C:/Users/Takeshi/AppData/Local/Temp/opencode')
-VERIFIER_VERSION = 3
+VERIFIER_VERSION = 4
 ARCHIVE_COMMIT = '6bf409ceed110104f3aa1e1fb6e75ad311dd27ca'
 ARCHIVE_PROBE = '5496d090e75e06e4b524dced7866a1d27bfd146c432e887f6455ab9fd5683278'
 ARCHIVE_HASHES = {
@@ -293,6 +293,8 @@ def verify_step(record, step):
         if step.get('reply_contains', '').casefold() not in record['reply']['text'].casefold():
             errors.append('quality:missing query response')
         results = record['model_results']
+        if step.get('no_inference') and (results or record['http']):
+            errors.append('security:reset-required inference was executed')
         if step.get('tool') and not step.get('allow_fallback'):
             if len(results) != 1 or results[0]['reason'] != 'candidate':
                 errors.append('quality:required interpretation fell back or was not executed')
@@ -367,11 +369,14 @@ def verify_step(record, step):
             # fabricated application validation record labels it a valid candidate.
             if index < len(results) and results[index]['reason'] == 'candidate':
                 response = json.loads(call['response'], object_pairs_hook=unique_json_object)
-                native = response.get('message', {})
-                tools = native.get('tool_calls', [])
-                if (call['status'] != 200 or response.get('done') is not True
-                        or response.get('done_reason') != 'stop' or native.get('refusal')
-                        or len(tools) != 1):
+                native = response.get('message', {}) if type(response) is dict else None
+                tools = native.get('tool_calls', []) if type(native) is dict else None
+                if (call['status'] != 200 or type(response) is not dict or response.get('done') is not True
+                        or response.get('done_reason') != 'stop' or response.get('error') or response.get('refusal')
+                        or type(native) is not dict or native.get('role') != 'assistant'
+                        or native.get('refusal') or native.get('error')
+                        or type(native.get('content', '')) is not str
+                        or type(tools) is not list or len(tools) != 1):
                     errors.append('quality:raw output invalid despite candidate validation')
                 else:
                     function = tools[0]['function']
@@ -753,12 +758,15 @@ async def run_probe(mode, output):
 
 
 def main(argv=None):
+    global MATRIX
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode', choices=['offline', 'real'], default='offline')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--repetitions', type=int, choices=[3], default=3)
     parser.add_argument('--verify', type=Path)
+    parser.add_argument('--matrix', type=Path, default=MATRIX)
     args = parser.parse_args(argv)
+    MATRIX = args.matrix.resolve()
     sys.addaudithook(prohibit_private)
     if args.verify:
         result = verify_file(args.verify)

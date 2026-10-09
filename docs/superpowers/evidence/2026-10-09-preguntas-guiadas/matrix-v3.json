@@ -1,0 +1,2677 @@
+{
+  "version": 3,
+  "model": "gemma4:e4b-it-q4_K_M",
+  "parameters": {
+    "temperature": 0,
+    "think": false,
+    "num_ctx": 8192,
+    "num_predict": 512,
+    "context_bytes": 24000,
+    "model_calls": 4,
+    "tool_calls": 8
+  },
+  "repetitions": 3,
+  "note": "Frozen synthetic expectations; tools are offline HTTP fixtures only, never real-mode responses. button and offered-text selections are not language-understanding passes. q=null means no active proposal question. saved is the complete ordered description/quantity projection. Version3 adds explicit-reset security scenarios only; all original v2 cases and expectations remain unchanged, including incompatible same-turn expiry convenience.",
+  "cases": [
+    {
+      "id": "one-each",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos, carne y atun",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                },
+                {
+                  "description": "carne"
+                },
+                {
+                  "description": "atun"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "names": [
+              "huevos",
+              "carne",
+              "atun"
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "one_each",
+          "text": "Uno de cada",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1,
+              1,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                1
+              ],
+              [
+                "carne",
+                1
+              ],
+              [
+                "atun",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "replay": true,
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                1
+              ],
+              [
+                "carne",
+                1
+              ],
+              [
+                "atun",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "shared",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos, carne y atun",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                },
+                {
+                  "description": "carne"
+                },
+                {
+                  "description": "atun"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "same_quantity",
+          "text": "Misma cantidad",
+          "expect": {
+            "q": "quantity_shared",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 2
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2,
+              2,
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                2
+              ],
+              [
+                "carne",
+                2
+              ],
+              [
+                "atun",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "partial-reordered",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "atun dos, huevos uno y carne",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "atun",
+                  "quantity": 2
+                },
+                {
+                  "description": "huevos",
+                  "quantity": 1
+                },
+                {
+                  "description": "carne"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "names": [
+              "atun",
+              "huevos",
+              "carne"
+            ],
+            "quantities": [
+              2,
+              1,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "tres",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 3
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2,
+              1,
+              3
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "atun",
+                2
+              ],
+              [
+                "huevos",
+                1
+              ],
+              [
+                "carne",
+                3
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "different-partial",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos y carne",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                },
+                {
+                  "description": "carne"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "different_quantities",
+          "text": "Cantidades diferentes",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 2
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              2,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "uno",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 1
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                2
+              ],
+              [
+                "carne",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "query-then-answer",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "carne",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "carne"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "qué lista tengo",
+          "tool": [
+            "consultar_lista",
+            {}
+          ],
+          "preserve": true,
+          "reply_contains": "lista",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "ficha leche",
+          "tool": [
+            "consultar_ficha",
+            {
+              "query": "leche"
+            }
+          ],
+          "preserve": true,
+          "reply_contains": "históricas",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 2
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "/lista",
+          "preserve": true,
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "carne",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "topic-no-then-append",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "leche",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "leche"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "topic",
+            "quantities": [
+              null
+            ],
+            "topic": [
+              "leche"
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "keep_topic",
+          "text": "no",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null
+            ],
+            "topic": [],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 2
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "leche una",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "leche",
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "topic",
+            "quantities": [
+              2
+            ],
+            "topic": [
+              "leche"
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "append_topic",
+          "text": "sí",
+          "expect": {
+            "q": "review",
+            "names": [
+              "huevos",
+              "leche"
+            ],
+            "quantities": [
+              2,
+              1
+            ],
+            "topic": [],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                2
+              ],
+              [
+                "leche",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "correction-mixed-final",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos uno y carne uno",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos",
+                  "quantity": 1
+                },
+                {
+                  "description": "carne",
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "sí, pero carne dos",
+          "tool": [
+            "proponer_asignaciones",
+            {
+              "patches": [
+                {
+                  "position": 2,
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              1,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_scope",
+          "positions": [
+            2
+          ],
+          "text": "carne",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1,
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "correct",
+          "text": "Corregir",
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              1,
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_scope",
+          "positions": [
+            1
+          ],
+          "text": "huevos",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              1,
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "tres",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 3
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              3,
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                3
+              ],
+              [
+                "carne",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "replay": true,
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                3
+              ],
+              [
+                "carne",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "internal-duplicates",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "leche una y leche una",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "leche",
+                  "quantity": 1
+                },
+                {
+                  "description": "leche",
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "duplicate",
+            "quantities": [
+              1,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "separate",
+          "text": "Añadir otra línea",
+          "expect": {
+            "q": "duplicate",
+            "quantities": [
+              1,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "separate",
+          "text": "Añadir otra línea",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "leche",
+                1
+              ],
+              [
+                "leche",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "condition-unit",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "pañales dos si oferta",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "pañales",
+                  "quantity": 2
+                }
+              ],
+              "condition": "si oferta"
+            }
+          ],
+          "expect": {
+            "q": "condition",
+            "quantities": [
+              2
+            ],
+            "condition": "si oferta",
+            "saved": []
+          }
+        },
+        {
+          "choice": "remove_condition",
+          "text": "Retirar condición",
+          "expect": {
+            "q": "unit",
+            "quantities": [
+              2
+            ],
+            "condition": null,
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_unit",
+          "unit": "paquetes",
+          "text": "paquetes",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "units": [
+              "paquetes"
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "pañales",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "cancel",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "carne dos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "carne",
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "cancel",
+          "text": "Cancelar",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-selection",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos y carne",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                },
+                {
+                  "description": "carne"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "uno",
+          "tool": [
+            "proponer_asignaciones",
+            {
+              "patches": [
+                {
+                  "position": 1,
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "ambiguous": true,
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_scope",
+          "positions": [
+            2
+          ],
+          "text": "carne",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 2
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                2
+              ],
+              [
+                "carne",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "delivery-unknown",
+      "group": "security",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "carne dos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "carne",
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "deliver": false,
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "unknown_delivery": true,
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "carne",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "expired-guided",
+      "group": "security",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "carne dos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "carne",
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "advance_seconds": 960,
+          "text": "/lista",
+          "preserve": true,
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "leche una",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "leche",
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "names": [
+              "leche"
+            ],
+            "quantities": [
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "leche",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "legacy-expired",
+      "group": "security",
+      "paths": [
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "/anadir arroz",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": []
+          }
+        },
+        {
+          "advance_seconds": 960,
+          "text": "2",
+          "tool": [
+            "pedir_aclaracion",
+            {}
+          ],
+          "allow_fallback": true,
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": []
+          }
+        },
+        {
+          "text": "carne dos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "carne",
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "sí",
+          "choice": "confirm",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "carne",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "unknown-base",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "seed": [
+        [
+          "leche",
+          null
+        ]
+      ],
+      "steps": [
+        {
+          "text": "añade tres más de leche",
+          "tool": [
+            "proponer_cambio",
+            {
+              "kind": "increment",
+              "query": "leche",
+              "quantity": 3
+            }
+          ],
+          "expect": {
+            "q": "duplicate",
+            "quantities": [
+              null
+            ],
+            "saved": [
+              [
+                "leche",
+                null
+              ]
+            ],
+            "base": [
+              null
+            ],
+            "additional": [
+              3
+            ]
+          }
+        },
+        {
+          "choice": "set_total",
+          "text": "Cambiar cantidad total",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null
+            ],
+            "saved": [
+              [
+                "leche",
+                null
+              ]
+            ]
+          }
+        },
+        {
+          "text": "cinco",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 5
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              5
+            ],
+            "saved": [
+              [
+                "leche",
+                null
+              ]
+            ]
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "leche",
+                5
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "increment",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "seed": [
+        [
+          "leche",
+          2
+        ]
+      ],
+      "steps": [
+        {
+          "text": "añade tres más de leche",
+          "tool": [
+            "proponer_cambio",
+            {
+              "kind": "increment",
+              "query": "leche",
+              "quantity": 3
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              5
+            ],
+            "saved": [
+              [
+                "leche",
+                2
+              ]
+            ],
+            "base": [
+              2
+            ],
+            "additional": [
+              3
+            ]
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "leche",
+                5
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "reservation",
+      "group": "security",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "seed": [
+        [
+          "leche",
+          2
+        ],
+        [
+          "leche",
+          4
+        ]
+      ],
+      "reserve_seed": [
+        0
+      ],
+      "steps": [
+        {
+          "text": "añade tres más de leche",
+          "tool": [
+            "proponer_cambio",
+            {
+              "kind": "increment",
+              "query": "leche",
+              "quantity": 3
+            }
+          ],
+          "expect": {
+            "q": "source_line",
+            "quantities": [
+              null
+            ],
+            "saved": [
+              [
+                "leche",
+                2
+              ],
+              [
+                "leche",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "choice": "choose_line",
+          "text_from_choice": true,
+          "expect": {
+            "q": "review",
+            "quantities": [
+              7
+            ],
+            "base": [
+              4
+            ],
+            "additional": [
+              3
+            ],
+            "saved": [
+              [
+                "leche",
+                2
+              ],
+              [
+                "leche",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "leche",
+                2
+              ],
+              [
+                "leche",
+                7
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Los-3-es-uno",
+      "group": "general-free",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos, carne y atun",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                },
+                {
+                  "description": "carne"
+                },
+                {
+                  "description": "atun"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "Los 3 es uno de cantidad",
+          "tool": [
+            "proponer_asignaciones",
+            {
+              "patches": [
+                {
+                  "position": 1,
+                  "quantity": 1
+                },
+                {
+                  "position": 2,
+                  "quantity": 1
+                },
+                {
+                  "position": 3,
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_scope",
+          "positions": [
+            1,
+            2,
+            3
+          ],
+          "text": "Todos",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1,
+              1,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                1
+              ],
+              [
+                "carne",
+                1
+              ],
+              [
+                "atun",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Uno-de-cada-uno",
+      "group": "general-free",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos, carne y atun",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                },
+                {
+                  "description": "carne"
+                },
+                {
+                  "description": "atun"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "Uno de cada uno",
+          "tool": [
+            "proponer_asignaciones",
+            {
+              "patches": [
+                {
+                  "position": 1,
+                  "quantity": 1
+                },
+                {
+                  "position": 2,
+                  "quantity": 1
+                },
+                {
+                  "position": 3,
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_scope",
+          "positions": [
+            1,
+            2,
+            3
+          ],
+          "text": "Todos",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1,
+              1,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                1
+              ],
+              [
+                "carne",
+                1
+              ],
+              [
+                "atun",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "saved-query-duplicate",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "seed": [
+        [
+          "huevos",
+          1
+        ]
+      ],
+      "steps": [
+        {
+          "text": "huevos dos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos",
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "duplicate",
+            "quantities": [
+              2
+            ],
+            "saved": [
+              [
+                "huevos",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "text": "qué lista tengo",
+          "tool": [
+            "consultar_lista",
+            {}
+          ],
+          "preserve": true,
+          "reply_contains": "huevos",
+          "expect": {
+            "q": "duplicate",
+            "quantities": [
+              2
+            ],
+            "saved": [
+              [
+                "huevos",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "choice": "separate",
+          "text": "Añadir otra línea",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": [
+              [
+                "huevos",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                1
+              ],
+              [
+                "huevos",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "query-plus-answer",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "carne",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "carne"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "qué lista tengo y carne dos",
+          "tool": [
+            "consultar_lista",
+            {}
+          ],
+          "preserve": true,
+          "reply_contains": "lista",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 2
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "carne",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "unknown-unit",
+      "group": "security",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "pañales dos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "pañales",
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "unit",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "kg",
+          "tool": [
+            "proponer_asignaciones",
+            {
+              "patches": [
+                {
+                  "position": 1,
+                  "unit": "kg"
+                }
+              ]
+            }
+          ],
+          "allow_fallback": true,
+          "expect": {
+            "q": "unit",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_unit",
+          "unit": "envases",
+          "text": "envases",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "units": [
+              "envases"
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "pañales",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "second-topic",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "carne una",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "carne",
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "leche",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "leche"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "topic",
+            "quantities": [
+              1
+            ],
+            "topic": [
+              "leche"
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "arroz dos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "arroz",
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "topic",
+            "quantities": [
+              1
+            ],
+            "topic": [
+              "leche"
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "keep_topic",
+          "text": "no",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1
+            ],
+            "topic": [],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "carne",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "replacement",
+      "group": "bounded",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "seed": [
+        [
+          "leche",
+          2
+        ]
+      ],
+      "steps": [
+        {
+          "text": "sustituye leche por arroz tres",
+          "tool": [
+            "proponer_cambio",
+            {
+              "kind": "replace",
+              "query": "leche",
+              "replacement": "arroz",
+              "quantity": 3
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              3
+            ],
+            "saved": [
+              [
+                "leche",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "arroz",
+                3
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "reordered-answer",
+      "group": "general-free",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos, carne y atun",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                },
+                {
+                  "description": "carne"
+                },
+                {
+                  "description": "atun"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "atun dos, huevos tres y carne uno",
+          "tool": [
+            "proponer_asignaciones",
+            {
+              "patches": [
+                {
+                  "position": 3,
+                  "quantity": 2
+                },
+                {
+                  "position": 1,
+                  "quantity": 3
+                },
+                {
+                  "position": 2,
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_scope",
+          "positions": [
+            1,
+            2,
+            3
+          ],
+          "text": "Todos",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "tres",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 3
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              3,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "uno",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 1
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              3,
+              1,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 2
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              3,
+              1,
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                3
+              ],
+              [
+                "carne",
+                1
+              ],
+              [
+                "atun",
+                2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "dos-carne-resto",
+      "group": "general-free",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "huevos, carne y atun",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "huevos"
+                },
+                {
+                  "description": "carne"
+                },
+                {
+                  "description": "atun"
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos de carne y uno del resto",
+          "tool": [
+            "proponer_asignaciones",
+            {
+              "patches": [
+                {
+                  "position": 1,
+                  "quantity": 1
+                },
+                {
+                  "position": 2,
+                  "quantity": 2
+                },
+                {
+                  "position": 3,
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "scope",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "choose_scope",
+          "positions": [
+            1,
+            2,
+            3
+          ],
+          "text": "Todos",
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              null,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "uno",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 1
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              1,
+              null,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "dos",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 2
+            }
+          ],
+          "expect": {
+            "q": "quantity_single",
+            "quantities": [
+              1,
+              2,
+              null
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "uno",
+          "tool": [
+            "responder_cantidad",
+            {
+              "quantity": 1
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              1,
+              2,
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "huevos",
+                1
+              ],
+              [
+                "carne",
+                2
+              ],
+              [
+                "atun",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "explicit-reset-guided",
+      "group": "security",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "carne dos",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "carne",
+                  "quantity": 2
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "advance_seconds": 960,
+          "text": "dos",
+          "no_inference": true,
+          "preserve": true,
+          "reply_contains": "Cancélala",
+          "expect": {
+            "q": "review",
+            "quantities": [
+              2
+            ],
+            "saved": []
+          }
+        },
+        {
+          "text": "Cancelar",
+          "no_inference": true,
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": []
+          }
+        },
+        {
+          "text": "leche una",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "leche",
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "names": [
+              "leche"
+            ],
+            "quantities": [
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "leche",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "explicit-reset-legacy",
+      "group": "security",
+      "paths": [
+        "button",
+        "text"
+      ],
+      "steps": [
+        {
+          "text": "/anadir arroz",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": []
+          }
+        },
+        {
+          "advance_seconds": 960,
+          "text": "dos",
+          "no_inference": true,
+          "preserve": true,
+          "reply_contains": "Cancélala",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": []
+          }
+        },
+        {
+          "text": "Cancelar",
+          "no_inference": true,
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": []
+          }
+        },
+        {
+          "text": "leche una",
+          "tool": [
+            "proponer_altas",
+            {
+              "items": [
+                {
+                  "description": "leche",
+                  "quantity": 1
+                }
+              ]
+            }
+          ],
+          "expect": {
+            "q": "review",
+            "names": [
+              "leche"
+            ],
+            "quantities": [
+              1
+            ],
+            "saved": []
+          }
+        },
+        {
+          "choice": "confirm",
+          "text": "sí",
+          "expect": {
+            "q": null,
+            "quantities": [],
+            "saved": [
+              [
+                "leche",
+                1
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
