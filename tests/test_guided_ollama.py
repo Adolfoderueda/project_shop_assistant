@@ -9,7 +9,13 @@ import pytest
 from shopping_agent.guided_contracts import QuantityCandidate, TopicCandidate
 from shopping_agent.guided_controller import reduce_guided, resolve_text_choice
 from shopping_agent.guided_ollama import GuidedOllamaAgent
-from tests.guided_helpers import NOW, guided_http_response, message, state_fixture
+from tests.guided_helpers import (
+    NOW,
+    guided_http_response,
+    message,
+    state_fixture,
+    topic_state_fixture,
+)
 
 
 def run_interpret_with_fixture(name, event, state, history=()):
@@ -215,3 +221,50 @@ def test_full_increment_and_conflict_facts_reach_context():
     assert context['proposal']['items'] == [state.snapshot.proposal.items[0].model_dump(mode='json')]
     assert context['lines'] == [state.snapshot.lines[0].model_dump(mode='json')]
     assert context['reservations'] == [state.snapshot.reservations[0].model_dump(mode='json')]
+
+
+def delivered_review_state():
+    state = reduce_guided(state_fixture(quantities=(1, 2, 3)),
+                          message(2, 'revisar'), None, now=NOW).state
+    witness = state.review.model_copy(update={'delivered_message_id': 100})
+    return state.model_copy(update={'review': witness, 'snapshot': state.snapshot.model_copy(update={
+        'proposal': state.snapshot.proposal.model_copy(update={'review': witness})})})
+
+
+@pytest.mark.parametrize('failure', ['network', 'refused', 'malformed', 'context_overflow'])
+@pytest.mark.parametrize('boundary', ['review', 'topic'])
+def test_model_failure_cannot_reenter_application_text_choice(failure, boundary):
+    state = delivered_review_state() if boundary == 'review' else topic_state_fixture()
+    event = message(4, 'sí')
+    history = ()
+    if failure == 'context_overflow':
+        history = ({'role': 'user', 'content': 'á' * 24000},
+                   {'role': 'assistant', 'content': 'ok'})
+
+    def respond(request):
+        if failure == 'context_overflow':
+            pytest.fail('Overflow must not make an HTTP request')
+        if failure == 'network':
+            raise httpx.ConnectError('offline failure', request=request)
+        return guided_http_response(failure)
+
+    result = asyncio.run(GuidedOllamaAgent(transport=httpx.MockTransport(respond)).interpret(
+        event, state, history))
+    assert result.reason == {'network': 'model_failure', 'refused': 'invalid',
+                             'malformed': 'invalid', 'context_overflow': 'context_overflow'}[failure]
+    decision = reduce_guided(state, event, result.answer, now=NOW)
+    assert decision.mutations == ()
+    assert decision.state == state  # Includes unknown topic quantity, originals and witnesses.
+
+    # Genuine app dispatch resolves BEFORE interpretation, on its own path.
+    choice = resolve_text_choice(event, state.question)
+    assert choice is not None
+    selected = reduce_guided(state, event, choice, now=NOW)
+    if boundary == 'review':
+        assert selected.reason == 'confirmed'
+        assert len(selected.mutations) == 3
+    else:
+        assert selected.state.topic is None
+        assert len(selected.state.snapshot.proposal.items) == 4
+        assert selected.state.snapshot.proposal.items[-1].quantity is None
+        assert selected.mutations == ()

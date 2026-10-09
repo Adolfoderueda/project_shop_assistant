@@ -327,9 +327,30 @@ def test_increment_overflow_is_not_reviewed_and_explains_range():
 
 def test_topic_no_is_not_model_authored_cancellation():
     state = topic_state_fixture()
-    decision = reduce_guided(state, message(4, 'no'), ControlCandidate(kind='cancel'), now=NOW)
+    event = message(4, 'no')
+    suggested = reduce_guided(state, event, ControlCandidate(kind='cancel'), now=NOW)
+    # Model controls cannot promote text to an app selection. Genuine contextual
+    # 'no' is resolved separately before interpretation; it keeps the main draft.
+    assert suggested.state == state
+    assert suggested.mutations == ()
+    decision = reduce_guided(state, event, resolve_text_choice(event, state.question), now=NOW)
     assert decision.state.snapshot.proposal is not None
     assert decision.state.topic is None
+
+
+def test_failed_model_clarification_cannot_cancel_or_advance_unknown_draft():
+    for state, text in ((state_fixture(), 'cancelar'), (topic_state_fixture(), 'no'),
+                        (state_fixture(), 'cantidades')):
+        decision = reduce_guided(state, message(4, text), ControlCandidate(kind='clarify'), now=NOW)
+        assert decision.state == state
+        assert decision.mutations == ()
+
+
+def test_application_explicit_cancel_still_discards_draft():
+    decision = reduce_guided(state_fixture(), message(4, 'cancelar'), None, now=NOW)
+    assert decision.reason == 'cancelled'
+    assert decision.state.snapshot.proposal is None
+    assert decision.mutations == ()
 
 
 def test_model_cannot_cancel_without_explicit_control():

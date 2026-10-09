@@ -337,7 +337,12 @@ def reduce_guided(state: GuidedState, event: IncomingEvent,
         return _decision(state, 'invalid')
     if isinstance(answer, ReadCandidate):
         return _decision(state, 'read')
-    if isinstance(event, IncomingMessage) and (answer is None or isinstance(answer, ControlCandidate)):
+    if isinstance(answer, ControlCandidate) and answer.kind == 'clarify':
+        # Model uncertainty/failure is inert, even if the original message is an
+        # offered control. Application text choices must be resolved separately
+        # before interpretation, never recovered from a failed model answer.
+        return _decision(state, 'clarify')
+    if isinstance(event, IncomingMessage) and answer is None:
         if question:
             resolved = resolve_text_choice(event, question)
             if resolved is not None:
