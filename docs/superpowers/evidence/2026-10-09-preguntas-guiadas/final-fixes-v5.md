@@ -3,6 +3,29 @@
 Acceptance/activation remains **BLOCKED** pending complete evidence and unmet gates.
 Final suite/execution/independent verification are now complete; unmet gates below
 still block acceptance. Earlier pending statements are chronological history.
+
+## Final scoped re-review: HIGH callback cancellation boundary residual
+
+Controller-supplied sole final scoped re-review identifies a remaining safety gap
+in `_guided_history_boundary`, guided_storage.py427–443: it scans only inbox messages.
+Authenticated review `Cancelar` callback clears pending proposal but creates no
+inference-segment boundary. Reproduction reported by that review: apply `one_each`,
+then cancel the review with its authenticated callback; replay the earlier successful
+callback three times; history again contains old `Uno de cada` pairs. A subsequent
+bare `2` plus injected stale native output creates a fresh `huevos: 2` review.
+No saved mutation is claimed here; stale inference recipients are nonetheless unsafe.
+
+The local RED/GREEN tests cover text Cancelar, not this callback-cancellation path.
+V5 omits this case. Frozen scores remain their actual measured values, but zero
+executed-subset invariant violations is NOT total safety and cannot waive the gap.
+This residual was supplied by the final review; no new reproduction run, source/test
+edit, matrix change, prompt iteration or suite/probe was performed afterward.
+
+Controller ruling: candidate unsafe to activate, flag off/unmerged; explicit follow-up
+required. Single final fix/re-review cap reached; do not repair silently in this wave.
+Review disposition:findings1/4/5/6/7 addressed;2partial (this HIGH residual),3real-native
+criteria unmet,8packaging partial (actual wheel unverified). Controller owns ledger
+and conservative expiry-reset ruling; extra reset UX turn remains disclosed separately.
 This is the same final fix wave. [V3](final-fixes-v3.md) records original fixes,
 native diagnosis, full1631-test suite, offline/real outcomes. [V4](final-fixes-v4.md)
 records RED/GREEN lifetime regressions, narrow source repairs, archive registration,

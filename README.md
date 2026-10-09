@@ -86,6 +86,17 @@ por separado en [la ronda final](docs/superpowers/evidence/2026-10-09-preguntas-
 Las migraciones SQL se declaran recursos del paquete `migrations`; sin backend de
 build instalado, la comprobación de un wheel realmente instalado sigue bloqueada.
 
+**No activar ni integrar:** la revisión final encontró un residual HIGH: `Cancelar`
+mediante callback autenticado borra la propuesta pero no crea un límite del historial
+de inferencia (el buscador sólo recorre mensajes). Repetir tres callbacks exitosos
+anteriores puede reintroducir sus destinatarios; un `2` posterior con salida nativa
+obsoleta puede crear una revisión nueva `huevos: 2`. Ese caso falta en la matriz v5;
+cero fallos de invariantes en los pasos ejecutados no demuestra seguridad total.
+Requiere seguimiento explícito, sin otra corrección en esta ronda. La regla conservadora
+de reinicio tras caducidad fue decisión del controlador, añade un turno y mantiene
+fallidas las expectativas originales de comodidad. Calidad real v5:42/102 acotadas,
+6/39 seguridad,0/24 libres; v4 INVALID por error de codificación; wheel no verificado.
+
 Para administración futura autorizada: `python -m shop_assistant questions-local status`
 no cambia permisos; `enable|disable` requiere el lock del worker detenido. Rollback:
 usar **código nuevo**, `questions-local disable`; revoca preguntas/tokens/temas/revisión
