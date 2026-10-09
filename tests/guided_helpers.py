@@ -16,9 +16,43 @@ from shopping_agent.contracts import (
     Reservation,
 )
 from shopping_agent.guided_contracts import GuidedState, QuantityCandidate
+from storage import Repository
 
 NOW = datetime(2026, 10, 9, tzinfo=UTC)
 VALID_TOKEN = 'q:' + 'A' * 22
+
+
+class PurchaseBlockedRepository(Repository):
+    """Isolated test safety adapter, never a deployment authorization."""
+
+    def _apply(self, db, update_id, intent, mode):
+        if intent.action in {'buy', 'resume'}:
+            raise PermissionError('Purchases blocked in guided tests')
+        return super()._apply(db, update_id, intent, mode)
+
+    def _apply_dialogue(self, db, source, proposal, mode, *, now):
+        from interpreter import parse_command, purchase_authorized
+
+        command = parse_command(source['text'], self._lines(db))
+        if (purchase_authorized(source['text']) or command and command.action in {'buy', 'resume'}
+                or proposal and proposal.action in {'buy', 'resume'}):
+            raise PermissionError('Purchases blocked in guided tests')
+        return super()._apply_dialogue(db, source, proposal, mode, now=now)
+
+
+class PurchaseBlockedConversation:
+    def __init__(self, repo, conversation):
+        self.repo, self.conversation = repo, conversation
+
+    async def handle(self, event, mode):
+        from domain import IncomingMessage, Reply
+        from interpreter import parse_command, purchase_authorized
+
+        if isinstance(event, IncomingMessage):
+            command = parse_command(event.text, self.repo.list_lines())
+            if purchase_authorized(event.text) or command and command.action in {'buy', 'resume'}:
+                return self.repo.complete_agent_reply(event.update_id, Reply(text='Compras bloqueadas en esta prueba.'))
+        return await self.conversation.handle(event, mode)
 
 
 def message(update_id, text, owner=7):

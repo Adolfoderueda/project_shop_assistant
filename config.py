@@ -26,12 +26,15 @@ class Settings(Model):
     model_provider: Literal["commands_only", "openai", "ollama"] = "commands_only"
     ollama_model: Literal["gemma4:e2b"] = "gemma4:e2b"
     conversation_engine: Literal["legacy", "skills_agent"] = "legacy"
+    guided_questions: bool = False
     agent_model: Literal["gemma4:e4b-it-q4_K_M"] = "gemma4:e4b-it-q4_K_M"
     profiles_path: Path = Path("private/profiles")
     logs_path: Path = Path("private/logs")
 
     @model_validator(mode="after")
     def agent_provider(self):
+        if self.guided_questions and self.conversation_engine != 'skills_agent':
+            raise ValueError('Guided questions require skills agent')
         if self.conversation_engine == "skills_agent" and self.model_provider != "ollama":
             raise ValueError("Skills agent requires Ollama")
         return self

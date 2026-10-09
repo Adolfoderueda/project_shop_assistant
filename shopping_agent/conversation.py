@@ -33,6 +33,8 @@ class AgentConversation:
         if prepared is not None:
             return await self.legacy._present(prepared)
         now = self.clock()
+        # This engine is the flag-off rollback path, never a v2 reducer.
+        self.repo.revoke_guided(message.user_id, now=now)
         self.repo.set_conversation_route(message.user_id, message.chat_id, 'agent', now=now)
         if message.text.strip().startswith('/') or purchase_authorized(message.text):
             return await self.legacy.handle(message, mode)

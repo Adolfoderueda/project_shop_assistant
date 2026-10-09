@@ -220,7 +220,10 @@ class GuidedRepository:
                             positions=tuple(i.position for i in initial.items), kind='create'),)})
                     state = GuidedState(snapshot=state.snapshot.model_copy(update={'proposal': proposal}))
                     answer = None
-            resolved = resolve_text_choice(event, state.question) if state.question else None
+            # Only application dispatch can supply choice authority. None is the
+            # published deterministic fallback; model candidates stay candidates.
+            resolved = (resolve_text_choice(event, state.question)
+                        if state.question and (answer is None or supplied_choice is not None) else None)
             if supplied_choice is not None and supplied_choice != resolved:
                 raise ValueError('Choice does not match the durable text and current question')
             if resolved is not None:

@@ -5,6 +5,64 @@ import pytest
 from tests.guided_helpers import candidate, persisted_case
 
 
+def test_model_clarify_cannot_confirm_delivered_review(tmp_path):
+    from shopping_agent.guided_contracts import ControlCandidate
+
+    c = persisted_case(tmp_path, quantities=(1, 1, 1))
+    c.record_known_delivery()
+    c.ingest_message(2, 'sí')
+    c.repo.apply_guided(2, ControlCandidate(kind='clarify'),
+                        expected_question_version=c.question().version, now=c.now)
+    assert c.repo.list_lines() == []
+    assert c.repo.guided_state(2, now=c.now).snapshot.proposal.revision == 1
+
+
+@pytest.mark.parametrize('kind', ['quantity', 'list', 'cancel'])
+def test_model_candidates_never_recover_confirmation_authority(tmp_path, kind):
+    from shopping_agent.guided_contracts import ControlCandidate, ReadCandidate
+
+    c = persisted_case(tmp_path, quantities=(1, 1, 1))
+    c.record_known_delivery()
+    c.ingest_message(2, 'sí')
+    answer = (candidate(2, (1, 2)) if kind == 'quantity' else
+              ReadCandidate(kind='list') if kind == 'list' else ControlCandidate(kind='cancel'))
+    c.repo.apply_guided(2, answer, expected_question_version=c.question().version, now=c.now)
+    assert c.repo.list_lines() == []
+    assert c.repo.guided_state(2, now=c.now).snapshot.proposal is not None
+
+
+@pytest.mark.parametrize('kind', ['clarify', 'cancel'])
+@pytest.mark.parametrize('text', ['sí', 'no'])
+def test_model_control_cannot_resolve_pending_topic(tmp_path, kind, text):
+    from shopping_agent.contracts import ItemInput, ProposeAdds
+    from shopping_agent.guided_contracts import ControlCandidate, TopicCandidate
+    from shopping_agent.guided_controller import resolve_text_choice
+
+    c = persisted_case(tmp_path)
+    c.ingest_message(2, 'leche')
+    c.repo.apply_guided(2, TopicCandidate(source_update_id=2,
+        adds=ProposeAdds(items=(ItemInput(description='leche'),))),
+        expected_question_version=c.question().version, now=c.now)
+    before = c.repo.guided_state(2, now=c.now)
+    c.ingest_message(3, text)
+    c.repo.apply_guided(3, ControlCandidate(kind=kind),
+        expected_question_version=before.question.version, now=c.now)
+    after = c.repo.guided_state(3, now=c.now)
+    assert after.topic == before.topic
+    assert after.snapshot.proposal == before.snapshot.proposal
+    assert c.repo.list_lines() == []
+    # The same original application choice remains usable on a later event.
+    c.ingest_message(4, text)
+    event, _ = c.repo.event_result(4)
+    choice = resolve_text_choice(event, after.question)
+    assert choice is not None
+    c.repo.apply_guided(4, choice, expected_question_version=after.question.version, now=c.now)
+    result = c.repo.guided_state(4, now=c.now)
+    assert result.topic is None
+    assert len(result.snapshot.proposal.items) == (4 if text == 'sí' else 3)
+    assert c.repo.list_lines() == []
+
+
 def test_callback_quantity_never_saves_and_replay_consumes_once(tmp_path):
     c = persisted_case(tmp_path)
     c.record_known_delivery()

@@ -171,6 +171,48 @@ async def agent_local(root: Path, action: str) -> bool:
     return await _local_engine(root, action, agent=True)
 
 
+async def guided_local(root: Path, action: str) -> bool:
+    """Change guided permission with the worker stopped; status performs no writes."""
+    from runtime import ProcessLock
+
+    if action not in {'status', 'enable', 'disable'}:
+        raise ValueError('Invalid local action')
+    initial = load_settings(root)
+    if action == 'status':
+        print(f'Guided questions: {"enabled" if initial.guided_questions else "disabled"}; '
+              f'engine: {initial.conversation_engine}; provider: {initial.model_provider}')
+        return True
+    try:
+        lock = ProcessLock(initial.database_path.parent / 'worker.lock')
+        lock.__enter__()
+    except RuntimeError:
+        print('Worker is running; stop the worker before changing guided questions, then retry.')
+        return False
+    try:
+        settings = load_settings(root)
+        if settings.database_path != initial.database_path:
+            raise ValueError('Database lock target changed; configuration unchanged')
+        if action == 'enable' and (
+                settings.conversation_engine != 'skills_agent' or settings.model_provider != 'ollama'
+                or not await ollama_available(settings.agent_model)):
+            print('Guided questions require skills_agent, Ollama and the available E4B model; configuration unchanged.')
+            return False
+        updated = Settings.model_validate(settings.model_copy(update={
+            'guided_questions': action == 'enable'}).model_dump())
+        from storage import Repository
+        repo = Repository(settings.database_path)
+        repo.migrate()
+        repo.assert_authorized_owner(settings.authorized_user_id)
+        repo.revoke_agent_proposals()
+        save_settings(root, updated)
+        print(f'Guided questions: {"enabled" if updated.guided_questions else "disabled"}. '
+              'Pending permissions revoked; saved lines unchanged. Restart the worker to apply. '
+              'Rollback uses this code with questions disabled, never a schema downgrade.')
+        return True
+    finally:
+        lock.__exit__(None, None, None)
+
+
 async def _local_engine(root: Path, action: str, *, agent: bool) -> bool:
     from runtime import ProcessLock
 
@@ -209,6 +251,8 @@ async def _local_engine(root: Path, action: str, *, agent: bool) -> bool:
                 updates['model_provider'] = 'ollama'
         elif action == 'disable':
             updates['conversation_engine'] = 'legacy'
+        if action == 'disable':
+            updates['guided_questions'] = False
         updated = Settings.model_validate(settings.model_copy(update=updates).model_dump())
         if agent or action == 'disable':
             from storage import Repository
@@ -280,6 +324,8 @@ def main(argv=None) -> int:
     local_parser.add_argument("action", choices=("enable", "disable", "status"))
     agent_parser = sub.add_parser('agent-local')
     agent_parser.add_argument('action', choices=('enable', 'disable', 'status'))
+    questions_parser = sub.add_parser('questions-local')
+    questions_parser.add_argument('action', choices=('enable', 'disable', 'status'))
     args = parser.parse_args(argv)
     root = Path.cwd().resolve()
     try:
@@ -298,6 +344,8 @@ def main(argv=None) -> int:
             return 0 if asyncio.run(model_local(root, args.action)) else 1
         elif args.command == 'agent-local':
             return 0 if asyncio.run(agent_local(root, args.action)) else 1
+        elif args.command == 'questions-local':
+            return 0 if asyncio.run(guided_local(root, args.action)) else 1
         else:
             verify_product(root, args.id)
     except KeyboardInterrupt:

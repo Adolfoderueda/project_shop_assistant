@@ -106,6 +106,7 @@ def test_runtime_constructs_only_selected_engine(tmp_path, monkeypatch, engine):
         async def recover(self): pass
 
     class IO:
+        async def ack_callbacks(self): pass
         async def send_pending(self): pass
         async def poll_once(self): raise asyncio.CancelledError
 
