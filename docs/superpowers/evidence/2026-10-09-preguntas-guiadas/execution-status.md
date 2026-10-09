@@ -42,6 +42,20 @@ Acceptance is **BLOCKED**, not merely a packaging/deployment formality. No appli
 fix or prompt/matrix tuning after these runs. No Telegram launch, flag activation
 or worker restart. Controller whole-branch review remains to be dispatched separately.
 
-Final complete suite:1559passed in567.05s, timeout600000, exit0; focused14passed;
+Original pre-review complete suite:1559passed in567.05s, timeout600000, exit0; focused14passed;
 whole Ruff and both diff checks clean. No application/script/tests changed after
 freeze or these runs. Packaging still unverified with no installed build tools.
+
+## Review fix round1: verifier v3, immutable v2 execution
+
+Only verifier/tests/documentation changed under scoped approval. No changes to
+application, prompts, matrix or raw artifacts; no model rerun.46 focused tests pass,
+whole Ruff/diff clean. Native schema/decoded data, actual transport/complete summary
+facts and live question expiry are independently checked. Historical source integrity
+uses the pinned original Git objects plus explicit exact-byte newline reconstruction,
+not an exemption for the changed current verifier. See `results.md` for the method.
+V3 independent verification retains12 offline/906 real errors and identical rejected
+acceptance totals; original harness validation gains no newly exposed false pass.
+Recorded runtime hashes verify; current-runtime differences are empty. Final complete
+suite:1591passed in552.14s, timeout600000, exit0. Selective commit verification is
+recorded in the local Task8 fix report. No code/tests edits after that final run.

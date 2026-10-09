@@ -80,7 +80,45 @@ The raw files retain original requests/responses, validations, state and deliver
 
 ## Limits and deployment gate
 
-Final source-state verification: `python -P -m pytest -q` **1559 passed in567.05s**
+### Verifier v3, review fix round1
+
+The v2 matrix, inputs, expectations and both raw artifacts are unchanged. No model
+rerun and no application/prompt changes. The verifier now independently validates
+required fields, strict types/bounds/enums/extra fields/nested arrays against native
+schemas frozen in the pinned v2 HTTP requests, rejects duplicate raw JSON keys, and
+strictly reconciles decoded candidate/provenance (not Python's int/float equality).
+
+For writes it reconciles the actual stub send request AND response body/message/chat
+with the DB delivery witness. Independently required item-by-item summary facts cover
+quantity/unit, original request, operation, replacement, base+additional=total, source
+rows/revisions, all candidates/destination conflicts and duplicate decisions. Matching
+counterfeit digests or controls-only text are insufficient. Both question and proposal
+must be live, with question expiry bounded by proposal expiry.
+
+Archival integrity: [archive-v2.json](archive-v2.json) pins
+`6bf409ceed110104f3aa1e1fb6e75ad311dd27ca`; local `git show COMMIT:path` recovers
+the original probe/matrix/runtime cohort. Explicit per-LF CRLF bitmaps reconstruct the
+exact originally hashed mixed-newline source bytes. The raw files' declared CRLF
+reconstruction must match their original SHA256 hashes AND the immutable Git blobs;
+there is no normalized-hash exemption. Every recorded source hash is checked. Results
+identify current verifier version/hash, archived probe hash/commit, metadata hash and
+current-runtime differences. These results describe archived execution, NOT acceptance
+of a later runtime. Missing Git objects or wrong reconstruction cannot verify history.
+
+Independent v3 `--verify` still returns1: offline12 errors (bounded102/102, security24/27,
+general24/24); real906 errors (bounded6/102, security6/27, general0/24). Step/fallback/
+unexecuted counts are unchanged. No additional false harness validation was exposed
+in the original immutable traces; the newly tested corruptions are now rejected.
+Recorded runtime integrity is verified, and current runtime differences are empty.
+Current verifier SHA256
+`fa20fab7fbf34367fae3e608a51d09d4b578f250b03ca19771e160773a249454`;
+archive metadata SHA256
+`ef12a3006e79e742c49dc8db340adc93b506dcab6199933334645fd2a6a10968`.
+Final complete suite:1591passed in552.14s (timeout600000); focused verifier/harness
+tests:46passed; whole Ruff and staged/unstaged diff checks clean. Application/model blockers remain deferred
+to the controller's separately scoped final wave; acceptance is still **BLOCKED**.
+
+Original pre-review source-state verification: `python -P -m pytest -q` **1559 passed in567.05s**
 (timeout600000); focused verifier/harness tests14passed; whole-repository Ruff and
 staged/unstaged diff checks clean. These green tests do not override the rejected
 real/offline acceptance. Controller whole-branch review has not yet occurred.

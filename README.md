@@ -71,6 +71,10 @@ $env:PYTHONPATH=(Get-Location).Path
 Cada salida es inmutable; elegir una ruta nueva. `--verify` no llama al modelo y
 devuelve nonzero si faltan pasos, hay fallos, cambian hashes o expectativas no coinciden.
 Botones simulados/etiquetas ofrecidas no cuentan como comprensión del modelo.
+El verificador v3 revalida la evidencia v2 inmutable contra su commit Git archivado y
+`archive-v2.json` (bytes/fin de línea exactos), separando el intérprete ejecutado del
+verificador actual. Requiere esos objetos Git locales; no descarga nada ni exime hashes
+de código. Revalidar historia no demuestra aceptación del runtime actual.
 
 Para administración futura autorizada: `python -m shop_assistant questions-local status`
 no cambia permisos; `enable|disable` requiere el lock del worker detenido. Rollback:

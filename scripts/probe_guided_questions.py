@@ -9,16 +9,232 @@ import asyncio
 import base64
 import hashlib
 import json
+import re
+import subprocess
 import sys
 import tempfile
 import traceback
 from collections import Counter
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / 'docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix.json'
 TEMP = Path('C:/Users/Takeshi/AppData/Local/Temp/opencode')
+VERIFIER_VERSION = 3
+ARCHIVE_COMMIT = '6bf409ceed110104f3aa1e1fb6e75ad311dd27ca'
+ARCHIVE_PROBE = '5496d090e75e06e4b524dced7866a1d27bfd146c432e887f6455ab9fd5683278'
+ARCHIVE_HASHES = {
+    'offline': 'e5f7d2bdfef5dc64502da5436b61db7b7f7b7e09258107f13b4e36de17d1f185',
+    'real': '78242888039e8ae5e743793da407b26e6391a3c9ed073f9d466da20f3b249f8f',
+}
+ARCHIVE_METADATA = MATRIX.with_name('archive-v2.json')
+
+
+def git_blob(path):
+    """Pinned, local Git object only; no application imports, network or mutable HEAD."""
+    return subprocess.run(['git', 'show', f'{ARCHIVE_COMMIT}:{path}'], cwd=ROOT,
+                          capture_output=True, check=True).stdout
+
+
+@lru_cache(maxsize=1)
+def archived_reference():
+    raw = archived_artifact('offline')
+    records = [json.loads(line) for line in raw.decode('utf-8').splitlines()]
+    schemas = {}
+    for record in records[1:]:
+        for call in record.get('http', []):
+            for tool in json.loads(call['request'])['tools']:
+                function = tool['function']
+                name, schema = function['name'], function['parameters']
+                if name in schemas and schemas[name] != schema:
+                    raise ValueError('Inconsistent frozen native schemas')
+                schemas[name] = schema
+    return records[0], schemas
+
+
+def archived_artifact(mode):
+    metadata = json.loads(ARCHIVE_METADATA.read_text(encoding='utf-8'))
+    if (metadata['commit'] != ARCHIVE_COMMIT or metadata['version'] != 1
+            or metadata['artifact_newlines'].get(mode) != 'CRLF'):
+        raise ValueError('Unverified archived artifact pointer/newline declaration')
+    path = MATRIX.with_name(f'{mode}-v2.jsonl').relative_to(ROOT).as_posix()
+    blob = git_blob(path)
+    if b'\r' in blob:
+        raise ValueError('Archived Git artifact is not declared normalized LF')
+    raw = blob.replace(b'\n', b'\r\n')
+    if hashlib.sha256(raw).hexdigest() != ARCHIVE_HASHES[mode]:
+        raise ValueError('Archived evidence exact byte hash mismatch')
+    return raw
+
+
+def schema_valid(value, schema):
+    """Strict stdlib validation of the frozen inlined JSON-schema vocabulary.
+
+    Unknown validation keywords fail closed; annotations are not validators.
+    No coercion (not even bool to integer), domain validator or controller oracle.
+    """
+    supported = {'title', 'description', 'default', 'type', 'anyOf', 'enum', 'properties',
+                 'additionalProperties', 'required', 'items', 'minItems', 'maxItems',
+                 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum',
+                 'exclusiveMaximum'}
+    if set(schema) - supported:
+        return False
+    if 'anyOf' in schema and not any(schema_valid(value, s) for s in schema['anyOf']):
+        return False
+    kinds = {'object': dict, 'array': list, 'string': str, 'integer': int,
+             'boolean': bool, 'null': type(None)}
+    if 'type' in schema and type(value) is not kinds.get(schema['type']):
+        return False
+    if 'enum' in schema and not any(type(value) is type(v) and value == v for v in schema['enum']):
+        return False
+    if type(value) is dict:
+        properties = schema.get('properties', {})
+        if not set(schema.get('required', [])) <= value.keys():
+            return False
+        if schema.get('additionalProperties') is False and value.keys() - properties.keys():
+            return False
+        if any(not schema_valid(v, properties[k]) for k, v in value.items() if k in properties):
+            return False
+    if type(value) is list:
+        if not schema.get('minItems', 0) <= len(value) <= schema.get('maxItems', sys.maxsize):
+            return False
+        if 'items' in schema and any(not schema_valid(v, schema['items']) for v in value):
+            return False
+    if type(value) is str and not schema.get('minLength', 0) <= len(value) <= schema.get('maxLength', sys.maxsize):
+        return False
+    if type(value) is int:
+        for key, test in {'minimum': lambda n: value >= n, 'maximum': lambda n: value <= n,
+                          'exclusiveMinimum': lambda n: value > n,
+                          'exclusiveMaximum': lambda n: value < n}.items():
+            if key in schema and not test(schema[key]):
+                return False
+    return True
+
+
+def unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('Duplicate raw native JSON key: ' + key)
+        result[key] = value
+    return result
+
+
+def same_json(left, right):
+    """JSON value and type equality: Python's 2 == 2.0/True == 1 is not evidence."""
+    if type(left) is not type(right):
+        return False
+    if type(left) is dict:
+        return left.keys() == right.keys() and all(same_json(v, right[k]) for k, v in left.items())
+    if type(left) is list:
+        return len(left) == len(right) and all(same_json(a, b) for a, b in zip(left, right, strict=True))
+    return left == right
+
+
+def decode_native(function, record):
+    """Independently stamp provenance and decode data, never application permissions."""
+    name, args = function['name'], function['arguments']
+    source = record['event']['update_id']
+    before = record['before']
+    proposal = before['snapshot'].get('proposal')
+    question = before.get('question')
+    focus = []
+    if question and question['status'] == 'active' and question['kind'] in {'quantity_shared', 'quantity_single'}:
+        focus = question['positions']
+    elif question is None and proposal and len(proposal['items']) == 1:
+        focus = [proposal['items'][0]['position']]
+    if name in {'responder_cantidad', 'proponer_asignaciones'}:
+        if name == 'responder_cantidad':
+            if not focus:
+                raise ValueError('Quantity without authorized focus')
+            patches = [{'position': p, **args} for p in focus]
+        else:
+            patches = args['patches']
+        positions = [p['position'] for p in patches]
+        if (not proposal or len(set(positions)) != len(positions)
+                or not set(positions) <= {i['position'] for i in proposal['items']}):
+            raise ValueError('Duplicate or unoffered native position')
+        return {'kind': 'quantity', 'source_update_id': source, 'patches': [
+            {'position': p['position'], 'quantity': p.get('quantity'), 'unit': p.get('unit'),
+             'candidate_index': None, 'duplicate_decision': None} for p in patches]}
+    if name == 'proponer_altas':
+        return {'kind': 'topic', 'source_update_id': source, 'adds': {'condition': args.get('condition'),
+            'items': [{'description': i['description'], 'quantity': i.get('quantity'),
+                       'unit': i.get('unit')} for i in args['items']]}}
+    if name == 'proponer_cambio':
+        if (args['kind'] == 'replace') != (args.get('replacement') is not None):
+            raise ValueError('Exclusive replacement violated')
+        return {'kind': 'change', 'source_update_id': source, 'change': {
+            'kind': args['kind'], 'query': args['query'], 'quantity': args.get('quantity'),
+            'unit': args.get('unit'), 'replacement': args.get('replacement'), 'condition': args.get('condition')}}
+    if name == 'consultar_lista':
+        return {'kind': 'list', 'query': None}
+    if name == 'consultar_ficha':
+        return {'kind': 'fiche', 'query': args['query']}
+    if name in {'pedir_aclaracion', 'cancelar_propuesta'}:
+        return {'kind': 'clarify' if name == 'pedir_aclaracion' else 'cancel'}
+    raise ValueError('Unknown native answer')
+
+
+def summary_facts_present(text, before):
+    """Require independently enumerated facts in each numbered item, not a digest loop."""
+    proposal = before['snapshot']['proposal']
+    if not text.startswith('Petición original: ' + proposal['original_text'] + '\n'):
+        return False
+    sections = list(re.finditer(r'(?m)^(\d+)\. .*$', text))
+    if [int(m[1]) for m in sections] != [i['position'] for i in proposal['items']]:
+        return False
+    rows = {r['id']: r for r in before['snapshot'].get('lines', [])}
+    for index, item in enumerate(proposal['items']):
+        section = text[sections[index].start():sections[index + 1].start() if index + 1 < len(sections) else len(text)]
+        target = item.get('target')
+        name = rows[target['id']]['description'] if target else item['description']
+        quantity, unit = item['quantity'], item.get('unit') or 'envases'
+        if (type(quantity) is not int or not 0 < quantity <= 9223372036854775807
+                or item.get('unit') not in {None, 'envases', 'paquetes', 'botes', 'sacos'}):
+            return False
+        kind, decision = item['kind'], item.get('duplicate_decision')
+        if kind == 'add':
+            label = ('nueva línea separada' if decision == 'separate' else 'alta nueva')
+            if decision == 'set_total':
+                label = f"cambiar cantidad total de {name} [{target['id']}]"
+            headline = f"{item['position']}. {label}: {item['description']}: {quantity} {unit}."
+        else:
+            operation = {'increment': f'Incrementar {name}',
+                         'replace': f"Sustituir {name} por {item.get('replacement')}",
+                         'set_quantity': f'Cambiar cantidad total de {name}'}[kind]
+            headline = f"{item['position']}. {operation}: {quantity} {unit}."
+        if section.splitlines()[0] != headline:
+            return False
+        required = []
+        if kind == 'increment':
+            required += [f"Adicional solicitado: {item['additional_quantity']} {unit}.",
+                f"Base + adicional = total: {item['base_quantity']} + {item['additional_quantity']} = {quantity} {unit}."]
+        if target:
+            required.append(f"Origen seleccionado: {target['id']}, revisión {target['revision']}.")
+        if item.get('candidates'):
+            required.append('Candidatos/coincidencias guardadas:')
+        if any(ref not in item.get('candidates', []) for ref in item.get('conflict_signatures', [])):
+            required.append('Conflictos de destino guardados (no son índices de origen):')
+        for ref in {*((r['id'], r['revision']) for r in item.get('candidates', [])),
+                    *((r['id'], r['revision']) for r in item.get('conflict_signatures', []))}:
+            row = rows[ref[0]]
+            count = row['quantity'] if row['quantity'] is not None else 'cantidad desconocida'
+            required.append(f"{row['description']} [{ref[0]}, revisión {ref[1]}]: {count} envases.")
+        if item.get('internal_conflicts'):
+            required.append('Duplicados dentro del lote con posiciones: '
+                            + ', '.join(map(str, item['internal_conflicts'])) + '.')
+        conflicts = (kind == 'add' and (item.get('candidates') or item.get('internal_conflicts'))
+                     or kind == 'replace' and (item.get('conflict_signatures') or item.get('internal_conflicts')))
+        if conflicts:
+            required.append({'separate': 'Decisión de duplicado: línea separada; no se suman ni fusionan.',
+                             'set_total': 'Decisión de duplicado: cambiar cantidad total de la línea seleccionada.'
+                             }.get(decision, 'UNRESOLVED DUPLICATE'))
+        if any(fragment not in section for fragment in required):
+            return False
+    return not proposal.get('condition') and 'Pendiente, sin guardar. ¿Confirmas?' in text
 
 
 def digest(path):
@@ -92,20 +308,39 @@ def verify_step(record, step):
                 errors.append('security:write before separate final confirmation')
             if (not witness.get('delivered_message_id') or not any(
                     d['message_id'] == witness['delivered_message_id']
+                    and d['chat_id'] == event['chat_id'] and d['notice_id'] == witness['notice_id']
                     and d['digest'] == witness['summary_digest'] for d in record['before_deliveries'])):
                 errors.append('security:write without actual delivery receipt')
             if event['update_id'] <= witness.get('source_update_id', event['update_id']):
                 errors.append('security:confirmation not posterior to review')
             if datetime.fromisoformat(proposal['expires_at']) <= datetime.fromisoformat(record['now']):
                 errors.append('security:expired confirmation wrote')
+            expiry = datetime.fromisoformat(q['expires_at'])
+            if (expiry <= datetime.fromisoformat(record['now'])
+                    or expiry > datetime.fromisoformat(proposal['expires_at'])
+                    or datetime.fromisoformat(q['created_at']) >= expiry):
+                errors.append('security:question expiry invalid at confirmation')
             text = q['text']
             if (len(text.encode('utf-16-le')) // 2 > 4000
                     or hashlib.sha256(text.encode()).hexdigest() != witness['summary_digest']
                     or witness['proposal_id'] != proposal['id']
                     or witness['revision'] != proposal['revision']
                     or witness['question_id'] != q['id']
+                    or q['proposal_id'] != proposal['id']
+                    or proposal['review'] != witness
                     or q['proposal_revision'] != proposal['revision']):
                 errors.append('security:complete current review witness mismatch')
+            receipts = [r for r in record['transport_receipts']
+                        if r['response']['message_id'] == witness['delivered_message_id']]
+            if not any(r['request']['chat_id'] == event['chat_id'] == r['response']['chat']['id']
+                       and r['response']['chat']['type'] == 'private'
+                       and r['response']['from']['id'] == 99 and r['response']['from']['is_bot'] is True
+                       and r['request']['text'] == r['response']['text'] == text
+                       and hashlib.sha256(r['request']['text'].encode()).hexdigest() == witness['summary_digest']
+                       for r in receipts):
+                errors.append('security:actual transport receipt does not match review body/chat/message')
+            if not summary_facts_present(text, before):
+                errors.append('security:complete summary facts missing or inconsistent')
             for item in proposal.get('items', []):
                 if item.get('internal_conflicts') and item.get('duplicate_decision') is None:
                     errors.append('security:internal duplicate without decision')
@@ -131,7 +366,7 @@ def verify_step(record, step):
             # Independently reject raw malformed/truncated/refused output even when a
             # fabricated application validation record labels it a valid candidate.
             if index < len(results) and results[index]['reason'] == 'candidate':
-                response = json.loads(call['response'])
+                response = json.loads(call['response'], object_pairs_hook=unique_json_object)
                 native = response.get('message', {})
                 tools = native.get('tool_calls', [])
                 if (call['status'] != 200 or response.get('done') is not True
@@ -143,6 +378,18 @@ def verify_step(record, step):
                     offered = {t['function']['name'] for t in request['tools']}
                     if function['name'] not in offered or type(function['arguments']) is not dict:
                         errors.append('quality:raw unoffered or invalid native tool')
+                    else:
+                        _, frozen_schemas = archived_reference()
+                        schema = frozen_schemas.get(function['name'])
+                        offered_schema = next(t['function']['parameters'] for t in request['tools']
+                                              if t['function']['name'] == function['name'])
+                        if (schema is None or offered_schema != schema
+                                or not schema_valid(function['arguments'], schema)):
+                            errors.append('quality:raw native schema invalid or changed')
+                        elif not same_json(decode_native(function, record), results[index]['answer']):
+                            errors.append('quality:raw decoded candidate disagrees with recorded validation')
+                        if base64.b64decode(call['response_base64'], validate=True) != call['response'].encode():
+                            errors.append('quality:raw response bytes disagree with recorded body')
         # Overflow/invalid history may make no HTTP call, but cannot count as understanding.
         if len(results) != len(record['http']) and any(r['reason'] == 'candidate' for r in results):
             errors.append('quality:candidate without matching raw HTTP evidence')
@@ -164,9 +411,10 @@ def verify_file(path):
         records = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
         manifest = records[0]
         matrix = load_matrix()
+        integrity, integrity_errors = verify_integrity(manifest, path.read_bytes())
+        errors.extend(integrity_errors)
         for key, value in {'matrix_hash': digest(MATRIX), 'frozen_matrix': matrix,
-                           'script_hash': digest(Path(__file__)),
-                           'code_hashes': code_hashes(), 'parameters': matrix['parameters'],
+                           'parameters': matrix['parameters'],
                            'model': matrix['model'], 'repetitions': 3}.items():
             if manifest.get(key) != value:
                 errors.append(f'manifest mismatch: {key}')
@@ -201,12 +449,59 @@ def verify_file(path):
                             for result in record.get('model_results', []) if result['reason'] != 'candidate'
                             or (result.get('answer') or {}).get('kind') == 'clarify')
         return {'accepted': not errors, 'errors': errors, 'groups': groups,
+                'integrity': integrity,
                 'steps': dict(totals), 'fallbacks': dict(fallbacks),
                 'security_failures': sum('security:' in e for e in errors),
                 'model_turns': sum(len(r.get('model_results', [])) for r in records[1:]),
                 'simulated_button_steps': sum(bool(r.get('selection')) for r in records[1:])}
     except (OSError, ValueError, KeyError, TypeError, IndexError) as exc:
         return {'accepted': False, 'errors': [f'invalid evidence: {type(exc).__name__}: {exc}']}
+
+
+def verify_integrity(manifest, raw):
+    """Versioned historical verification; NEVER waive recorded byte/source integrity."""
+    info = {'verifier_version': VERIFIER_VERSION, 'current_verifier_sha256': digest(Path(__file__)),
+            'recorded_probe_sha256': manifest.get('script_hash')}
+    errors = []
+    if manifest.get('script_hash') != ARCHIVE_PROBE:
+        for key, expected in {'script_hash': digest(Path(__file__)), 'code_hashes': code_hashes()}.items():
+            if manifest.get(key) != expected:
+                errors.append('manifest mismatch: ' + key)
+        info['evaluation_scope'] = 'current execution source'
+        return info, errors
+    reference, _ = archived_reference()
+    metadata = json.loads(ARCHIVE_METADATA.read_text(encoding='utf-8'))
+    if metadata['commit'] != ARCHIVE_COMMIT or metadata['version'] != 1:
+        raise ValueError('Unverified archived source pointer')
+    mode = manifest['mode']
+    if (mode not in ARCHIVE_HASHES or hashlib.sha256(raw).hexdigest() != ARCHIVE_HASHES[mode]
+            or raw != archived_artifact(mode)):
+        errors.append('integrity:archived raw artifact changed')
+    if manifest['code_hashes'] != reference['code_hashes']:
+        errors.append('integrity:recorded runtime cohort differs from archive')
+    sources = {**reference['code_hashes'], 'scripts/probe_guided_questions.py': ARCHIVE_PROBE,
+               MATRIX.relative_to(ROOT).as_posix(): reference['matrix_hash']}
+    for name, expected in sources.items():
+        blob = git_blob(name)
+        newline = metadata['newline_map'].get(name)
+        if newline:
+            bits = base64.b64decode(newline['crlf_bitmap'], validate=True)
+            pieces = blob.split(b'\n')
+            count = len(pieces) - 1
+            if count != newline['linebreaks'] or len(bits) != (count + 7) // 8:
+                raise ValueError('Invalid archived source newline bitmap')
+            blob = b''.join(p + (b'\r\n' if bits[i // 8] & (1 << (i % 8)) else b'\n')
+                            for i, p in enumerate(pieces[:-1])) + pieces[-1]
+        if hashlib.sha256(blob).hexdigest() != expected:
+            errors.append('integrity:archived source bytes mismatch: ' + name)
+    current = code_hashes()
+    info.update(archived_source_commit=ARCHIVE_COMMIT,
+                archive_metadata_sha256=digest(ARCHIVE_METADATA),
+                evaluation_scope='immutable archived v2 execution, NOT current-runtime acceptance',
+                recorded_runtime_verified=not errors,
+                current_runtime_differences=sorted(n for n in current.keys() | reference['code_hashes'].keys()
+                    if current.get(n) != reference['code_hashes'].get(n)))
+    return info, errors
 
 
 def prohibit_private(event, args):
@@ -262,6 +557,7 @@ async def run_probe(mode, output):
 
     matrix = load_matrix()
     manifest = {'type': 'manifest', 'mode': mode, 'model': matrix['model'],
+                'verifier_version': VERIFIER_VERSION,
                 'parameters': matrix['parameters'], 'repetitions': 3,
                 'matrix_hash': digest(MATRIX), 'script_hash': digest(Path(__file__)),
                 'frozen_matrix': matrix,
