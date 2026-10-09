@@ -335,6 +335,12 @@ def answer_proposal(message: IncomingMessage, snapshot: AgentSnapshot, *, now: d
             or proposal.reviewed_update_id is None or message.update_id <= proposal.reviewed_update_id
             or len(proposal_text(proposal, snapshot, review=True)) > MAX_REPLY):
         return ProposalDecision(proposal=proposal, reason=reason if reason != "reviewed" else "pending")
+    return ProposalDecision(proposal=proposal, reason="confirmed",
+                            mutations=proposal_mutations(proposal, snapshot))
+
+
+def proposal_mutations(proposal, snapshot):
+    """Build intentions only after the caller has validated current review authority."""
     rows = {line.id: line for line in snapshot.lines}
     mutations = []
     for item in proposal.items:
@@ -344,4 +350,14 @@ def answer_proposal(message: IncomingMessage, snapshot: AgentSnapshot, *, now: d
             target=item.target if kind != "add" else None, unit=item.unit or "envases",
             expected_base=item.base_quantity if kind == "increment" else None,
             additional_quantity=item.additional_quantity if kind == "increment" else None))
-    return ProposalDecision(proposal=proposal, reason="confirmed", mutations=tuple(mutations))
+    return tuple(mutations)
+
+
+# Shared pure validation/arithmetic. Guided transitions must use the same rules
+# without manufacturing legacy messages or granting their review witnesses.
+proposal_status = _status
+revalidate_proposal = _revalidate
+patch_item = _patch
+recompute_conflicts = _internal
+matching_lines = _matches
+missing_unit = _missing_unit
