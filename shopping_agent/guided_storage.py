@@ -424,11 +424,33 @@ class GuidedRepository:
         witness = state.review.model_copy(update={'delivered_message_id': message_id})
         self._write_agent_proposal(db, source, state.snapshot.proposal.model_copy(update={'review': witness}))
 
+    def _guided_history_boundary(self, db, user_id, chat_id):
+        from interpreter import parse_command
+
+        for source in db.execute('SELECT * FROM inbox WHERE user_id=? AND chat_id=? '
+                "AND completed=1 AND kind='message' ORDER BY update_id DESC", (user_id, chat_id)):
+            event = self._stored_event(source)
+            reply = Reply.model_validate_json(source['reply_json'])
+            reset = canonical_name(event.text) == 'cancelar' and reply == Reply(text=REASONS['cancelled'])
+            command = parse_command(event.text, self._lines(db)) if event.text.strip().startswith('/') else None
+            # An incompatible explicit command isolates history even if its row
+            # was removed later and reparsing now yields clarify. This boundary
+            # does NOT authorize clearing a reset-required pending recipient.
+            command_boundary = command is not None and command.action not in {'list', 'fiche', 'status'}
+            if reset or command_boundary:
+                if not self._committed_reply_matches(db, source, reply):
+                    raise ValueError('History reset lacks committed reply')
+                return event.update_id
+        return -1
+
     def guided_history(self, user_id: int, chat_id: int) -> tuple[dict, ...]:
         with self._connection() as db:
             db.execute('BEGIN')
+            # Find the real reset independently of the last-three window: cached
+            # pre-reset choices may be replayed with newer update IDs.
+            boundary = self._guided_history_boundary(db, user_id, chat_id)
             rows = db.execute('SELECT * FROM inbox WHERE user_id=? AND chat_id=? AND completed=1 '
-                              'ORDER BY update_id DESC', (user_id, chat_id))
+                              'AND update_id>? ORDER BY update_id DESC', (user_id, chat_id, boundary))
             pairs = []
             for source in rows:
                 event = self._stored_event(source)
@@ -467,16 +489,11 @@ class GuidedRepository:
                             or not self._guided_receipt(db, token, event, q)
                             or reply != Reply.model_validate_json(token['result_json'])):
                         raise ValueError('History callback lacks authenticated selection')
+                    if q.source_update_id <= boundary:
+                        continue  # Authenticated replay, but outside this inference segment.
                     text = q.choices[token['choice_index']].label
                 else:
                     text = event.text
-                    if canonical_name(text) == 'cancelar' and reply == Reply(text=REASONS['cancelled']):
-                        break  # Audit survives; expired recipients cannot cross this real reset.
-                    if text.strip().startswith('/'):
-                        from interpreter import parse_command
-                        command = parse_command(text, self._lines(db))
-                        if command is not None and command.action not in {'list', 'fiche', 'status'}:
-                            break  # A genuine deterministic fresh command starts a new segment.
                 pairs.append(({'role': 'user', 'content': text}, {'role': 'assistant', 'content': reply.text}))
                 if len(pairs) == 3:
                     break

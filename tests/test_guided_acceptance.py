@@ -373,6 +373,47 @@ def test_archive_integrity_distinguishes_recorded_probe_from_current_verifier():
         '5496d090e75e06e4b524dced7866a1d27bfd146c432e887f6455ab9fd5683278')
 
 
+def test_v3_exact_runtime_is_independently_archivable_without_hash_exemption(monkeypatch):
+    module = probe()
+    monkeypatch.setattr(module, 'MATRIX', EVIDENCE / 'matrix-v3.json')
+    result = module.verify_file(EVIDENCE / 'offline-v3.jsonl')
+    assert result['integrity']['archived_source_commit'] == 'd026f0528e9a25f40c94dab4cfc61333864a6271'
+    assert result['integrity']['recorded_runtime_verified'] is True
+
+
+def test_v3_new_resource_runtime_source_hash_cannot_be_waived(tmp_path, monkeypatch):
+    import base64
+    import json
+    module = probe()
+    monkeypatch.setattr(module, 'MATRIX', EVIDENCE / 'matrix-v3.json')
+    metadata = json.loads(module.ARCHIVE3_METADATA.read_text())
+    newline = metadata['newline_map']['migrations/__init__.py']
+    bits = bytearray(base64.b64decode(newline['crlf_bitmap']))
+    bits[0] ^= 1
+    newline['crlf_bitmap'] = base64.b64encode(bits).decode()
+    file = tmp_path / 'archive-v3.json'
+    file.write_text(json.dumps(metadata), encoding='utf-8')
+    monkeypatch.setattr(module, 'ARCHIVE3_METADATA', file)
+    result = module.verify_file(EVIDENCE / 'offline-v3.jsonl')
+    assert result['integrity']['recorded_runtime_verified'] is False
+    assert any('source bytes mismatch: migrations/__init__.py' in e for e in result['errors'])
+
+
+def test_v3_raw_mutation_still_fails_both_archive_integrity_and_native_oracle(tmp_path, monkeypatch):
+    import json
+    module = probe()
+    monkeypatch.setattr(module, 'MATRIX', EVIDENCE / 'matrix-v3.json')
+    records = [json.loads(l) for l in (EVIDENCE / 'offline-v3.jsonl').read_text().splitlines()]
+    record = next(r for r in records[1:] if r['case'] == 'shared' and r['path'] == 'button'
+                  and r['repetition'] == 1 and r['step'] == 3)
+    replace_raw_response(record, lambda args: args.update(quantity=999))
+    file = tmp_path / 'changed.jsonl'
+    file.write_text('\n'.join(json.dumps(r) for r in records), encoding='utf-8')
+    result = module.verify_file(file)
+    assert any('archived raw artifact changed' in e for e in result['errors'])
+    assert any('raw decoded candidate disagrees' in e for e in result['errors'])
+
+
 def test_duplicate_raw_json_key_cannot_hide_a_bad_quantity():
     import base64
     record, step = archived_step('shared', 3)

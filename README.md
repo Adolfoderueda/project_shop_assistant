@@ -76,13 +76,13 @@ $env:PYTHONPATH=(Get-Location).Path
 Cada salida es inmutable; elegir una ruta nueva. `--verify` no llama al modelo y
 devuelve nonzero si faltan pasos, hay fallos, cambian hashes o expectativas no coinciden.
 Botones simulados/etiquetas ofrecidas no cuentan como comprensión del modelo.
-El verificador v4 revalida la evidencia v2 inmutable contra su commit Git archivado y
+El verificador v5 revalida la evidencia v2/v3 inmutable contra sus commits Git archivados y
 `archive-v2.json` (bytes/fin de línea exactos), separando el intérprete ejecutado del
 verificador actual. Requiere esos objetos Git locales; no descarga nada ni exime hashes
 de código. Revalidar historia no demuestra aceptación del runtime actual.
-La evaluación nueva usa `--matrix docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v3.json`
+La evaluación nueva usa `--matrix docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v5.json`
 tanto al ejecutar como al verificar. Sus resultados y diagnóstico nativo se registran
-por separado en [la ronda final](docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v3.md).
+por separado en [la ronda final](docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v5.md).
 Las migraciones SQL se declaran recursos del paquete `migrations`; sin backend de
 build instalado, la comprobación de un wheel realmente instalado sigue bloqueada.
 

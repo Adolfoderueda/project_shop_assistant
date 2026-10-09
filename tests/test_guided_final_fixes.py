@@ -263,3 +263,68 @@ def test_fresh_deterministic_command_resets_expired_legacy_recipient(tmp_path):
     request = json.loads(s.calls[-1].content)
     assert 'arroz' not in json.dumps(request['messages'][1:])
 
+
+@pytest.mark.parametrize('replays', [1, 3])
+def test_valid_successful_callback_replays_cannot_cross_real_reset_history_boundary(tmp_path, replays):
+    c = persisted_case(tmp_path)
+    c.record_known_delivery()
+    token = c.choice_token('one_each')
+    c.ingest_callback(2, token)
+    result = c.repo.apply_guided_callback(2, now=c.now)
+    c.ingest_message(3, 'Cancelar')
+    c.repo.apply_guided(3, None, expected_question_version=None, now=c.now)
+    for update in range(4, 4 + replays):
+        c.ingest_callback(update, token)
+        assert c.repo.apply_guided_callback(update, now=c.now) == result
+    assert Repository(c.repo.path).guided_history(7, 7) == ()
+    assert c.repo.list_lines() == []
+
+
+def test_corrupt_old_callback_replay_is_not_laundered_by_reset(tmp_path):
+    c = persisted_case(tmp_path)
+    c.record_known_delivery()
+    token = c.choice_token('one_each')
+    c.ingest_callback(2, token)
+    c.repo.apply_guided_callback(2, now=c.now)
+    c.ingest_message(3, 'Cancelar')
+    c.repo.apply_guided(3, None, expected_question_version=None, now=c.now)
+    c.ingest_callback(4, token)
+    c.repo.apply_guided_callback(4, now=c.now)
+    with c.repo._connection(write=True) as db:
+        db.execute('UPDATE guided_tokens SET result_json=? WHERE token=?', ('{"text":"forged"}', token))
+    with pytest.raises(ValueError):
+        c.repo.guided_history(7, 7)
+
+
+@pytest.mark.parametrize('command', ['/lista', '/estado synthetic', '/desconocido'])
+def test_read_or_invalid_slash_after_legacy_expiry_cannot_clear_reset_requirement(tmp_path, command):
+    s = Session(tmp_path)
+    s.send('/anadir arroz')
+    s.now += timedelta(minutes=16)
+    s.send(command)
+    reply = s.send('2', httpx.Response(200, json={'done': True, 'done_reason': 'stop', 'message': {
+        'role': 'assistant', 'tool_calls': [{'function': {'name': 'proponer_altas',
+            'arguments': {'items': [{'description': 'arroz', 'quantity': 2}]}}}]}}))
+    assert reply.text == 'La petición anterior ha caducado. Cancélala para iniciar una nueva.'
+    assert s.calls == []
+    assert s.saved() == []
+
+
+def test_successful_remove_command_history_boundary_survives_deleted_reference(tmp_path):
+    from interpreter import parse_command
+    c = persisted_case(tmp_path)
+    with c.repo._connection(write=True) as db:
+        db.execute("INSERT INTO list_lines VALUES ('saved',NULL,'leche',2,1,1)")
+    c.record_known_delivery()
+    token = c.choice_token('one_each')
+    c.ingest_callback(2, token)
+    cached = c.repo.apply_guided_callback(2, now=c.now)
+    c.ingest_message(3, '/quitar saved')
+    command = parse_command('/quitar saved', c.repo.list_lines())
+    assert command.action == 'remove'
+    c.repo.revoke_guided(7, now=c.now)
+    c.repo.apply_intent(3, command, 'dry_run')
+    assert c.repo.list_lines() == []
+    c.ingest_callback(4, token)
+    assert c.repo.apply_guided_callback(4, now=c.now) == cached
+    assert c.repo.guided_history(7, 7) == ()

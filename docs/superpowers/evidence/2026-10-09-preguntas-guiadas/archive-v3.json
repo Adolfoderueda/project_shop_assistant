@@ -1,0 +1,267 @@
+{
+  "version": 1,
+  "generation": 3,
+  "commit": "d026f0528e9a25f40c94dab4cfc61333864a6271",
+  "artifact_newlines": {
+    "offline": "CRLF",
+    "real": "CRLF"
+  },
+  "newline_map": {
+    "catalog.py": {
+      "linebreaks": 49,
+      "crlf_bitmap": "////////AQ=="
+    },
+    "checkout.py": {
+      "linebreaks": 124,
+      "crlf_bitmap": "////////////////////Dw=="
+    },
+    "checkout_storage.py": {
+      "linebreaks": 259,
+      "crlf_bitmap": "//////////////////////////////////////////8H"
+    },
+    "cli.py": {
+      "linebreaks": 358,
+      "crlf_bitmap": "////////////////////////////AQAAAADg/////4f//////////x////A/"
+    },
+    "config.py": {
+      "linebreaks": 263,
+      "crlf_bitmap": "////5+P///////////////////////////////////9/"
+    },
+    "conversation.py": {
+      "linebreaks": 103,
+      "crlf_bitmap": "////////////////fw=="
+    },
+    "dialogue.py": {
+      "linebreaks": 222,
+      "crlf_bitmap": "////////////////////////////////////Pw=="
+    },
+    "dialogue_additions.py": {
+      "linebreaks": 50,
+      "crlf_bitmap": "////////Aw=="
+    },
+    "dialogue_controller.py": {
+      "linebreaks": 319,
+      "crlf_bitmap": "////////////////////////////////////////////////////fw=="
+    },
+    "dialogue_increments.py": {
+      "linebreaks": 89,
+      "crlf_bitmap": "//////////////8B"
+    },
+    "dialogue_replies.py": {
+      "linebreaks": 42,
+      "crlf_bitmap": "//////8D"
+    },
+    "dialogue_requests.py": {
+      "linebreaks": 125,
+      "crlf_bitmap": "////////////////////Hw=="
+    },
+    "dialogue_storage.py": {
+      "linebreaks": 234,
+      "crlf_bitmap": "//////////////////////////////////////8D"
+    },
+    "domain.py": {
+      "linebreaks": 199,
+      "crlf_bitmap": "3////98BAAAAwP////8B8P//////////fw=="
+    },
+    "interpreter.py": {
+      "linebreaks": 193,
+      "crlf_bitmap": "////////////////////////////////AQ=="
+    },
+    "migrations/001.sql": {
+      "linebreaks": 55,
+      "crlf_bitmap": "////////fw=="
+    },
+    "migrations/002.sql": {
+      "linebreaks": 7,
+      "crlf_bitmap": "fw=="
+    },
+    "migrations/003.sql": {
+      "linebreaks": 17,
+      "crlf_bitmap": "//8B"
+    },
+    "migrations/004.sql": {
+      "linebreaks": 14,
+      "crlf_bitmap": "/z8="
+    },
+    "migrations/005.sql": {
+      "linebreaks": 12,
+      "crlf_bitmap": "/w8="
+    },
+    "migrations/006.sql": {
+      "linebreaks": 9,
+      "crlf_bitmap": "/wE="
+    },
+    "migrations/007.sql": {
+      "linebreaks": 10,
+      "crlf_bitmap": "/wM="
+    },
+    "migrations/008.sql": {
+      "linebreaks": 7,
+      "crlf_bitmap": "fw=="
+    },
+    "migrations/009.sql": {
+      "linebreaks": 13,
+      "crlf_bitmap": "/x8="
+    },
+    "migrations/010.sql": {
+      "linebreaks": 54,
+      "crlf_bitmap": "AAAAAAAAAA=="
+    },
+    "migrations/__init__.py": {
+      "linebreaks": 1,
+      "crlf_bitmap": "AA=="
+    },
+    "offers.py": {
+      "linebreaks": 224,
+      "crlf_bitmap": "/////////////////////////////////////w=="
+    },
+    "ollama_interpreter.py": {
+      "linebreaks": 198,
+      "crlf_bitmap": "////////////////////////////////Pw=="
+    },
+    "ollama_replies.py": {
+      "linebreaks": 161,
+      "crlf_bitmap": "//////////////////////////8B"
+    },
+    "presentation.py": {
+      "linebreaks": 121,
+      "crlf_bitmap": "////////////////////AQ=="
+    },
+    "presentation_phrases.py": {
+      "linebreaks": 55,
+      "crlf_bitmap": "////////fw=="
+    },
+    "presentation_replies.py": {
+      "linebreaks": 200,
+      "crlf_bitmap": "/////////////////////////////////w=="
+    },
+    "presentation_storage.py": {
+      "linebreaks": 100,
+      "crlf_bitmap": "///i///////w////Dw=="
+    },
+    "presentation_validation.py": {
+      "linebreaks": 119,
+      "crlf_bitmap": "//////////////////9/"
+    },
+    "product_memory.py": {
+      "linebreaks": 61,
+      "crlf_bitmap": "/////////x8="
+    },
+    "pyproject.toml": {
+      "linebreaks": 31,
+      "crlf_bitmap": "/3/zfw=="
+    },
+    "recovery.py": {
+      "linebreaks": 39,
+      "crlf_bitmap": "/////38="
+    },
+    "restrictions.py": {
+      "linebreaks": 21,
+      "crlf_bitmap": "//8f"
+    },
+    "runtime.py": {
+      "linebreaks": 197,
+      "crlf_bitmap": "z//////////////9////APj//wcA4P//Hw=="
+    },
+    "shopping_agent/__init__.py": {
+      "linebreaks": 1,
+      "crlf_bitmap": "AQ=="
+    },
+    "shopping_agent/contracts.py": {
+      "linebreaks": 298,
+      "crlf_bitmap": "M4D///////////////////f/g/8/AAAAAAAAAAAAnv//n////wM="
+    },
+    "shopping_agent/conversation.py": {
+      "linebreaks": 54,
+      "crlf_bitmap": "/////+P/Pw=="
+    },
+    "shopping_agent/guided_contracts.py": {
+      "linebreaks": 225,
+      "crlf_bitmap": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    },
+    "shopping_agent/guided_controller.py": {
+      "linebreaks": 480,
+      "crlf_bitmap": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    "shopping_agent/guided_conversation.py": {
+      "linebreaks": 87,
+      "crlf_bitmap": "AAAAAAAAAAAAAAA="
+    },
+    "shopping_agent/guided_ollama.py": {
+      "linebreaks": 266,
+      "crlf_bitmap": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+    },
+    "shopping_agent/guided_replies.py": {
+      "linebreaks": 33,
+      "crlf_bitmap": "AAAAAAA="
+    },
+    "shopping_agent/guided_storage.py": {
+      "linebreaks": 501,
+      "crlf_bitmap": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    "shopping_agent/ollama.py": {
+      "linebreaks": 150,
+      "crlf_bitmap": "////////////////////////Pw=="
+    },
+    "shopping_agent/proposals.py": {
+      "linebreaks": 363,
+      "crlf_bitmap": "////////////////////////////////////////////////////////Af4AAA=="
+    },
+    "shopping_agent/replies.py": {
+      "linebreaks": 124,
+      "crlf_bitmap": "////////////////////Dw=="
+    },
+    "shopping_agent/skills/altas.md": {
+      "linebreaks": 26,
+      "crlf_bitmap": "g///Aw=="
+    },
+    "shopping_agent/skills/cambios.md": {
+      "linebreaks": 38,
+      "crlf_bitmap": "/////z8="
+    },
+    "shopping_agent/skills/consultar.md": {
+      "linebreaks": 12,
+      "crlf_bitmap": "/w8="
+    },
+    "shopping_agent/skills/propuestas.md": {
+      "linebreaks": 56,
+      "crlf_bitmap": "AwD//////w=="
+    },
+    "shopping_agent/skills.py": {
+      "linebreaks": 11,
+      "crlf_bitmap": "/wc="
+    },
+    "shopping_agent/storage.py": {
+      "linebreaks": 415,
+      "crlf_bitmap": "//94/v/////////g//////8+/P//////P/z///j/////////////////////////m/9/AA=="
+    },
+    "shopping_agent/tools.py": {
+      "linebreaks": 179,
+      "crlf_bitmap": "/////////////////////////////wc="
+    },
+    "storage.py": {
+      "linebreaks": 662,
+      "crlf_bitmap": "nz8A/vz/v////wAA////////////N/0HAAAAAAAAAAAACAAAAAAAAAAAgH8AAAAAAAAAAMD//////wO+////h////////////////////////z8="
+    },
+    "telegram_io.py": {
+      "linebreaks": 204,
+      "crlf_bitmap": "BwDz/3/oPwAAAPD///4AAAAQAAw+Ow/8/w8="
+    },
+    "tests/fakes.py": {
+      "linebreaks": 124,
+      "crlf_bitmap": "3///////////////P8D/Dw=="
+    },
+    "tests/guided_helpers.py": {
+      "linebreaks": 213,
+      "crlf_bitmap": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    "scripts/probe_guided_questions.py": {
+      "linebreaks": 783,
+      "crlf_bitmap": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    },
+    "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v3.json": {
+      "linebreaks": 2677,
+      "crlf_bitmap": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    }
+  }
+}

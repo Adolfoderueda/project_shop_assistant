@@ -48,6 +48,12 @@ class GuidedConversation:
         self.repo.set_conversation_route(event.user_id, event.chat_id, 'agent', now=now)
         if event.text.strip().startswith('/') or purchase_authorized(event.text):
             command = parse_command(event.text, self.repo.list_lines())
+            if command is not None and command.action in {'list', 'fiche', 'status'}:
+                # A deterministic read must not let the legacy reducer discard
+                # an expired recipient and thereby bypass the explicit-reset gate.
+                return self.repo.apply_intent(event.update_id, command, mode)
+            if (command is None or command.action == 'clarify') and self.repo.guided_reset_required(event.update_id, now=now):
+                return self.repo.complete_agent_reply(event.update_id, Reply(text=RESET_REQUIRED))
             if command is None or command.action not in {'list', 'fiche', 'status'}:
                 self.repo.revoke_guided(event.user_id, now=now)
             return await self.legacy.handle(event, mode)

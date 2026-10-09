@@ -21,8 +21,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / 'docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix.json'
+ARCHIVE_DIRECTORY = MATRIX.parent
 TEMP = Path('C:/Users/Takeshi/AppData/Local/Temp/opencode')
-VERIFIER_VERSION = 4
+VERIFIER_VERSION = 5
 ARCHIVE_COMMIT = '6bf409ceed110104f3aa1e1fb6e75ad311dd27ca'
 ARCHIVE_PROBE = '5496d090e75e06e4b524dced7866a1d27bfd146c432e887f6455ab9fd5683278'
 ARCHIVE_HASHES = {
@@ -30,11 +31,18 @@ ARCHIVE_HASHES = {
     'real': '78242888039e8ae5e743793da407b26e6391a3c9ed073f9d466da20f3b249f8f',
 }
 ARCHIVE_METADATA = MATRIX.with_name('archive-v2.json')
+ARCHIVE3_COMMIT = 'd026f0528e9a25f40c94dab4cfc61333864a6271'
+ARCHIVE3_PROBE = 'e8026771b4af2f9d55f39ef830057be29509aa705c42c7df3fb972eb9e8d5902'
+ARCHIVE3_HASHES = {
+    'offline': 'be8716967aeb709c2c716522ab80dda9be39ad6dc072e9345c8431bfeafe8637',
+    'real': '261b84b63ebfc2fc21f325625dd6a485f92f941e65d5cc09edb9dc23acb9c254',
+}
+ARCHIVE3_METADATA = MATRIX.with_name('archive-v3.json')
 
 
-def git_blob(path):
+def git_blob(path, commit=ARCHIVE_COMMIT):
     """Pinned, local Git object only; no application imports, network or mutable HEAD."""
-    return subprocess.run(['git', 'show', f'{ARCHIVE_COMMIT}:{path}'], cwd=ROOT,
+    return subprocess.run(['git', 'show', f'{commit}:{path}'], cwd=ROOT,
                           capture_output=True, check=True).stdout
 
 
@@ -54,17 +62,19 @@ def archived_reference():
     return records[0], schemas
 
 
-def archived_artifact(mode):
-    metadata = json.loads(ARCHIVE_METADATA.read_text(encoding='utf-8'))
-    if (metadata['commit'] != ARCHIVE_COMMIT or metadata['version'] != 1
+def archived_artifact(mode, *, generation=2):
+    commit, hashes, meta = (ARCHIVE_COMMIT, ARCHIVE_HASHES, ARCHIVE_METADATA) if generation == 2 else (
+        ARCHIVE3_COMMIT, ARCHIVE3_HASHES, ARCHIVE3_METADATA)
+    metadata = json.loads(meta.read_text(encoding='utf-8'))
+    if (generation not in {2, 3} or metadata['commit'] != commit or metadata['version'] != 1
             or metadata['artifact_newlines'].get(mode) != 'CRLF'):
         raise ValueError('Unverified archived artifact pointer/newline declaration')
-    path = MATRIX.with_name(f'{mode}-v2.jsonl').relative_to(ROOT).as_posix()
-    blob = git_blob(path)
+    path = (ARCHIVE_DIRECTORY / f'{mode}-v{generation}.jsonl').relative_to(ROOT).as_posix()
+    blob = git_blob(path, commit)
     if b'\r' in blob:
         raise ValueError('Archived Git artifact is not declared normalized LF')
     raw = blob.replace(b'\n', b'\r\n')
-    if hashlib.sha256(raw).hexdigest() != ARCHIVE_HASHES[mode]:
+    if hashlib.sha256(raw).hexdigest() != hashes[mode]:
         raise ValueError('Archived evidence exact byte hash mismatch')
     return raw
 
@@ -468,26 +478,33 @@ def verify_integrity(manifest, raw):
     info = {'verifier_version': VERIFIER_VERSION, 'current_verifier_sha256': digest(Path(__file__)),
             'recorded_probe_sha256': manifest.get('script_hash')}
     errors = []
-    if manifest.get('script_hash') != ARCHIVE_PROBE:
+    generation = {ARCHIVE_PROBE: 2, ARCHIVE3_PROBE: 3}.get(manifest.get('script_hash'))
+    if generation is None:
         for key, expected in {'script_hash': digest(Path(__file__)), 'code_hashes': code_hashes()}.items():
             if manifest.get(key) != expected:
                 errors.append('manifest mismatch: ' + key)
         info['evaluation_scope'] = 'current execution source'
         return info, errors
-    reference, _ = archived_reference()
-    metadata = json.loads(ARCHIVE_METADATA.read_text(encoding='utf-8'))
-    if metadata['commit'] != ARCHIVE_COMMIT or metadata['version'] != 1:
+    commit, hashes, meta, probe_hash, matrix_path = (
+        (ARCHIVE_COMMIT, ARCHIVE_HASHES, ARCHIVE_METADATA, ARCHIVE_PROBE,
+         ARCHIVE_DIRECTORY / 'matrix.json') if generation == 2 else
+        (ARCHIVE3_COMMIT, ARCHIVE3_HASHES, ARCHIVE3_METADATA, ARCHIVE3_PROBE,
+         ARCHIVE_DIRECTORY / 'matrix-v3.json'))
+    reference = (archived_reference()[0] if generation == 2 else
+                 json.loads(archived_artifact('offline', generation=3).decode('utf-8').splitlines()[0]))
+    metadata = json.loads(meta.read_text(encoding='utf-8'))
+    if metadata['commit'] != commit or metadata['version'] != 1:
         raise ValueError('Unverified archived source pointer')
     mode = manifest['mode']
-    if (mode not in ARCHIVE_HASHES or hashlib.sha256(raw).hexdigest() != ARCHIVE_HASHES[mode]
-            or raw != archived_artifact(mode)):
+    if (mode not in hashes or hashlib.sha256(raw).hexdigest() != hashes[mode]
+            or raw != archived_artifact(mode, generation=generation)):
         errors.append('integrity:archived raw artifact changed')
     if manifest['code_hashes'] != reference['code_hashes']:
         errors.append('integrity:recorded runtime cohort differs from archive')
-    sources = {**reference['code_hashes'], 'scripts/probe_guided_questions.py': ARCHIVE_PROBE,
-               MATRIX.relative_to(ROOT).as_posix(): reference['matrix_hash']}
+    sources = {**reference['code_hashes'], 'scripts/probe_guided_questions.py': probe_hash,
+               matrix_path.relative_to(ROOT).as_posix(): reference['matrix_hash']}
     for name, expected in sources.items():
-        blob = git_blob(name)
+        blob = git_blob(name, commit)
         newline = metadata['newline_map'].get(name)
         if newline:
             bits = base64.b64decode(newline['crlf_bitmap'], validate=True)
@@ -500,9 +517,9 @@ def verify_integrity(manifest, raw):
         if hashlib.sha256(blob).hexdigest() != expected:
             errors.append('integrity:archived source bytes mismatch: ' + name)
     current = code_hashes()
-    info.update(archived_source_commit=ARCHIVE_COMMIT,
-                archive_metadata_sha256=digest(ARCHIVE_METADATA),
-                evaluation_scope='immutable archived v2 execution, NOT current-runtime acceptance',
+    info.update(archived_source_commit=commit,
+                archive_metadata_sha256=digest(meta),
+                evaluation_scope=f'immutable archived v{generation} execution, NOT current-runtime acceptance',
                 recorded_runtime_verified=not errors,
                 current_runtime_differences=sorted(n for n in current.keys() | reference['code_hashes'].keys()
                     if current.get(n) != reference['code_hashes'].get(n)))
