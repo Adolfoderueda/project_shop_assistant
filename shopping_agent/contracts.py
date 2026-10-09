@@ -1,9 +1,18 @@
 """Agent boundaries: model suggestions carry no identity or mutation authority."""
 
+import json
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AfterValidator, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    Discriminator,
+    Field,
+    Tag,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 from dialogue import (
     DIALOGUE_TTL,
@@ -158,13 +167,84 @@ class AgentProposal(Model):
         return self
 
 
+SourceUpdateId = Annotated[int, Field(ge=0)]
+
+
+def unique_positions(positions: tuple[int, ...]) -> tuple[int, ...]:
+    if len(set(positions)) != len(positions):
+        raise ValueError("positions must be unique")
+    return positions
+
+
+Positions = Annotated[tuple[Position, ...], Field(max_length=20), AfterValidator(unique_positions)]
+
+
+class Contribution(Model):
+    update_id: SourceUpdateId
+    positions: Positions
+    kind: Literal["create", "edit", "append", "decision"]
+
+
+class ReviewWitness(Model):
+    proposal_id: UUID
+    revision: Positive
+    question_id: UUID
+    summary_digest: Annotated[str, Field(min_length=1)]
+    source_update_id: SourceUpdateId
+    notice_id: Annotated[str, Field(min_length=1)]
+    delivered_message_id: Positive | None
+
+
+class GuidedProposal(AgentProposal):
+    schema_version: Literal[2] = 2
+    source_update_id: SourceUpdateId
+    contributions: tuple[Contribution, ...] = Field(min_length=1)
+    review: ReviewWitness | None = None
+
+    @model_validator(mode="after")
+    def valid_guided_provenance(self) -> Self:
+        positions = {item.position for item in self.items}
+        if any(not set(contribution.positions) <= positions for contribution in self.contributions):
+            raise ValueError("contributions must refer to existing positions")
+        if self.review is not None and (
+            self.review.proposal_id != self.id or self.review.revision != self.revision
+            or self.condition is not None or not all(item.complete for item in self.items)
+        ):
+            raise ValueError("review witness requires a complete unconditional current proposal")
+        return self
+
+
+def proposal_version(value: object) -> object:
+    if isinstance(value, dict):
+        return value.get("schema_version", 1)
+    return getattr(value, "schema_version", None)
+
+
+# A callable discriminator preserves v1's strict before-validator and default
+# version, unlike a field discriminator (which forbids before-validators).
+StoredProposal = Annotated[
+    Annotated[AgentProposal, Tag(1)] | Annotated[GuidedProposal, Tag(2)],
+    Discriminator(proposal_version),
+]
+_proposal_adapter = TypeAdapter(StoredProposal)
+
+
+def decode_proposal(payload: str) -> StoredProposal:
+    """Read historical v1 JSON (including its default version) or explicit v2."""
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("proposal must be an object")  # noqa: TRY004 - decoding boundary
+    data.setdefault("schema_version", 1)
+    return _proposal_adapter.validate_json(json.dumps(data))
+
+
 class Reservation(Model):
     line_id: str
     order_id: str
 
 
 class AgentSnapshot(Model):
-    proposal: AgentProposal | None = None
+    proposal: StoredProposal | None = None
     lines: tuple[ListLine, ...] = ()
     reservations: tuple[Reservation, ...] = ()
     user_id: int
@@ -188,7 +268,7 @@ DecisionReason = Literal[
 
 
 class ProposalDecision(Model):
-    proposal: AgentProposal | None = None
+    proposal: StoredProposal | None = None
     reason: DecisionReason
     mutations: tuple[DialogueMutation, ...] = ()
 
