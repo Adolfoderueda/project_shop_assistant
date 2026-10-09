@@ -35,7 +35,9 @@ def durable(repo):
     with sqlite3.connect(repo.path) as db:
         tables = ("list_lines", "orders", "order_lines", "execution", "reservations", "inbox",
                   "outbox", "meta", "observed_products", "dialogue_state")
-        return {t: db.execute(f"SELECT * FROM {t} ORDER BY rowid").fetchall() for t in tables}
+        return {t: db.execute(
+            f"SELECT {'update_id,user_id,chat_id,text,completed,reply_json' if t == 'inbox' else '*'} "
+            f"FROM {t} ORDER BY rowid").fetchall() for t in tables}
 
 
 def test_v6_upgrade_preserves_all_durable_work(tmp_path):
@@ -60,8 +62,8 @@ def test_v6_upgrade_preserves_all_durable_work(tmp_path):
     repo.migrate()
     assert durable(repo) == before | {"dialogue_state": []}
     with sqlite3.connect(repo.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 9
-        db.execute("PRAGMA user_version=10")
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 10
+        db.execute("PRAGMA user_version=11")
     with pytest.raises(ValueError, match="newer"):
         repo.migrate()
 

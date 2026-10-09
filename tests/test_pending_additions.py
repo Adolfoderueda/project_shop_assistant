@@ -193,7 +193,17 @@ def test_product_query_preserves_saved_quantity_question(tmp_path):
 
 
 def test_v8_preserves_rows_and_prepared_v1(tmp_path):
-    repo = make_repo(tmp_path)
+    from pathlib import Path
+
+    from catalog import PRODUCT_RULES
+    from tests.test_dialogue_storage import v5_repo
+
+    repo = v5_repo(tmp_path)
+    with sqlite3.connect(repo.path) as db:
+        for version in (6, 7):
+            db.executescript((Path(__file__).parents[1] / f'migrations/{version:03}.sql').read_text())
+        db.executemany('INSERT INTO products VALUES (?,?)',
+                       [(rule.id, rule.model_dump_json()) for rule in PRODUCT_RULES])
     old = seed_line(repo, "arroz")
     message = IncomingMessage(update_id=30, user_id=7, chat_id=7, text="añade 2 leche")
     repo.ingest_batch([message], 31)
@@ -215,19 +225,20 @@ def test_v8_preserves_rows_and_prepared_v1(tmp_path):
         db.execute("UPDATE dialogue_state SET state_json=?", (json.dumps(payload),))
         tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
                   if r[0] != "dialogue_state"]
-        durable = {t: db.execute(f'SELECT * FROM "{t}" ORDER BY rowid').fetchall() for t in tables}
-        db.execute("PRAGMA user_version=7")
+        queries = {t: f"SELECT {'update_id,user_id,chat_id,text,completed,reply_json' if t == 'inbox' else '*'} "
+                      f'FROM "{t}" ORDER BY rowid' for t in tables}
+        durable = {t: db.execute(query).fetchall() for t, query in queries.items()}
     repo.migrate()
     repo.migrate()
     assert repo.list_lines() == rows and old in rows
     assert repo.dialogue_state(7, 7, now=datetime.now(UTC)) is None
     with sqlite3.connect(repo.path) as db:
-        assert {t: db.execute(f'SELECT * FROM "{t}" ORDER BY rowid').fetchall() for t in tables} == durable
+        assert {t: db.execute(query).fetchall() for t, query in queries.items()} == durable
     assert repo.prepared_presentation(30) == prepared
     assert repo.apply_dialogue(30, None, "dry_run", now=datetime.now(UTC)) == prepared.snapshot.fallback
     assert repo.list_lines() == rows
     with sqlite3.connect(repo.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 9
-        db.execute("PRAGMA user_version=10")
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 10
+        db.execute("PRAGMA user_version=11")
     with pytest.raises(ValueError):
         repo.migrate()

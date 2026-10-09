@@ -37,12 +37,14 @@ def test_v8_migration_preserves_all_old_tables(tmp_path):
     job = prepare_add(repo)
     with sqlite3.connect(repo.path) as db:
         tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
-        before = {t: db.execute(f'SELECT * FROM {t}').fetchall() for t in tables}
+        queries = {t: f"SELECT {'update_id,user_id,chat_id,text,completed,reply_json' if t == 'inbox' else '*'} FROM {t}"
+                   for t in tables}
+        before = {t: db.execute(query).fetchall() for t, query in queries.items()}
         assert all(before[t] for t in ('list_lines', 'orders', 'order_lines', 'reservations', 'execution', 'inbox', 'outbox', 'dialogue_state', 'presentation_jobs'))
     repo.migrate()
     with sqlite3.connect(repo.path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 9
-        assert {t: db.execute(f'SELECT * FROM {t}').fetchall() for t in tables} == before
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 10
+        assert {t: db.execute(query).fetchall() for t, query in queries.items()} == before
     assert repo.complete_agent_reply(11, job.snapshot.fallback) == job.snapshot.fallback
     assert len(repo.list_lines()) == 2
 

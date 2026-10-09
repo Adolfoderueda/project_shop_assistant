@@ -17,6 +17,8 @@ class PresentationRepository:
         if (source is None or (row["user_id"], row["chat_id"]) !=
                 (source["user_id"], source["chat_id"])):
             raise ValueError("Presentation source identity mismatch or orphan job")
+        if 'kind' in tuple(source.keys()) and source['kind'] != 'message':
+            raise ValueError('A callback cannot have a generative presentation job')
         IncomingMessage(**{k: source[k] for k in ("update_id", "user_id", "chat_id", "text")})
         snapshot = PresentationSnapshot.model_validate_json(row["snapshot_json"])
         if (source["text"].strip().startswith("/") or snapshot.fallback.order_id is not None
@@ -62,6 +64,8 @@ class PresentationRepository:
             source = db.execute("SELECT * FROM inbox WHERE update_id=?", (update_id,)).fetchone()
             if source is None:
                 raise KeyError(update_id)
+            if 'kind' in tuple(source.keys()) and source['kind'] != 'message':
+                raise ValueError('A callback cannot enter legacy presentation')
             if source["completed"]:
                 return Reply.model_validate_json(source["reply_json"])
             if prepared is not None:

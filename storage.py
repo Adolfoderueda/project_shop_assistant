@@ -11,7 +11,17 @@ from catalog import PRODUCT_RULES, resolve_product
 from checkout_storage import CheckoutRepository
 from dialogue import expired
 from dialogue_storage import DialogueRepository
-from domain import IncomingMessage, Intent, IntentLine, ListLine, Order, Reply
+from domain import (
+    IncomingCallback,
+    IncomingEvent,
+    IncomingMessage,
+    Intent,
+    IntentLine,
+    ListLine,
+    Order,
+    Reply,
+    decode_event,
+)
 from presentation_storage import PresentationRepository
 from product_memory import (
     ObservedProduct,
@@ -66,26 +76,22 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 9:
+            if version > 10:
                 raise ValueError("Database schema is newer than this application")
-            if version == 0:
-                db.executescript((Path(__file__).parent / "migrations/001.sql").read_text())
-            if version < 2:
-                db.executescript((Path(__file__).parent / "migrations/002.sql").read_text())
-            if version < 3:
-                db.executescript((Path(__file__).parent / "migrations/003.sql").read_text())
-            if version < 4:
-                db.executescript((Path(__file__).parent / "migrations/004.sql").read_text())
-            if version < 5:
-                db.executescript((Path(__file__).parent / "migrations/005.sql").read_text())
-            if version < 6:
-                db.executescript((Path(__file__).parent / "migrations/006.sql").read_text())
-            if version < 7:
-                db.executescript((Path(__file__).parent / "migrations/007.sql").read_text())
-            if version < 8:
-                db.executescript((Path(__file__).parent / "migrations/008.sql").read_text())
-            if version < 9:
-                db.executescript((Path(__file__).parent / "migrations/009.sql").read_text())
+            # executescript commits a pending transaction first. Execute complete SQL
+            # statements ourselves so DDL, data and user_version roll back together.
+            db.execute("BEGIN IMMEDIATE")
+            for target in range(version + 1, 11):
+                script = (Path(__file__).parent / f"migrations/{target:03}.sql").read_text()
+                statement = ''
+                for line in script.splitlines(keepends=True):
+                    statement += line
+                    if sqlite3.complete_statement(statement):
+                        if statement.strip().upper() not in {'BEGIN;', 'BEGIN IMMEDIATE;', 'COMMIT;'}:
+                            db.execute(statement)
+                        statement = ''
+                if statement.strip():
+                    raise ValueError('Incomplete migration SQL')
             db.executemany(
                 "INSERT OR IGNORE INTO observed_products "
                 "(id,store_id,product_id,title,url,observed_on,price_cents,availability,format_note) "
@@ -165,6 +171,7 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
                 if (row["user_id"], row["chat_id"]) != (user_id, user_id):
                     raise PermissionError("Stored work belongs to another owner; manual review required")
                 self._read_prepared(db, row["update_id"])
+            self._assert_guided_owner(db, user_id)
 
     def verify_formula(self, gtin: str) -> None:
         """Persist a manually cross-checked reference, without changing the baked-in catalog."""
@@ -179,16 +186,152 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
             db.execute("UPDATE products SET rule_json=? WHERE id='formula'",
                        (rule.model_copy(update={"gtin": gtin, "verified": True}).model_dump_json(),))
 
+    def _assert_guided_owner(self, db, user_id):
+        from shopping_agent.guided_contracts import GuidedQuestion, PendingTopic
+        from shopping_agent.guided_replies import render_question
+
+        try:
+            for row in db.execute('SELECT * FROM inbox'):
+                self._stored_event(row)
+            questions = {}
+            for table, column, model in (
+                ('guided_questions', 'question_json', GuidedQuestion),
+                ('guided_topics', 'topic_json', PendingTopic),
+            ):
+                for row in db.execute(f'SELECT * FROM {table}'):
+                    if (row['user_id'], row['chat_id']) != (user_id, user_id):
+                        raise ValueError('Foreign guided state')
+                    state = model.model_validate_json(row[column])
+                    if (str(state.id), state.version, state.source_update_id) != (
+                            row['id'], row['version'], row['source_update_id']):
+                        raise ValueError('Guided state metadata mismatch')
+                    source = db.execute('SELECT * FROM inbox WHERE update_id=?',
+                                        (state.source_update_id,)).fetchone()
+                    if (source is None or (source['user_id'], source['chat_id']) != (user_id, user_id)
+                            or not source['completed']):
+                        raise ValueError('Orphan guided source')
+                    self._stored_event(source)
+                    if table == 'guided_questions':
+                        if (state.owner_id, state.chat_id) != (user_id, user_id):
+                            raise ValueError('Foreign question payload')
+                        notice = db.execute('SELECT * FROM outbox WHERE id=?',
+                                            (row['notice_id'],)).fetchone()
+                        if (notice is None or notice['chat_id'] != user_id
+                                or notice['update_id'] != state.source_update_id
+                                or notice['reply_json'] != source['reply_json']
+                                or Reply.model_validate_json(notice['reply_json']).text
+                                != render_question(state).text):
+                            raise ValueError('Question notice mismatch')
+                        questions[(row['id'], row['version'])] = (state, row['notice_id'])
+            for row in db.execute('SELECT * FROM guided_tokens'):
+                question, notice_id = questions[(row['question_id'], row['question_version'])]
+                if ((row['user_id'], row['chat_id']) != (user_id, user_id)
+                        or row['notice_id'] != notice_id
+                        or not 0 <= row['choice_index'] < len(question.choices)):
+                    raise ValueError('Token binding mismatch')
+                reply = Reply.model_validate_json(db.execute(
+                    'SELECT reply_json FROM outbox WHERE id=?', (notice_id,)).fetchone()[0])
+                buttons = ([button for buttons in reply.keyboard.rows for button in buttons]
+                           if reply.keyboard else [])
+                if (len(buttons) != len(question.choices)
+                        or buttons[row['choice_index']].token != row['token']
+                        or buttons[row['choice_index']].label
+                        != question.choices[row['choice_index']].label):
+                    raise ValueError('Token not offered in its notice')
+                if row['consumed_update_id'] is not None:
+                    source = db.execute('SELECT * FROM inbox WHERE update_id=?',
+                                        (row['consumed_update_id'],)).fetchone()
+                    result = Reply.model_validate_json(row['result_json'])
+                    if (source is None or (source['user_id'], source['chat_id']) != (user_id, user_id)
+                            or not source['completed']
+                            or Reply.model_validate_json(source['reply_json']) != result):
+                        raise ValueError('Token result source mismatch')
+                    self._stored_event(source)
+                elif row['result_json'] is not None:
+                    raise ValueError('Orphan token result')
+            for row in db.execute('SELECT * FROM telegram_deliveries'):
+                if row['chat_id'] != user_id:
+                    raise ValueError('Foreign delivery')
+                self._delivery_notice(db, row['notice_id'], row['chat_id'],
+                                      row['message_id'], row['digest'])
+        except (ValueError, KeyError, TypeError, IndexError) as error:
+            raise PermissionError('Invalid retained guided provenance') from error
+
     def ingest_batch(self, messages: list[IncomingMessage], next_offset: int) -> None:
+        if any(not isinstance(message, IncomingMessage) for message in messages):
+            raise ValueError('Legacy batch cannot contain callback events')
+        self.ingest_events(messages, next_offset)
+
+    @staticmethod
+    def _stored_event(row) -> IncomingEvent:
+        if 'kind' not in tuple(row.keys()):
+            return IncomingMessage(**{k: row[k] for k in ('update_id', 'user_id', 'chat_id', 'text')})
+        if row['kind'] == 'message':
+            event = IncomingMessage(**{k: row[k] for k in ('update_id', 'user_id', 'chat_id', 'text')})
+            if row['callback_query_id'] is not None or row['callback_ack_state'] is not None:
+                raise ValueError('Invalid message metadata')
+        elif row['kind'] == 'callback':
+            event = decode_event(json.loads(row['payload_json']))
+            if (not isinstance(event, IncomingCallback) or row['text'] != ''
+                    or event.callback_query_id != row['callback_query_id']
+                    or row['callback_ack_state'] not in {'pending', 'sent', 'expired'}):
+                raise ValueError('Invalid callback metadata')
+        else:
+            raise ValueError('Unknown stored event kind')
+        if (event.update_id, event.user_id, event.chat_id) != (
+                row['update_id'], row['user_id'], row['chat_id']):
+            raise ValueError('Stored event identity mismatch')
+        if row['payload_json'] is not None and decode_event(json.loads(row['payload_json'])) != event:
+            raise ValueError('Stored event payload mismatch')
+        return event
+
+    @staticmethod
+    def _agent_message(source):
+        if 'kind' in tuple(source.keys()) and source['kind'] != 'message':
+            raise ValueError('A callback is not executable message text')
+        return Repository._stored_event(source)
+
+    def _apply_dialogue(self, db, source, proposal, mode, *, now):
+        self._agent_message(source)
+        return super()._apply_dialogue(db, source, proposal, mode, now=now)
+
+    def ingest_events(self, events: list[IncomingEvent], next_offset: int) -> None:
         if type(next_offset) is not int or next_offset < 0:
             raise ValueError("Invalid offset")
-        if any(m.update_id >= next_offset for m in messages):
+        events = [decode_event(event.model_dump(mode='json')) for event in events]
+        if any(event.update_id >= next_offset for event in events):
             raise ValueError("Offset must follow the batch")
         with self._connection(write=True) as db:
-            db.executemany(
-                "INSERT OR IGNORE INTO inbox(update_id,user_id,chat_id,text) VALUES (?,?,?,?)",
-                [(m.update_id, m.user_id, m.chat_id, m.text) for m in messages],
-            )
+            typed_inbox = 'kind' in {row[1] for row in db.execute('PRAGMA table_info(inbox)')}
+            for event in events:
+                existing = db.execute('SELECT * FROM inbox WHERE update_id=?',
+                                      (event.update_id,)).fetchone()
+                if existing is not None:
+                    if self._stored_event(existing) != event:
+                        raise ValueError('Conflicting update replay')
+                    continue
+                callback = isinstance(event, IncomingCallback)
+                if not typed_inbox:
+                    if callback:
+                        raise ValueError('A callback requires schema v10')
+                    db.execute('INSERT INTO inbox(update_id,user_id,chat_id,text) VALUES (?,?,?,?)',
+                               (event.update_id, event.user_id, event.chat_id, event.text))
+                    continue
+                if callback:
+                    existing = db.execute('SELECT * FROM inbox WHERE callback_query_id=?',
+                                          (event.callback_query_id,)).fetchone()
+                    if existing is not None:
+                        original = self._stored_event(existing)
+                        if (original.model_dump(exclude={'update_id'})
+                                != event.model_dump(exclude={'update_id'})):
+                            raise ValueError('Conflicting callback query replay')
+                        continue
+                db.execute(
+                    'INSERT INTO inbox(update_id,user_id,chat_id,text,kind,payload_json,'
+                    'callback_query_id,callback_ack_state) VALUES (?,?,?,?,?,?,?,?)',
+                    (event.update_id, event.user_id, event.chat_id, '' if callback else event.text,
+                     'callback' if callback else 'message', event.model_dump_json(),
+                     event.callback_query_id if callback else None, 'pending' if callback else None))
             db.execute(
                 "UPDATE meta SET value=max(value,?) WHERE key='telegram_offset'", (next_offset,)
             )
@@ -198,13 +341,74 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
             return db.execute("SELECT value FROM meta WHERE key='telegram_offset'").fetchone()[0]
 
     def pending_messages(self) -> list[IncomingMessage]:
+        return [event for event in self.pending_events() if isinstance(event, IncomingMessage)]
+
+    def pending_events(self) -> list[IncomingEvent]:
         with self._connection() as db:
-            return [
-                IncomingMessage(**dict(row))
-                for row in db.execute(
-                    "SELECT update_id,user_id,chat_id,text FROM inbox WHERE completed=0 ORDER BY update_id"
-                )
-            ]
+            return [self._stored_event(row) for row in db.execute(
+                'SELECT * FROM inbox WHERE completed=0 ORDER BY update_id')]
+
+    def pending_replies(self) -> list[tuple[str, int, Reply]]:
+        with self._connection() as db:
+            return [(row['id'], row['chat_id'], Reply.model_validate_json(row['reply_json']))
+                    for row in db.execute('SELECT id,chat_id,reply_json FROM outbox '
+                                          'WHERE sent_at IS NULL ORDER BY rowid')]
+
+    def pending_callback_acks(self) -> list[str]:
+        with self._connection() as db:
+            return [self._stored_event(row).callback_query_id for row in db.execute(
+                "SELECT * FROM inbox WHERE kind='callback' AND callback_ack_state='pending' "
+                "ORDER BY update_id")]
+
+    def mark_callback_ack(self, query_id: str, *, expired: bool = False) -> None:
+        if type(query_id) is not str or not query_id or type(expired) is not bool:
+            raise ValueError('Invalid callback acknowledgement')
+        with self._connection(write=True) as db:
+            db.execute("UPDATE inbox SET callback_ack_state=? WHERE callback_query_id=? "
+                       "AND kind='callback' AND callback_ack_state='pending'",
+                       ('expired' if expired else 'sent', query_id))
+
+    @staticmethod
+    def _delivery_notice(db, notice_id, chat_id, message_id, digest):
+        if (type(notice_id) is not str or not notice_id or type(chat_id) is not int
+                or chat_id <= 0 or type(message_id) is not int or message_id <= 0
+                or type(digest) is not str or not digest):
+            raise ValueError('Invalid delivery receipt')
+        notice = db.execute('SELECT * FROM outbox WHERE id=?', (notice_id,)).fetchone()
+        if notice is None or notice['chat_id'] != chat_id:
+            raise ValueError('Delivery notice missing or owner mismatch')
+        Reply.model_validate_json(notice['reply_json'])
+        if notice['update_id'] is not None:
+            source = db.execute('SELECT * FROM inbox WHERE update_id=?',
+                                (notice['update_id'],)).fetchone()
+            if (source is None or (source['user_id'], source['chat_id']) != (chat_id, chat_id)
+                    or not source['completed'] or source['reply_json'] != notice['reply_json']):
+                raise ValueError('Delivery source mismatch')
+            Repository._stored_event(source)
+        return notice
+
+    def record_delivery(self, notice_id: str, chat_id: int, message_id: int, digest: str) -> None:
+        with self._connection(write=True) as db:
+            self._delivery_notice(db, notice_id, chat_id, message_id, digest)
+            existing = db.execute('SELECT digest FROM telegram_deliveries WHERE '
+                                  'notice_id=? AND chat_id=? AND message_id=?',
+                                  (notice_id, chat_id, message_id)).fetchone()
+            if existing is not None:
+                if existing['digest'] != digest:
+                    raise ValueError('Conflicting delivery digest')
+                return
+            db.execute('INSERT INTO telegram_deliveries VALUES (?,?,?,?)',
+                       (notice_id, chat_id, message_id, digest))
+
+    def known_delivery(self, notice_id: str, chat_id: int, message_id: int, digest: str) -> bool:
+        with self._connection() as db:
+            try:
+                self._delivery_notice(db, notice_id, chat_id, message_id, digest)
+            except (ValueError, TypeError):
+                return False
+            return db.execute('SELECT 1 FROM telegram_deliveries WHERE '
+                              'notice_id=? AND chat_id=? AND message_id=? AND digest=?',
+                              (notice_id, chat_id, message_id, digest)).fetchone() is not None
 
     def pending_notices(self) -> list[tuple[str, int, str]]:
         with self._connection() as db:
@@ -250,12 +454,18 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
             return Order(**dict(row), lines=lines)
 
     def message_result(self, update_id: int) -> tuple[IncomingMessage, Reply | None]:
+        event, reply = self.event_result(update_id)
+        if isinstance(event, IncomingCallback):
+            raise TypeError('A callback is not a legacy message')
+        return event, reply
+
+    def event_result(self, update_id: int) -> tuple[IncomingEvent, Reply | None]:
         with self._connection() as db:
             row = db.execute("SELECT * FROM inbox WHERE update_id=?", (update_id,)).fetchone()
             if row is None:
                 raise KeyError(update_id)
             return (
-                IncomingMessage(**{k: row[k] for k in ("update_id", "user_id", "chat_id", "text")}),
+                self._stored_event(row),
                 Reply.model_validate_json(row["reply_json"]) if row["completed"] else None,
             )
 
@@ -286,6 +496,7 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
             source = db.execute("SELECT * FROM inbox WHERE update_id=?", (update_id,)).fetchone()
             if source is None:
                 raise KeyError(update_id)
+            self._agent_message(source)
             if source["completed"]:
                 return Reply.model_validate_json(source["reply_json"])
             reply = self._apply(db, update_id, intent, mode)
