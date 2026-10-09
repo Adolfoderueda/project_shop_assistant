@@ -1,5 +1,25 @@
 # Handoff — preguntas guiadas, aceptación bloqueada
 
+## Actualización posterior: callback Cancelar corregido
+
+El residual de callback Cancelar descrito abajo corresponde al candidato `b1a7601`.
+La continuación autorizada con `Continua` lo corrigió en `157186b`: solo el consumo
+original autenticado de la opción tipada cancel establece frontera; replays no
+reintroducen destinatarios cancelados ni borran contexto posterior. Revisión
+independiente: spec conforme y calidad aprobada, sin hallazgos.
+
+Verificación final fresca del controlador: **1.658 tests pasan en 526,18 s**;
+Ruff y diff limpios. Regresiones incluyen 1/3 replays, reinicio, contexto HTTP real
+con fixture externa, conservación de filas/auditoría y rechazo de procedencia corrupta.
+Informe: `.superpowers/sdd/2026-10-09-callback-cancel-reset/report.md`.
+
+No se repitieron inferencias reales ni se modificaron los datos archivados v5.
+La calidad E4B, wheel instalado y cambio UX tras caducidad siguen bloqueados;
+v5 mide el runtime anterior, no la aceptación del código corregido. No activación,
+restart Telegram, cambios privados, merge o push.
+
+## Handoff anterior conservado como registro
+
 Rama local `feat/guided-questions`; worktree `.worktrees/guided-questions`.
 Código candidato: `b1a7601` (no merge/push/activación). Spec y plan aprobados;
 ocho tareas ejecutadas con revisiones independientes. Revisión final: **NOT READY**.

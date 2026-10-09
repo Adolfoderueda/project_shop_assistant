@@ -87,11 +87,13 @@ Las migraciones SQL se declaran recursos del paquete `migrations`; sin backend d
 build instalado, la comprobación de un wheel realmente instalado sigue bloqueada.
 
 **No activar ni integrar:** el residual HIGH de cancelación por callback documentado
-en la revisión v5 tiene una corrección local posterior, pendiente de revisión independiente:
+en la revisión v5 tiene una corrección local posterior aprobada por revisión independiente:
 solo el consumo original de una opción tipada `cancel`, con procedencia y entrega
 validadas, delimita el historial. Replays anteriores no recuperan destinatarios
 cancelados, ni un replay de cancelación borra contexto nuevo. Véase
 [el informe correctivo](.superpowers/sdd/2026-10-09-callback-cancel-reset/report.md).
+Suite final del controlador: 1.658 tests pasan; Ruff/diff limpios. Revisión acotada
+sin hallazgos; no sustituye la aceptación nativa ni autoriza activar el candidato.
 No se repitió la evaluación nativa ni se modificó la evidencia archivada v5; esto
 no resuelve conjeturas del modelo desde entradas actuales. La regla conservadora
 de reinicio tras caducidad fue decisión del controlador, añade un turno y mantiene
