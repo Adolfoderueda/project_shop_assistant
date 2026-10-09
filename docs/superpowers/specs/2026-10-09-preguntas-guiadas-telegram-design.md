@@ -1,7 +1,7 @@
 # Preguntas guiadas y respuesta libre en Telegram
 
-Fecha: 2026-10-09. Estado: diseño conversacional aprobado; especificación escrita
-pendiente de revisión humana. Autoriza documentación, no implementación, migración
+Fecha: 2026-10-09. Estado: especificación escrita aprobada por el usuario tras
+el commit documental `ed01d8e`. Autoriza preparar el plan, no implementación, migración
 privada, activación, reinicio ni publicación. Base de lectura: worktree
 `feat/skills-agent`, `bd00337`. Complementa el diseño de agente de 2026-10-08;
 no declara completada su aceptación pendiente.
@@ -392,7 +392,7 @@ arbitrary callback data: los tokens son cadenas y su registro vive en SQLite.
 - https://docs.python-telegram-bot.org/en/v22.5/telegram.inlinekeyboardbutton.html
 - https://docs.python-telegram-bot.org/en/v22.5/telegram.bot.html
 
-Siguiente etapa: revisión humana de ESTA especificación escrita. Solo tras su
-aprobación preparar el plan con writing-plans y revisarlo antes de elegir cómo
+La revisión humana de esta especificación ya fue aprobada. Siguiente etapa:
+preparar el plan con writing-plans y revisarlo antes de elegir cómo
 implementar. No ejecutar tareas del plan anterior ni integrar simulaciones mientras
 se decide este cambio. No confundir aprobación del diseño con permiso de despliegue.
