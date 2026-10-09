@@ -35,7 +35,9 @@ def repo(tmp_path):
 @pytest.fixture
 def bot():
     # Only the network boundary is replaced; Telegram models and SQLite are real.
-    return AsyncMock(spec=Bot)
+    result = AsyncMock(spec=Bot)
+    result.send_message.return_value = update(900).message
+    return result
 
 
 @pytest.fixture(autouse=True)
@@ -84,7 +86,7 @@ def test_crash_before_dispatch_preserves_input(repo, bot):
     bot.get_updates.return_value = ()
     asyncio.run(TelegramIO(bot, reopened, 7).poll_once())
     assert bot.get_updates.call_args.kwargs["offset"] == 12
-    assert bot.get_updates.call_args.kwargs["allowed_updates"] == ["message"]
+    assert bot.get_updates.call_args.kwargs["allowed_updates"] == ["message", "callback_query"]
     assert bot.get_updates.call_args.kwargs["timeout"] > 0
     assert reopened.telegram_offset() == 12
     assert len(reopened.pending_messages()) == 2
@@ -153,11 +155,11 @@ def test_retry_after_waits_before_resending(repo, bot, sleep, monkeypatch, as_ti
     monkeypatch.setenv("PTB_TIMEDELTA", "true" if as_timedelta else "false")
     notice(repo)
     if as_timedelta:
-        bot.send_message.side_effect = [RetryAfter(timedelta(seconds=4)), None]
+        bot.send_message.side_effect = [RetryAfter(timedelta(seconds=4)), update(900).message]
         asyncio.run(TelegramIO(bot, repo, 7).send_pending())
     else:
         with pytest.warns(PTBDeprecationWarning):
-            bot.send_message.side_effect = [RetryAfter(timedelta(seconds=4)), None]
+            bot.send_message.side_effect = [RetryAfter(timedelta(seconds=4)), update(900).message]
         with pytest.warns(PTBDeprecationWarning):
             asyncio.run(TelegramIO(bot, repo, 7).send_pending())
     sleep.assert_awaited_once_with(4)
@@ -185,7 +187,7 @@ def test_outbox_never_sends_to_other_chat(repo, bot):
 def test_permanent_error_preserves_notice_but_does_not_block_others(repo, bot):
     blocked = notice(repo)
     notice(repo, number=2)
-    bot.send_message.side_effect = [BadRequest("sensitive error"), None]
+    bot.send_message.side_effect = [BadRequest("sensitive error"), update(900).message]
     asyncio.run(TelegramIO(bot, repo, 7).send_pending())
     assert bot.send_message.call_count == 2
     assert repo.pending_notices() == [blocked]
@@ -217,7 +219,7 @@ def test_crash_after_send_before_mark_does_not_lose_or_duplicate_order(repo, bot
 def test_long_notice_is_not_truncated_and_partial_failure_stays_pending(repo, bot):
     text = "😀" * 5000
     pending = notice(repo, text=text)
-    bot.send_message.side_effect = [None, BadRequest("injected")]
+    bot.send_message.side_effect = [update(900).message, BadRequest("injected")]
     asyncio.run(TelegramIO(bot, repo, 7).send_pending())
     assert repo.pending_notices() == [pending]
     bot.send_message.reset_mock(side_effect=True)
@@ -350,7 +352,7 @@ def test_real_bot_serializes_plain_text_and_durable_poll_offset(repo):
     calls = asyncio.run(exercise())
     polls = [call for call in calls if call[0] == "getUpdates"]
     assert [call[1]["offset"] for call in polls] == [0, 2]
-    assert polls[0][1]["allowed_updates"] == ["message"]
+    assert polls[0][1]["allowed_updates"] == ["message", "callback_query"]
     assert polls[0][2]["read_timeout"] == 35
     sent = next(call[1] for call in calls if call[0] == "sendMessage")
     assert sent["text"] == "<i>literal</i>"
