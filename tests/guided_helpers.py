@@ -1,6 +1,8 @@
-"""Deterministic guided-state fixtures; no repository or token authority."""
+"""Pure fixtures and inbox-backed guided repository cases."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from uuid import UUID
 
 from dialogue import DIALOGUE_TTL, LineRef
@@ -76,3 +78,50 @@ def increment_state(*, base=2, reserved=False, selected=True):
         base_quantity=base if selected else None, additional_quantity=3,
         quantity=base + 3 if selected and base is not None else None),), lines=(line,),
         reservations=(Reservation(line_id='line', order_id='order'),) if reserved else ())
+
+
+@dataclass
+class PersistedCase:
+    repo: object
+    now: datetime
+    source_update_id: int = 1
+
+    def question(self):
+        return self.repo.guided_state(self.source_update_id, now=self.now).question
+
+    def choice_token(self, kind):
+        q = self.question()
+        index = next(i for i, c in enumerate(q.choices) if c.kind == kind)
+        with self.repo._connection() as db:
+            return db.execute('SELECT token FROM guided_tokens WHERE question_id=? AND question_version=? '
+                              'AND choice_index=?', (str(q.id), q.version, index)).fetchone()[0]
+
+    def record_known_delivery(self, message_id=100):
+        q = self.question()
+        with self.repo._connection() as db:
+            notice = db.execute('SELECT notice_id FROM guided_questions WHERE id=? AND version=?',
+                                (str(q.id), q.version)).fetchone()[0]
+        self.repo.record_delivery(notice, 7, message_id, sha256(q.text.encode('utf-8')).hexdigest())
+
+    def ingest_message(self, update_id, text):
+        self.repo.ingest_events([message(update_id, text)], update_id + 1)
+
+    def ingest_callback(self, update_id, token, message_id=100, query_id=None):
+        self.repo.ingest_events([callback(update_id, token, query_id=query_id or f'query-{update_id}',
+                                          message_id=message_id)], update_id + 1)
+
+
+def persisted_case(tmp_path, *, quantities=(None, None, None), condition=None):
+    from shopping_agent.contracts import ItemInput, ProposeAdds
+    from shopping_agent.guided_contracts import TopicCandidate
+    from storage import Repository
+
+    repo = Repository(tmp_path / 'guided.db')
+    repo.migrate()
+    c = PersistedCase(repo=repo, now=datetime.now(UTC))
+    c.ingest_message(1, 'huevos carne atun')
+    answer = TopicCandidate(source_update_id=1, adds=ProposeAdds(condition=condition,
+        items=tuple(ItemInput(description=name, quantity=q) for name, q in
+                    zip(('huevos', 'carne', 'atun'), quantities, strict=True))))
+    repo.apply_guided(1, answer, expected_question_version=None, now=c.now)
+    return c

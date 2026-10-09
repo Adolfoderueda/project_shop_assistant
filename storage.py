@@ -29,6 +29,7 @@ from product_memory import (
     identifiable_product_name,
     matches_observation,
 )
+from shopping_agent.guided_storage import GuidedRepository
 from shopping_agent.storage import AgentRepository
 
 OBSERVED_PRODUCTS = (
@@ -50,7 +51,7 @@ OBSERVED_PRODUCTS = (
 )
 
 
-class Repository(CheckoutRepository, DialogueRepository, PresentationRepository, AgentRepository):
+class Repository(CheckoutRepository, DialogueRepository, PresentationRepository, GuidedRepository, AgentRepository):
     def __init__(self, path: Path):
         self.path = Path(path)
 
@@ -223,7 +224,16 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
                                 != render_question(state).text):
                             raise ValueError('Question notice mismatch')
                         questions[(row['id'], row['version'])] = (state, row['notice_id'])
+                    else:
+                        event = self._stored_event(source)
+                        proposal = self._agent_snapshot(db, source).proposal
+                        if (not isinstance(event, IncomingMessage) or event.text != state.original_text
+                                or proposal is None or (proposal.id, proposal.revision) !=
+                                (state.proposal_id, state.proposal_revision)
+                                or state.expires_at > proposal.expires_at):
+                            raise ValueError('Topic provenance mismatch')
             for row in db.execute('SELECT * FROM guided_tokens'):
+                self._guided_token_row(db, row)
                 question, notice_id = questions[(row['question_id'], row['question_version'])]
                 if ((row['user_id'], row['chat_id']) != (user_id, user_id)
                         or row['notice_id'] != notice_id
@@ -396,9 +406,11 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
             if existing is not None:
                 if existing['digest'] != digest:
                     raise ValueError('Conflicting delivery digest')
+                self._guided_delivery(db, notice_id, chat_id, message_id, digest)
                 return
             db.execute('INSERT INTO telegram_deliveries VALUES (?,?,?,?)',
                        (notice_id, chat_id, message_id, digest))
+            self._guided_delivery(db, notice_id, chat_id, message_id, digest)
 
     def known_delivery(self, notice_id: str, chat_id: int, message_id: int, digest: str) -> bool:
         with self._connection() as db:

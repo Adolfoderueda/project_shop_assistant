@@ -14,14 +14,15 @@ from dialogue_replies import render_dialogue_result
 from domain import IncomingMessage, Model, Reply, utc
 from interpreter import diaper_reference, parse_command, purchase_authorized
 from shopping_agent.contracts import (
-    AgentProposal,
     AgentSnapshot,
     CompleteProposal,
+    GuidedProposal,
     ProposalDecision,
     ProposeAdds,
     ProposeChange,
     Reservation,
     ToolResult,
+    decode_proposal,
 )
 from shopping_agent.proposals import (
     _revalidate,
@@ -85,9 +86,11 @@ class AgentRepository:
         if row is None:
             return None
         try:
-            proposal = AgentProposal.model_validate_json(row[0])
+            proposal = decode_proposal(row[0])
             if (proposal.user_id, proposal.chat_id) != (snapshot.user_id, snapshot.chat_id):
                 raise ValueError('Proposal owner mismatch')
+            if isinstance(proposal, GuidedProposal):
+                return self._validate_guided_proposal(db, proposal, snapshot)
             original = self._agent_source(db, proposal.source_update_id)
             original_notices = db.execute('SELECT chat_id,reply_json FROM outbox WHERE update_id=?',
                                           (proposal.source_update_id,)).fetchall()
@@ -131,13 +134,16 @@ class AgentRepository:
         if proposal is None:
             db.execute('DELETE FROM agent_proposals WHERE user_id=? AND chat_id=?', key)
         else:
-            proposal = AgentProposal.model_validate_json(proposal.model_dump_json())
+            proposal = decode_proposal(proposal.model_dump_json())
             if (proposal.user_id, proposal.chat_id) != key:
                 raise ValueError('Proposal owner mismatch')
             db.execute('INSERT INTO agent_proposals VALUES (?,?,?) ON CONFLICT(user_id,chat_id) '
                        'DO UPDATE SET proposal_json=excluded.proposal_json', (*key, proposal.model_dump_json()))
 
     def _commit_agent_decision(self, db, source, decision, snapshot):
+        if isinstance(snapshot.proposal, GuidedProposal):
+            return self._complete_reply(db, source, Reply(text='Borrador guiado pendiente. '
+                'Responde a su pregunta vigente o descártalo antes de cambiar de modo.'))
         reply = render_proposal(decision, snapshot)
         proposal = decision.proposal
         if (proposal is not None and proposal.reviewed_update_id == source['update_id']
@@ -191,6 +197,9 @@ class AgentRepository:
                 if message.text.strip().startswith('/') or purchase_authorized(message.text):
                     raise ValueError('Deterministic commands cannot enter the agent mutation path')
                 snapshot = self._agent_snapshot(db, source)
+                if isinstance(snapshot.proposal, GuidedProposal):
+                    reply = self._commit_agent_decision(db, source, None, snapshot)
+                    return ToolResult(name=name, data={'reply': reply.model_dump(mode='json')}, reply=reply, terminal=True)
                 if name in {'proponer_altas', 'proponer_cambio'}:
                     decision = prepare_proposal(message, args, snapshot, now=now)
                 elif name == 'cancelar_propuesta':
@@ -214,6 +223,8 @@ class AgentRepository:
                 return self._complete_reply(db, source, prepared.snapshot.fallback)
             message = self._agent_message(source)
             snapshot = self._agent_snapshot(db, source)
+            if isinstance(snapshot.proposal, GuidedProposal):
+                return self._commit_agent_decision(db, source, None, snapshot)
             if (canonical_name(message.text) not in CONTROL_WORDS
                     and parse_control(message.text, snapshot.proposal, now=now) is None):
                 return None
@@ -376,6 +387,7 @@ class AgentRepository:
             preserve_legacy = previous is None and route == 'legacy' and not discarded
             if command is None and not preserve_legacy:
                 discarded = discarded or self._read_dialogue_state(db, user_id, chat_id) is not None
+            self._revoke_guided(db, user_id)
             db.execute('DELETE FROM agent_proposals WHERE user_id=? AND chat_id=?', (user_id, chat_id))
             if command is None and not preserve_legacy:
                 db.execute('DELETE FROM dialogue_state WHERE user_id=? AND chat_id=?', (user_id, chat_id))
@@ -394,4 +406,10 @@ class AgentRepository:
     def revoke_agent_proposals(self) -> None:
         """Explicit local switches revoke permissions even without intervening turns."""
         with self._connection(write=True) as db:
+            owners = [r[0] for r in db.execute("SELECT DISTINCT user_id FROM agent_proposals "
+                      "WHERE json_extract(proposal_json,'$.schema_version')=2")]
+            for owner in owners:
+                self._revoke_guided(db, owner)
             db.execute('DELETE FROM agent_proposals')
+            if owners:
+                logging.getLogger('runtime').warning('Pending guided memory discarded; saved lines are unchanged')
