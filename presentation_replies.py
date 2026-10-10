@@ -1,0 +1,200 @@
+"""Build grounded presentation from typed transaction results, never parsed prose."""
+
+from dialogue import DialogueDecision, DialogueState
+from domain import ListLine, Reply
+from interpreter import diaper_reference
+from presentation import PresentationFact, PresentationOption, PresentationSnapshot
+from presentation_phrases import presentation_variants
+from product_memory import ObservedProduct, identifiable_product_name
+
+REASONS = {
+    "generic": "Aclara el producto o la acción concreta. No he cambiado la lista.",
+    "expired": "El contexto anterior ha caducado; repite la petición.",
+    "stale": "La lista ha cambiado. Revisa el producto y vuelve a indicarlo.",
+    "reserved": "La entrada está reservada. Revisa la lista; no he cambiado esa entrada.",
+    "quantity_range": "Indica una cantidad entera de envases dentro del rango permitido.",
+    "diaper_unit": "Indica paquetes o envases de pañales explícitamente.",
+    "no_pending": "No hay propuesta pendiente. No he cambiado la lista.",
+    "cancelled_pending": "Propuesta cancelada; no he deshecho entradas ya guardadas.",
+}
+
+
+def quantity_text(quantity: int | None, unit: str = "envases") -> str:
+    if quantity is None:
+        return "cantidad pendiente"
+    return f"{quantity} {unit[:-1] if quantity == 1 else unit}"
+
+
+def _question(state: DialogueState, lines: list[ListLine]) -> tuple[str, list[str]]:
+    name = state.focus.description if state.focus else "el producto"
+    unit = state.focus.unit if state.focus else "envases"
+    source = next((l for l in lines if state.target and l.id == state.target.id
+                   and l.revision == state.target.revision), None)
+    source_name = source.description if source else "el producto de origen"
+    q = state.question
+    options = []
+    if q == "add_quantity":
+        question = f"¿Cuántos {unit} de {name} quieres añadir? Todavía no está en la lista."
+    elif q == "increment_quantity":
+        question = f"¿Cuántos {unit} adicionales de {name} quieres añadir?"
+    elif q == "confirm_increment":
+        question = (f"¿Confirmas añadir {quantity_text(state.additional_quantity, unit)} a {name}? "
+                    f"Pasaría de {quantity_text(state.base_quantity, unit)} a "
+                    f"{quantity_text(state.proposal_quantity, unit)}. Todavía no lo he añadido.")
+        options.append("Sí: confirma el incremento. No: rechaza el incremento.")
+    elif q in {"increment_missing", "increment_unknown"}:
+        question = (f"No hay una entrada guardada de {name}." if q == "increment_missing" else
+                    f"La cantidad guardada de {name} es desconocida; no se puede incrementar.")
+        labels = {"add": "Añadir otra entrada", "change_quantity": "Cambiar cantidad total"}
+        options.extend(f"{i}: {labels[action]}" for i, action in enumerate(state.options, 1))
+    elif q in {"quantity", "replace_quantity"}:
+        question = f"Indica la cantidad total de {unit} para {name}, no un incremento."
+        if diaper_reference(name):
+            question = (f"Indica la cantidad total de paquetes o envases para {name}, "
+                        "por ejemplo «2 paquetes», no un incremento.")
+        elif q == "replace_quantity" and source and source.quantity is not None:
+            options.append(f"Conserva la cantidad: responde «conserva la cantidad» ({quantity_text(source.quantity, unit)}).")
+    elif q == "duplicate_choice":
+        question = f"Ya tienes entradas de {name}. ¿Quieres cambiar la cantidad total o añadir otra entrada?"
+        labels = {"change_quantity": "Cambiar cantidad total", "add": "Añadir otra entrada"}
+        options.extend(f"{i}: {labels[action]}" for i, action in enumerate(state.options, 1))
+    elif q == "add_or_replace":
+        question = f"¿Quieres añadir {name} o sustituir {source_name} por {name}?" if source else f"¿Quieres añadir {name}?"
+        labels = {"add": f"Añadir {name} (añádelo)", "replace": f"Sustituir {source_name} por {name} (sustitúyelo)"}
+        options.extend(f"{i}: {labels[action]}" for i, action in enumerate(state.options, 1))
+    elif q == "select_line":
+        question = "Selecciona una entrada por su número."
+        options.extend(f"{i}: Entrada {i}" for i, _ in enumerate(state.candidates, 1))
+    elif q == "confirm_replace":
+        question = f"¿Confirmas sustituir {source_name} por {name}? Todavía no lo he sustituido."
+        options.append("Sí: confirma la sustitución.")
+    elif q == "replace_duplicate":
+        question = (f"Ya tienes {name}. ¿Confirmas sustituir {source_name} por {name} con "
+                    f"{quantity_text(state.proposal_quantity, unit)} y mantener entradas separadas? "
+                    "No se sumarán ni fusionarán; todavía no lo he sustituido.")
+        options.append("Sí: confirma mantener entradas separadas.")
+    else:
+        question = "Para quitar una entrada, envía su ID exacto o /quitar <id>."
+        # Ordinals are presentation labels only: the parser still requires IDs.
+        options.extend(f"Entrada {i}: usa el ID indicado por la aplicación."
+                       for i, _ in enumerate(state.candidates, 1))
+    options.append("Cancelar: responde «cancelar».")
+    return question, options
+
+
+def build_presentation(
+    decision: DialogueDecision, affected: ListLine | None, lines: list[ListLine],
+    legacy_reply: Reply | None, *, observations: list[ObservedProduct], original: ListLine | None,
+) -> PresentationSnapshot:
+    facts: list[str] = []
+    options: list[str] = []
+    question = None
+    kind = "clarify"
+    state = decision.state
+    unit = (decision.mutation.unit if decision.mutation else
+            state.focus.unit if state and state.focus else "envases")
+    if affected is not None and decision.reply_kind in {"added", "updated", "replaced", "incremented"}:
+        kind = decision.reply_kind
+        details = f"{affected.description}: {quantity_text(affected.quantity, unit)}."
+        if kind == "replaced":
+            if original is None:
+                raise ValueError("Replacement presentation requires the original saved row")
+            facts.append(f"He sustituido {original.description} por {details}")
+        elif kind == "added":
+            facts.append(f"He añadido {details}")
+        elif decision.reply_kind == "incremented":
+            if original is None or decision.mutation is None:
+                raise ValueError("Increment presentation requires the original row and operands")
+            facts.append(f"He añadido {quantity_text(decision.mutation.additional_quantity, unit)} "
+                         f"a {affected.description}: de {quantity_text(original.quantity, unit)} a "
+                         f"{quantity_text(affected.quantity, unit)}.")
+        else:
+            facts.append(f"He actualizado la cantidad total de {details}")
+    elif decision.reply_kind == "natural_list" or (
+        decision.legacy_intent and decision.legacy_intent.action == "list"
+    ):
+        kind = "list"
+        facts.extend(f"{l.description}: {quantity_text(l.quantity)}." for l in lines)
+        if not facts:
+            facts.append("La lista está vacía.")
+    elif decision.legacy_intent and decision.legacy_intent.action == "product_query":
+        kind = "product"
+        intent = decision.legacy_intent
+        valid = (len(intent.lines) == 1 and intent.lines[0].description
+                 and identifiable_product_name(intent.lines[0].description)
+                 and intent.lines[0].line_id is None and intent.lines[0].quantity is None
+                 and intent.lines[0].url is None)
+        if not valid:
+            facts.append("Aclara el producto que buscas.")
+        elif observations:
+            for p in observations:
+                price = (f"{p.price_cents // 100},{p.price_cents % 100:02d} €"
+                         if p.price_cents is not None else "no observado")
+                stock = ("no observado" if p.availability is None else
+                         "disponible" if p.availability else "no disponible")
+                facts.append(f"{p.title} — fuente {p.store_id} ({p.url}); observado {p.observed_on}; "
+                             f"precio observado {price}; stock observado {stock}; "
+                             f"{p.format_note or 'sin detalle de formato'}. Datos históricos: precio y stock no actuales.")
+        else:
+            facts.append(f"No tenemos ficha observada de {intent.lines[0].description}.")
+            # A supplied legacy result certifies _apply completed; its text is opaque.
+            if legacy_reply is not None:
+                facts.append("Lo he anotado para revisar.")
+    elif decision.reply_kind == "cancelled":
+        kind = "cancelled"
+        facts.append(REASONS[decision.presentation_reason])
+    elif decision.reply_kind == "greeting":
+        kind = "greeting"
+        facts.append("¡Hola! ¿Qué necesitas para tu lista?")
+
+    act = {"greeting": "greeting", "list": "list", "cancelled": "cancel",
+           "added": "result", "updated": "result", "replaced": "result",
+           "incremented": "result"}.get(kind, "clarify")
+    if (state and state.question and decision.presentation_reason == "generic"
+            and kind in {"clarify", "question"}):
+        if kind == "clarify":
+            kind = "question"
+        if state.question == "confirm_increment":
+            facts.append(f"{state.focus.description}: cantidad guardada "
+                         f"{quantity_text(state.base_quantity, unit)}; añadirías "
+                         f"{quantity_text(state.additional_quantity, unit)}; total propuesto "
+                         f"{quantity_text(state.proposal_quantity, unit)}. Todavía no lo he añadido.")
+        if state.question == "quantity" and state.target:
+            selected = next((l for l in lines if l.id == state.target.id
+                             and l.revision == state.target.revision), None)
+            if selected is not None and selected.quantity is not None:
+                facts.append(f"Entrada seleccionada: {selected.description}: "
+                             f"cantidad actual {quantity_text(selected.quantity, unit)}.")
+        if state.question in {"duplicate_choice", "select_line", "remove_id", "replace_duplicate"}:
+            rows = {l.id: l for l in lines}
+            for i, reference in enumerate(state.candidates, 1):
+                row = rows.get(reference.id)
+                if row and row.revision == reference.revision:
+                    facts.append(f"Entrada {i}: {row.description}: {quantity_text(row.quantity)}.")
+        question, options = _question(state, lines)
+        act = {"add_quantity": "pending_add", "select_line": "select_entry",
+               "duplicate_choice": "select_entry", "remove_id": "select_entry",
+               "replace_duplicate": "select_entry", "increment_quantity": "increment_amount",
+               "confirm_increment": "increment_confirm", "increment_missing": "increment_missing",
+               "increment_unknown": "increment_unknown"}.get(state.question, "clarify")
+        if act == "pending_add":
+            kind = "pending_add"
+    if not facts and question is None:
+        facts.append(REASONS[decision.presentation_reason])
+    rendered_facts = ["• " + f for f in facts] if kind == "list" and lines else facts
+    text = "\n".join([*rendered_facts, *([question] if question else []), *options])
+    if state and state.question == "remove_id" and question is not None:
+        text += "\n" + "\n".join(f"Entrada {i}: /quitar {r.id}"
+                                  for i, r in enumerate(state.candidates, 1))
+    # Technical/command results retain essential IDs and all legacy scalar metadata.
+    fallback = legacy_reply if decision.reply_kind == "legacy" and kind != "product" and legacy_reply else Reply(text=text)
+    result = PresentationSnapshot.model_construct(version=2, kind=kind, act=act,
+        facts=tuple(PresentationFact(key=f"f{i}", text=t) for i, t in enumerate(facts)),
+        options=tuple(PresentationOption(key=f"o{i}", text=t) for i, t in enumerate(options)),
+        question=question, fallback=fallback)
+    result = result.model_copy(update={"phrases": presentation_variants(result)})
+    return PresentationSnapshot.model_validate_json(result.model_dump_json())
+
+
+def fallback_reply(snapshot: PresentationSnapshot) -> Reply:
+    return PresentationSnapshot.model_validate_json(snapshot.model_dump_json()).fallback

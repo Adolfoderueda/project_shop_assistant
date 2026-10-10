@@ -1,5 +1,161 @@
 # Progreso del asistente de compras
 
+## 2026-10-08 — Diálogo natural Task6 (REAL PASS; Telegram pendiente)
+
+- Probe opt-in con proveedores reales de interpretación y redacción, Conversation,
+  seis SQLite inventadas y oráculo independiente de las secuencias exactas A/B/C.
+  Saludos/cierres/respuestas deterministas etiquetados; no FakeInterpreter real.
+- Dos capturas reales preservadas:34/34 pasos, intérprete12/12 compatible,
+  writer33/33 aceptados,0 fallback,0 órdenes, exit0 y limpieza. Segundo run añade
+  reloj avanzado, TTL900 exacto, replay30s después sin llamadas/renovación y restart
+  entre delta/confirm. Reserva/revisión cambiada no guardan bajo el sí antiguo.
+- Calidad exige interpretación+writer reales en add/increment/list y aceptación
+  por todos los actos redactados; tests de fallback-only e intent buy malicioso
+  impiden PASS aparente. Facts/opciones/cantidades siguen fijos de aplicación;
+  Gemma elige variantes cerradas por acto, no prosa libre factual.
+- RED subprocess7 fallos por script ausente; GREEN7/7. Suite plain910 passed
+  in294.99s, Ruff limpio. Sin privados/Telegram/tiendas/compras/ACL/procesos,
+  instalación/descarga/reinicio/unload/merge/push. Telegram sigue no aceptado.
+- Evidencia: `prueba-dialogo-natural-2026-10-08.md` y dos JSONL raw versionados.
+  Se conservan los históricos de fallos anteriores; no fue necesario tocar codecs,
+  gramática, guardas ni producción para este task.
+
+## 2026-10-08 — Task6 reparación autorizada (muestra REAL PASS, Telegram pendiente)
+
+- Base15b586f; schema condicionado al snapshot con roles/tokens completos,
+  composición separada/agrupada y lead opcional aprobado. Sin reescribir output,
+  ampliar leadgrammar, debilitar validator o cambiar autoridad de interpretación,
+  reducer, lista/SQLite o checkout. Facts/question/options siguen de aplicación.
+- RED schema **7 failed/38 passed**; dos fallos de compatibilidad reales preservados:
+  items:false=>HTTP400, items:{} priorizado sobre prefixItems=>HTTP200 con objetos
+  genéricos rechazados. Omitir items conserva tuple/min=max y logra la corrección.
+- **Dos probes REALES corregidos PASS, exit0: accepted18/fallback2 cada uno**, todas
+  las18 clases normales aceptadas y solo2fallos inyectados con respaldo. Todos20
+  checks/zeroorders/replay/TTL/inbox/outbox pasan en ambos. No fallback-only PASS.
+  Gemma eligió leads (Te lo explico/Vamos por partes/Aquí tienes el detalle o sin
+  lead); no se observó agrupación en estos dos runs. No es redacción libre total.
+- Full suite plain **752 passed in177.00s**, Ruff **All checks passed!**, diff limpio
+  (avisos LF→CRLF). Evidencia versionada conserva fallos anteriores y40 outputs raw
+  exactos cotejados con capturas. Sin privados/Telegram/tiendas/órdenes, reinicios,
+  ACL, instalación/descargas, subagentes, merge/push. Telegram no aceptado.
+
+## 2026-10-08 — Task6: redacción, probe/evidencia (calidad REAL FAIL)
+
+- Probe opt-in de veinte escenarios independientes, SQLite temporal inventada,
+  contratos subprocess0/1/2, sentinel privado sin lectura, limpieza y gate que
+  exige drafts aceptados en clases fundamentales. Caso cantidad conocida usa
+  alias existente sin slash «añade 2 arroz», no cantidad interpretada por Gemma.
+- **Tres runs REALES exit1: accepted0/fallback20 cada uno** (18 rechazos reales
+  y2 fallos inyectados). Facts/opciones/filas/inbox/outbox/replay/TTL900/zeroorders
+  pasaron; la calidad de generación no. No usar el respaldo claro para dar PASS
+  aparente. Ejemplo JSON agregado al prompt tras RED no arregló el modelo; se
+  revirtió sin cambiar gramática ni validador. Se necesita ruling antes de ampliar
+  o condicionar la gramática de salida. No se afirma aceptación de Telegram.
+- Libertad actual: lead de lista cerrada, orden/agrupación/composición; textos
+  factuales, preguntas y opciones de aplicación. No todos los mensajes son texto
+  libre generado. Recuperación preparada evita repetir acciones/renovar TTL.
+- **740 full passed in179.86s**, sin filtros/skips/plugins externos. Ruff detectó
+  `check=False` ausente en test subprocess; corregido explícitamente. Verificación
+  posterior: **4 subprocess passed in36.65s**, Ruff limpio y diff sin errores.
+  Evidencia,
+  métricas y veinte mensajes: `prueba-respuestas-gemma-2026-10-08.md`.
+- Sin privados, Telegram, tiendas, pedidos, descarga, reinicios, ACL, merge/push.
+  Servicio existente conservado; no se forzó unload.
+
+## 2026-10-01 — Task 6, corrección de aceptación (fix round 1)
+
+- Los tres fallos reales anteriores requerían corregir la funcionalidad, no solo
+  documentar el rechazo seguro. Se reutilizó la gramática de `validate_model` en
+  `literal_request`; `parse_with_dialogue` emite para las peticiones completas
+  reconocidas un esquema restringido a acción/nombre original/cantidad nula o
+  aclaración. Sin corregir respuestas del modelo ni ampliar permisos del controlador.
+  Rutas legacy `parse`/`parse_with_context` conservan esquema y payload; contexto
+  nuevo sigue sin IDs/controles, y peticiones desconocidas conservan ruta no fiable.
+- RED enfocado: 13 failed / 9 passed antes de tocar producción; GREEN ampliado:
+  **179 passed in 19.17s**, incluidas negaciones, condiciones, citas y calificadores.
+- **Dos probes REALES corregidos PASS (exit 0), 25/25 pasos cada uno**, mismo
+  script/datos/expectativas que los dos fallidos conservados abajo. Captura,
+  duplicado, sustitución confirmada y «aroz» literal ahora funcionan; cero órdenes
+  en los 50 pasos corregidos. Primera respuesta 12,839 s con `/api/ps` vacío;
+  segunda ejecución ya cargada 7,290 s (no atribuir a frío), resto con modelo
+  0,391–0,773 s en esa segunda ejecución. No es garantía de latencia/fiabilidad.
+- Sin acciones privadas, bot/procesos/ACL/configuración, descarga o tiendas.
+  Aceptación en Telegram privado sigue pendiente, sin activarla por inferencia.
+- Verificación final: **180 focused passed in 20.97s**, **560 full passed in
+  122.82s**, Ruff **All checks passed!**, diff sin errores (avisos LF→CRLF).
+
+## 2026-10-01 — Task 6: diálogo contextual integrado (DONE_WITH_CONCERNS)
+
+- Siete tests de runtime/TelegramIO/Conversation con datos inventados verifican
+  captura, reemplazo tras reinicio, replay sin duplicación/renovación, caducidad
+  a 900 segundos, fallo del intérprete, chat ajeno, rollback de outbox y script
+  con salida 0/1 y limpieza temporal. Las rutas previas ya eran verdes: ningún
+  RED artificial ni cambio de producción; RED del script ausente antes de crearlo.
+- Probe opt-in `scripts/Probe-Dialogue.ps1`, solo loopback Ollama existente y DB
+  temporales eliminadas. **Dos ejecuciones live FALLARON (exit 1): 13/25 pasos
+  válidos en cada una**, con cero órdenes en los 50 pasos. Gemma propone `add`
+  para «ahora pasta», copia cantidad del contexto y corrige «aroz»; el controlador
+  rechaza esas propuestas. No se relajó validación para dar un PASS aparente.
+- Primera respuesta con `/api/ps` vacío: 13,074 s; caliente 0,372–0,415 s.
+  Repetición diagnóstica ya cargada: primera 0,584 s, resto 0,387–1,085 s.
+  Informe versionado: `docs/superpowers/prueba-dialogo-contextual-2026-10-01.md`.
+- **Telegram privado no probado**, proveedor sin cambios, worker existente intacto.
+  Sin ajustes/DB privados, tiendas, compras, descarga/instalación, ACL, merge/push.
+  No considerar el flujo Gemma fiable ni activar el bot por estos resultados.
+- Verificación final tras reforzar guards/assertions: **535 passed in 113.62s**,
+  Ruff **All checks passed!**, `git diff --check` limpio (solo avisos LF→CRLF).
+
+**Punto de continuación (01-10-2026):**
+`docs/superpowers/continuacion-gemma-2026-10-01.md` registra la corrección de los
+dos defectos del handoff anterior. Suite: 371 tests pasan; Ruff limpio.
+`docs/superpowers/prueba-gemma-2026-10-01.md` conserva dos pruebas aisladas con
+Ollama real y límites observados. La calidad de clasificación sigue pendiente,
+al igual que la aceptación en Telegram; no considerarlo listo para uso habitual.
+
+**Seguimiento solicitado por el usuario:** quiere probar Telegram experimentalmente.
+Se corrigió el atasco de `model-local enable` por procesos ACL por archivo; ahora
+se aplica/verifica por lotes sin relajar los permisos. **379 tests pasan**, Ruff
+limpio. Activación en configuración temporal con 728 archivos/236 carpetas de
+perfiles: 23,898 s; no es prueba del bot privado. Ver el seguimiento del documento
+de continuación y las instrucciones de worktree en `docs/setup.md`.
+
+## 2026-09-29 — Aceptación sin compras (Task 4; PENDIENTE EN TELEGRAM)
+
+- La prueba pequeña de Task 3 usó Ollama real y SQLite aislada, no la sesión Telegram
+  privada. La corrección permitió dos altas independientes de «necesito arroz» sin
+  cantidad; el resultado no acredita fiabilidad general, ni latencia/VRAM máximas.
+  El fallo anterior de «necesito arroz» ocurrió antes de esa corrección. `docs/setup.md`
+  distingue ambos resultados y describe un protocolo de aceptación condicionado.
+- No hay acceso autorizado a configuración privada, sesión Telegram ni activación del
+  bot; no se paró el worker ni se ejecutó `model-local enable`, `disable` o `status`
+  contra el bot privado. No hubo tiendas, scraping, `/comprar`, compras ni push.
+  La aceptación en Telegram, reinicio real, persistencia de inbox/outbox en esa sesión
+  y fallo de Ollama con el bot vinculado siguen **pendientes**. Hasta obtener autorización
+  y sesión disponible, conservar el proveedor sin cambios y usar comandos explícitos.
+- Cobertura offline existente: pruebas de flujo de backlog/reinicio/inbox/outbox y
+  pruebas de fallo Ollama sin fallback y continuidad de comandos; no sustituyen una
+  prueba integrada de Telegram privado. No se observó defecto que requiriese cambiar
+  código o añadir un RED artificial; Task 4 cambia solo documentación.
+- Verificación de esta rama: `.venv\Scripts\python.exe -m pytest -q` → **329 passed
+  in 134.53s**; `.venv\Scripts\python.exe -m ruff check .` → **All checks passed!**;
+  `git diff --check` → limpio (avisos de conversión LF→CRLF para ambos documentos);
+  `git status --short` antes del commit → `M docs/setup.md`, `M docs/superpowers/progress.md`.
+  Estas pruebas usan dobles para Telegram, no constituyen aceptación live.
+
+## 2026-09-29 — Intérprete local contextual (Task 3)
+
+- Gemma 4 E2B recibe texto, instantánea mínima de lista y hasta cinco fichas pertinentes
+  fechadas, sin URL de fichas ni identificadores internos; comandos deterministas eluden
+  Ollama. `Conversation` mantiene la validación y responde desde SQLite.
+- TDD RED 5 fallos de contexto/dispatch; otro RED de prioridad `necesito` tras la primera
+  prueba real. GREEN enfocados 94 passed; suite 329 passed; Ruff limpio.
+- Ollama real con DB aislada y textos inventados: primera carga 11,34 s; caliente
+  0,39–0,67 s. Tras reforzar prioridad, dos peticiones independientes «necesito arroz»
+  añadieron una línea sin cantidad cada una; consultas de lista, pañales y ficha ausente
+  respondieron desde SQLite y «no compres» no creó órdenes. GPU RTX 3060: 3708/12288 MiB
+  observados tras carga; modelo 1,7 GB, 100 % GPU en `ollama ps`. No Telegram, ajustes
+  privados, compras ni habilitación del proveedor. Ver informe Task 3 del SDD.
+
 ## Diseño arquitectónico
 - [x] Explorar el proyecto: carpeta vacía, sin repositorio Git.
 - [x] Aclarar objetivo, productos restringidos y alojamiento en Windows.
@@ -120,3 +276,29 @@ Git fue inicializado antes de la tarea 1; base de implementación: `50da498`.
 - Documentación inicial en commits `bc7d1a4` y `4788bac`. El reporte detallado local
   `.superpowers/sdd/2026-09-29-gemma4-local-telegram/task-3-report.md` está ignorado
   por Git; esta sección conserva los resultados auditables en la rama.
+
+## 2026-09-29 — Gemma 4 local, prueba voluntaria en este equipo (NO ACTIVADO)
+
+- Tras autorización del usuario, se instaló Ollama 0.34.4 para el usuario actual mediante
+  `winget install --id Ollama.Ollama --exact --scope user --silent`; winget comprobó la
+  suma SHA-256 del instalador. El servicio escuchaba en `127.0.0.1:11434`.
+- `ollama pull gemma4:e2b` terminó con `success` y `ollama list` mostró el modelo de
+  7,2 GB. No se descargaron otras variantes ni se modificaron los perfiles de tiendas.
+- Con el intérprete real del proyecto, `num_ctx=4096`, la primera frase «necesito arroz»
+  agotó los 60 s de arranque en frío y devolvió aclaración. Con el modelo ya cargado,
+  «necesito arroz» devolvió aclaraciones sobre el tipo/cantidad de arroz en cuatro
+  intentos sucesivos (~0,6–0,9 s cada uno), no `add`. «No compres» devolvió `clarify`;
+  «necesito Blemil etapa dos» también devolvió `clarify`. La salida del modelo varía.
+- `ollama ps` indicó **100 % GPU** y contexto **4096**; `nvidia-smi` registró
+  **3592 MiB** de VRAM total usada con el modelo cargado (antes: **755 MiB**).
+  Esta medida es una instantánea, no un máximo durante inferencia.
+- Una prueba exploratoria con instrucciones y ejemplo explícito de lista de compras
+  produjo `add` para arroz, pero no forma parte del código entregado ni demuestra
+  fiabilidad; se necesitarían pruebas reproducibles y una corrección revisada.
+- **No se activó `model-local enable`, no se accedió a la configuración privada y no se
+  enviaron mensajes al bot**: la prueba de aceptación en Telegram continúa pendiente.
+  No se cambió el proveedor configurado previamente; las compras reales continúan
+  deshabilitadas.
+- Verificación posterior: `.venv\Scripts\python.exe -m pytest -q` → **299 passed
+  in 139.89s**; `.venv\Scripts\python.exe -m ruff check .` → **All checks passed!**;
+  `git diff --check` → sin errores. Son pruebas offline, no aceptación del modelo.

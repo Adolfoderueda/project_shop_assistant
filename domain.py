@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_serializer
 
 Positive = Annotated[int, Field(gt=0)]
 Cents = Annotated[int, Field(ge=0)]
@@ -42,6 +42,39 @@ class IncomingMessage(Model):
     text: str
 
 
+CallbackToken = Annotated[str, Field(pattern=r"^q:[A-Za-z0-9_-]{22}$", min_length=24, max_length=24)]
+
+
+class IncomingCallback(Model):
+    kind: Literal["callback"] = "callback"
+    update_id: int
+    user_id: int
+    chat_id: int
+    callback_query_id: Annotated[str, Field(min_length=1)]
+    message_id: Positive
+    bot_id: Positive
+    data: CallbackToken
+
+
+IncomingEvent = IncomingMessage | IncomingCallback
+
+
+def decode_event(payload: dict) -> IncomingEvent:
+    """Dispatch only on an explicit transport kind, never on message text."""
+    if "kind" not in payload:
+        return IncomingMessage.model_validate(payload)
+    return IncomingCallback.model_validate(payload)
+
+
+class InlineButton(Model):
+    label: Annotated[str, Field(min_length=1)]
+    token: CallbackToken
+
+
+class InlineKeyboard(Model):
+    rows: tuple[tuple[InlineButton, ...], ...]
+
+
 class ProductRule(Model):
     id: str
     brand: str
@@ -69,7 +102,10 @@ class IntentLine(Model):
 
 
 class Intent(Model):
-    action: Literal["add", "remove", "set_quantity", "list", "buy", "status", "resume", "clarify"]
+    action: Literal[
+        "add", "remove", "set_quantity", "list", "product_query", "mention_product", "buy",
+        "status", "resume", "clarify", "greet", "increment",
+    ]
     lines: list[IntentLine] = Field(default_factory=list)
     order_id: str | None = None
     question: str | None = None
@@ -78,6 +114,14 @@ class Intent(Model):
 class Reply(Model):
     text: str
     order_id: str | None = None
+    keyboard: InlineKeyboard | None = None
+
+    @model_serializer(mode="wrap")
+    def compatible_serialization(self, handler):
+        data = handler(self)
+        if self.keyboard is None:
+            data.pop("keyboard", None)
+        return data
 
 
 class Order(Model):

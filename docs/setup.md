@@ -21,6 +21,17 @@ se interpretan comandos explícitos (`/lista`, `/anadir`, `/cantidad`, `/quitar`
 `/comprar`, `/estado`, `/continuar`); `doctor` lo indica. El modo inicial es siempre
 `dry_run`. `private/settings.json`, SQLite, perfiles y logs permanecen excluidos de Git;
 el archivo se escribe con ACL del usuario local (o permisos de propietario en Unix).
+
+Para frases libres en español, el intérprete opcional Ollama usa exclusivamente el modelo
+local `gemma4:e2b` en `127.0.0.1:11434` (sin proxies ni redirecciones), con límite de
+60 segundos. Recibe solo texto, hasta 20 líneas mínimas de la lista y hasta cinco fichas
+observadas pertinentes; no recibe ajustes privados ni historial y no navega ni compra.
+Los comandos siguen funcionando sin modelo. Las preguntas por lista se contestan desde
+SQLite; las fichas son observaciones **fechadas**, no precios ni stock actuales. Sin ficha
+para un producto identificable, se guarda solo el nombre para investigación futura, sin
+iniciar scraping. La activación del bot vinculado no se realiza en esta tarea: usar
+`model-local status` y, solo tras la aceptación del entorno privado, `model-local enable`
+con el worker detenido. El perfil permanece en comandos explícitos hasta esa decisión.
 Guardar una copia segura de `private/` si se necesita recuperación tras pérdida de disco.
 La configuración no permite vincular el mismo directorio de datos a otro usuario:
 si se intenta cambiar de propietario, se bloquea antes de sobrescribirla. El worker
@@ -41,17 +52,21 @@ verifica que escucha **exclusivamente** en `127.0.0.1:11434` (no en la red local
 dispón de unos 7,2 GB para los pesos, **más** espacio libre para descarga temporal,
 servicio y otros datos; los pesos no incluyen el consumo de contexto/servidor en VRAM.
 Tras aceptar la descarga, en la consola local ejecuta `ollama pull gemma4:e2b`; nunca
-se ejecuta automáticamente. La RTX 3060 de 12 GB, velocidad y VRAM reales están por
-verificar; el contexto de inferencia es 4096. Si no responde o no está descargado,
+se ejecuta automáticamente. El contexto de inferencia es 4096. Si no responde o no está descargado,
 `enable` falla sin modificar la configuración. No se necesita clave de OpenAI.
 
-**Estado observado (29-09-2026, solo comprobaciones offline):** `nvidia-smi` informó
-`NVIDIA GeForce RTX 3060, 12288 MiB`; `Get-Command ollama` no encontró ejecutable en
-`PATH` (no acredita ausencia de toda instalación). No se instaló Ollama, no se descargó
-`gemma4:e2b`, ni se midieron latencia, VRAM durante inferencia o calidad de respuestas.
-La instalación y la descarga requieren **consentimiento explícito adicional** por sus
-efectos fuera del repositorio. Mientras tanto conserva `commands_only` y los comandos
-de Telegram; no ejecutes `model-local enable` para esta comprobación.
+**Estado observado (29-09-2026):** con autorización expresa se instaló Ollama 0.34.4
+para el usuario actual y se descargó `gemma4:e2b` (7,2 GB). En la RTX 3060 de 12 GB,
+`ollama ps` indicó 100 % GPU con contexto 4096; `nvidia-smi` mostró 3592 MiB usados
+con el modelo cargado (755 MiB antes). Antes de reforzar las instrucciones, la primera
+petición agotó los 60 s y «necesito arroz» pidió aclaración repetidamente en caliente.
+Después de la corrección, una pequeña prueba aislada con Ollama real y SQLite de prueba
+observó dos altas independientes de «necesito arroz» sin cantidad, consultas de lista,
+ficha y ausencia, y «no compres» sin órdenes. Arranque en frío: 11,34 s; peticiones
+calientes: 0,39–0,67 s; VRAM observada tras carga: 3708/12288 MiB. Estas medidas son
+instantáneas, no máximos bajo carga, y la muestra no demuestra fiabilidad en producción.
+**No se ha habilitado el modelo en el bot ni se ha probado Telegram real**; no ejecutes
+`model-local enable` solo por estos resultados. Más detalles: `docs/superpowers/progress.md`.
 
 ```powershell
 .\.venv\Scripts\python.exe -m shop_assistant model-local status
@@ -67,8 +82,43 @@ detenerlo, para el worker con `Ctrl+C` o `scripts/Stop-ShopAssistant.ps1`, ejecu
 `model-local disable` con el comando anterior y detén Ollama desde su aplicación o
 servicio. Si decides retirarlo, ejecuta `ollama rm gemma4:e2b` solo si deseas borrar
 los pesos, y desinstala Ollama desde Aplicaciones instaladas de Windows si no lo
-necesitas. Son instrucciones para una instalación futura, **no acciones realizadas**.
+necesitas. Son instrucciones de parada y retirada; no se ha ejecutado `disable`,
+`ollama rm` ni la desinstalación.
 Ninguna de estas acciones borra la configuración privada ni los datos de Telegram.
+
+**Prueba experimental desde el worktree conservando el bot original:** solo si el
+usuario decide probarlo pese a las limitaciones de calidad conocidas. No copiar
+`private/` ni volver a ejecutar `configure`. Detener el worker actual con Ctrl+C
+y, en PowerShell desde la raíz original `project_shop_assistant`, ejecutar:
+
+```powershell
+$env:PYTHONPATH = "$PWD\.worktrees\gemma4-local"
+.\.venv\Scripts\python.exe -P -m shop_assistant model-local enable
+# Solo tras confirmar Provider: ollama, y sin otro worker en marcha:
+.\.venv\Scripts\python.exe -P -m shop_assistant run
+```
+
+`-P` evita que los módulos de la raíz antigua oculten los del worktree, mientras
+la carpeta actual conserva la configuración privada existente. La revisión de
+permisos ahora se aplica/verifica por lotes: una activación de prueba con perfiles
+inventados (728 archivos, 236 carpetas) tardó 23,898 s; no garantiza ese tiempo en
+el bot privado. Primero probar `/lista` y preguntas de lista/fichas; no `/comprar`.
+Para volver a comandos, parar el worker y ejecutar en esa misma consola
+`.\.venv\Scripts\python.exe -P -m shop_assistant model-local disable`, y reiniciar.
+El bot interpreta compras/lista/fichas; todavía no ofrece conversación general.
+
+**Aceptación pendiente (sin compras):** requiere autorización expresa y sesión privada
+disponible; no se realiza desde esta rama. Antes de habilitarlo, confirma la calidad del
+modelo con más pruebas representativas y conserva `commands_only` si no es suficiente.
+Con la sesión privada disponible, detén el worker y comprueba que su bloqueo esté libre;
+consulta `model-local status` y solo entonces considera `model-local enable`. Reinicia
+el worker y comprueba en el chat privado autorizado una sola alta «necesito arroz»,
+`/lista`, una ficha observada con fecha y solo atributos conocidos, un producto ausente
+registrado una vez como pendiente, y persistencia de lista e inbox/outbox tras reiniciar.
+Verifica que un fallo de Ollama no cambie lista ni backlog y que los comandos sigan
+disponibles. No envíes `/comprar`, no abras tiendas y no cambies el modo de compra. Ante
+fallos, detén el worker, ejecuta `model-local disable` y reinícialo. Ninguna de estas
+comprobaciones privadas se ha efectuado ni se autoriza aquí el acceso a `private/`.
 
 `doctor` no compra ni abre tienda: revisa SQLite, API Telegram, instalación de Chromium,
 capacidades declaradas. Para abrir sesión manual visible en perfil dedicado:
@@ -79,6 +129,13 @@ reanudar el worker. Para la fórmula, cotejar físicamente etiqueta de **Blemil 
 y referencia independiente del fabricante antes de ejecutar
 `.\.venv\Scripts\python.exe -m shop_assistant verify-product --id formula`; un producto «Optimum Evolution»
 no se equipara automáticamente. El cotejo local no verifica precio, tienda ni compra.
+
+### Flujo independiente: compra simulada preexistente (fuera de esta aceptación)
+
+El siguiente procedimiento `dry_run` pertenece a la comprobación general previa del
+checkout, **no** a la aceptación de Gemma, lista o fichas de productos. No lo sigas
+durante esa aceptación: **no envíes `/comprar`**, ni siquiera en `dry_run`. Describir
+este flujo anterior no autoriza ejecutarlo en el bot privado.
 
 Con el chat privado vinculado, probar `/anadir 2 sacos de pienso`, `/lista`,
 `/cantidad <id> 3`, `/comprar` (solo en `dry_run`), reiniciar el servicio y consultar
@@ -120,7 +177,148 @@ con Ctrl+C. Si se instaló la tarea con consentimiento, iniciarla con
 `.\scripts\Uninstall-ShopAssistant.ps1 -Consent`. Estos comandos son instrucciones,
 **no** indican que la tarea haya sido registrada ni probada en este equipo.
 
-## Bloqueos de compra autónoma
+## Diálogo contextual de lista (01-10-2026; muestra aislada corregida)
+
+SQLite conserva el producto preguntado y las propuestas, también tras reiniciar.
+El modelo solo propone nombres/interpretaciones: no elige IDs ni revisiones, no
+confirma sustituciones y no autoriza compras. Estos ejemplos describen el flujo
+validado offline y en una pequeña muestra aislada real, no una garantía general:
+
+- «necesito arroz» → pregunta cantidad; «2» fija **2 envases en total**, no suma 2.
+  Para evitar el modelo: `/anadir arroz`, seguido de «2».
+- «ahora pasta» → ofrece añadir o sustituir; «añádelo» añade pasta y pregunta su
+  cantidad. «sustitúyelo» pide confirmar origen/destino; «sí» todavía no cambia
+  la línea. Contestar «conserva la cantidad» o una cantidad explícita completa
+  el reemplazo. Si la cantidad original no se conoce, hay que indicar una.
+- Un producto repetido ofrece «cambiar cantidad» o «añadir otra línea»; «sí»
+  no elige una opción. Cuando hay varias líneas, seleccionar solo el número
+  ofrecido y después contestar su cantidad. No se fusionan ni suman variantes.
+  Si la sustitución choca con un destino existente, requiere confirmar que las
+  líneas sigan separadas, o cancelar. Una línea cambiada/reservada no se sustituye.
+- «cancelar» cancela la propuesta, **no deshace** altas/cantidades ya guardadas.
+  Consultar la ficha de otro producto cancela una pregunta incompatible;
+  consultar la lista no cambia el foco. `/lista` conserva IDs; lista natural no.
+
+El contexto caduca a los **15 minutos de inactividad**, incluido tras reinicio.
+Cada respuesta válida renueva el plazo; leer la lista, respuestas inválidas y
+replay del mismo update no lo renuevan. Un número o «sí» fuera del contexto no
+autoriza actuar. La cantidad afecta solo al producto preguntado. Se admiten
+enteros positivos de envases (etiquetas paquetes/botes/sacos), no kilos, litros,
+fracciones ni conversiones. Para pañales hay que escribir «2 paquetes» o
+«2 envases» explícitamente; «2» solo no basta. No se corrigen nombres con erratas.
+
+### Verificación separada, sin activar ni parar el bot
+
+Desde el worktree, con el entorno existente:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_dialogue_end_to_end.py -q
+powershell.exe -NoProfile -File scripts/Probe-Dialogue.ps1
+```
+
+El script es opt-in: usa solo datos inventados y SQLite temporal bajo
+`$env:LOCALAPPDATA\Temp\opencode`, muestra `/api/ps` inicial y mide tiempos.
+No carga configuración privada, no llama a Telegram/tiendas, no arranca servicios,
+no instala/descarga y no fuerza descarga de memoria ni reinicio de Ollama. Borra
+sus DB al terminar; devuelve 0 si pasan todas las expectativas, 1 si fallan y
+2 si el servicio existente no está disponible (pendiente, sin activarlo).
+`-Python <ruta>` permite elegir el entorno existente. `-Offline` usa un transporte
+falso y **no constituye prueba del modelo**; `-Offline -FailExpectation` comprueba
+el camino de salida fallida/limpieza. No ejecutar el probe durante una operación
+sensible: comparte el Ollama existente y podría competir por sus recursos.
+
+**Resultado real actualizado:** las dos ejecuciones iniciales FALLARON; tras la
+corrección, dos ejecuciones del mismo probe pasaron **25/25 pasos cada una**, con
+cero órdenes. Para las peticiones completas ya reconocidas («necesito X»,
+«quiero X», «me hace(n) falta X», «ahora X»), la gramática compartida restringe
+el esquema de salida a la acción correspondiente, el nombre original exacto y
+cantidad nula, o aclaración. Conserva acentos/mayúsculas/variantes y evita copiar
+cantidades o corregir erratas. Si el modelo incumple esas restricciones se
+rechaza, no se repara. Condiciones/negaciones/citas no reciben esa restricción;
+siguen siendo datos no fiables y el controlador conserva sus rechazos. Frases
+no reconocidas o nombres de más de 160 caracteres mantienen la ruta anterior.
+Ver `docs/superpowers/prueba-dialogo-contextual-2026-10-01.md`. No demuestra
+fiabilidad general ni acepta Telegram privado: esa fase sigue **no probada**.
+No cambiar el proveedor/configuración ni reiniciar el bot a partir de esta prueba.
+La receta `-P`/`PYTHONPATH` y la protección ACL anteriores siguen vigentes; solo
+usar esa receta con autorización privada independiente, sin `/comprar`.
+
+## Diálogo natural, altas pendientes e incrementos (08-10-2026)
+
+- «hols», «hola que tal» y «hola» saludan sin consultar la lista.
+- «necesito avena» pregunta cantidad y **no guarda ninguna fila** hasta responder
+  una cantidad válida. Consultar lista/saludar no completa ni renueva el alta.
+- «quiero más arroz» propone un incremento, nunca añade «más arroz». Con dos
+  entradas ofrece selección; después pregunta envases adicionales y confirma
+  cantidad guardada + adicional = total. Solo «sí» guarda; «no»/«cancelar» descartan
+  la propuesta, no deshacen filas. Una reserva/revisión cambiada/caducidad exige
+  nueva petición. No se suman entre entradas ni se consolidan variantes.
+- TTL900 de transiciones válidas; generación, saludo, consulta y replay no renuevan.
+  Reiniciar Conversation conserva la propuesta. Presentaciones v1 históricas
+  preparadas se recuperan sin rehacer su acción; nuevos actos usan presentación v2
+  sin cabecera genérica, con variantes cerradas y hechos de aplicación.
+
+Probe opt-in, solo Gemma local existente y SQLite inventada temporal:
+
+```powershell
+$env:PYTHONPATH=$PWD.Path
+powershell.exe -NoProfile -File scripts/Probe-NaturalDialogue.ps1 -Python ../../.venv/Scripts/python.exe
+powershell.exe -NoProfile -File scripts/Probe-NaturalDialogue.ps1 -Offline -Python ../../.venv/Scripts/python.exe
+```
+
+Exit0=expectativas y calidadPASS,1=FAIL,2=servicio/modelo ausente (pendiente).
+Default busca `.venv` o `../../.venv`; Python usa `-P`. Offline prueba el contrato,
+no el modelo. No carga settings/DB privados ni llama Telegram/tiendas/compra,
+instala/descarga/reinicia/unload/controla el bot. No ejecutar durante trabajo
+sensible: comparte Ollama. Dos muestras reales PASS conservadas; el run final
+tiene34/34 pasos, interpretación12/12, writer33/33 aceptados y0 respaldos/órdenes.
+No demuestra fiabilidad general ni aceptación de Telegram privado. Ver
+`docs/superpowers/prueba-dialogo-natural-2026-10-08.md` y sus raw exactos.
+La lista privada existente **no se limpia ni consolida automáticamente**.
+
+## Redacción grounded de respuestas (08-10-2026; muestra aislada corregida)
+
+Con proveedor Ollama, Conversation prepara el resultado y un trabajo durable en
+SQLite, redacta fuera de la transacción y finaliza inbox/outbox idempotentemente.
+Tras una caída recupera la presentación sin aplicar otra vez ni renovar el TTL.
+La gramática inicial es acotada: Gemma elige lead, agrupación y composición;
+hechos, preguntas y opciones proceden de aplicación. No es prosa totalmente libre.
+El schema de generación contiene referencias completas del snapshot: permite
+bloques separados/agrupados y lead opcional aprobado; no cambia hechos ni orden
+de preguntas/opciones. El validador posterior sigue igual, sin reparar el output.
+Si el draft falla, se usa el respaldo íntegro y mejorado. Slash commands,
+autorizaciones de compra, avisos operativos y otros proveedores siguen deterministas.
+
+Probe opt-in desde el worktree, sin settings/DB privados ni Telegram/tiendas:
+
+```powershell
+powershell.exe -NoProfile -File scripts/Probe-Replies.ps1
+powershell.exe -NoProfile -File scripts/Probe-Replies.ps1 -Offline
+powershell.exe -NoProfile -File scripts/Probe-Replies.ps1 -OfflineReject
+```
+
+Defaults modelo `gemma4:e2b` y loopback existente; `-Python <ruta>` elige el entorno.
+No crea servicios/instala/descarga/reinicia/unload. Usa veinte DB inventadas en su
+temp root bajo `$env:LOCALAPPDATA\Temp\opencode` y las elimina. Exit0=expectativas
+pasadas, exit1=fallo de expectativa o calidad, exit2=servicio/modelo no disponible.
+Offline prueba contrato; OfflineReject prueba respaldo, **no calidad del modelo**.
+`-Offline -FailExpectation` y `-TestUnavailable` son fixtures de fallo explícitas.
+No ejecutar el probe durante trabajo sensible: comparte recursos del Ollama local.
+
+**Histórico:** tres runs REALES fallaron (0/18 drafts normales aceptados y20/20
+respaldos); un ejemplo adicional al prompt no lo corrigió y fue revertido.
+Tras autorización, se condicionó el schema a los tokens actuales; se diagnosticó
+también compatibilidad de tuples con Ollama0.35.1, conservando sus fallos.
+**Dos probes REALES corregidos PASS: 18/18 drafts normales aceptados +2 respaldos
+inyectados por run, veinte escenarios completos y cero órdenes.** El gate nunca
+acepta fallback-only. El modelo eligió lead opcional y frases aprobadas; en esta
+muestra no eligió agrupación. Hechos/preguntas/opciones siguen de aplicación.
+Solo muestra aislada y acotada, no garantía de redacción libre/fiabilidad general.
+No activar/reiniciar el bot por estos tests: aceptación Telegram sigue pendiente.
+Evidencia con fallos históricos preservados, métricas y outputs exactos:
+`docs/superpowers/prueba-respuestas-gemma-2026-10-08.md`.
+
+## Bloqueos de compra autónoma (situación preexistente)
 
 Actualmente todas las tiendas exponen `prepare=False`, `submit=False`,
 `reconcile=False`, `live_verified=False`, cotización parcial sin envío/total/destino

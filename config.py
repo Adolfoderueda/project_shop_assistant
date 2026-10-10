@@ -25,8 +25,19 @@ class Settings(Model):
     openai_model: str | None = None
     model_provider: Literal["commands_only", "openai", "ollama"] = "commands_only"
     ollama_model: Literal["gemma4:e2b"] = "gemma4:e2b"
+    conversation_engine: Literal["legacy", "skills_agent"] = "legacy"
+    guided_questions: bool = False
+    agent_model: Literal["gemma4:e4b-it-q4_K_M"] = "gemma4:e4b-it-q4_K_M"
     profiles_path: Path = Path("private/profiles")
     logs_path: Path = Path("private/logs")
+
+    @model_validator(mode="after")
+    def agent_provider(self):
+        if self.guided_questions and self.conversation_engine != 'skills_agent':
+            raise ValueError('Guided questions require skills agent')
+        if self.conversation_engine == "skills_agent" and self.model_provider != "ollama":
+            raise ValueError("Skills agent requires Ollama")
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -81,6 +92,64 @@ $acl = Get-Acl -LiteralPath $env:SHOP_ASSISTANT_ACL_PATH
 """
 
 
+_PRIVATE_TREE_ACL = r"""
+$ErrorActionPreference = 'Stop'
+$targets = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$setPrivate = {
+""" + _SET_ACL + r"""
+}
+$readPrivate = {
+""" + _READ_ACL + r"""
+}
+$count = 0
+foreach ($target in $targets) {
+    $item = Get-Item -LiteralPath $target.path -Force
+    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        $item.PSIsContainer -ne $target.directory) {
+        throw 'Unsafe private path'
+    }
+    $env:SHOP_ASSISTANT_ACL_PATH = $target.path
+    $env:SHOP_ASSISTANT_ACL_DIRECTORY = if ($target.directory) { '1' } else { '0' }
+    & $setPrivate
+    $access = (& $readPrivate) | ConvertFrom-Json
+    $rules = @($access.rules)
+    $expectedInheritance = if ($target.directory) { 3 } else { 0 }
+    if ($access.protected -ne $true -or
+        $access.owner -ne $env:SHOP_ASSISTANT_ACL_SID -or $rules.Count -ne 1 -or
+        $rules[0].sid -ne $env:SHOP_ASSISTANT_ACL_SID -or
+        $rules[0].allow -ne $true -or $rules[0].rights -ne 2032127 -or
+        $rules[0].inherited -ne $false -or
+        $rules[0].propagation -ne 0 -or
+        $rules[0].inheritance -ne $expectedInheritance) {
+        throw 'Private ACL verification failed'
+    }
+    $count++
+}
+[pscustomobject]@{ verified = $true; count = $count } | ConvertTo-Json -Compress
+"""
+
+
+def _windows_private_tree(paths: list[Path]) -> None:
+    """Apply and read back every DACL in one process, never skip verification."""
+    identity = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"],
+                              capture_output=True, text=True, check=True).stdout
+    sid = next(csv.reader(identity.splitlines()))[1]
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _PRIVATE_TREE_ACL],
+        env={**os.environ, "SHOP_ASSISTANT_ACL_SID": sid},
+        input=json.dumps([{"path": str(path.absolute()), "directory": path.is_dir()}
+                          for path in paths]),
+        capture_output=True, text=True, check=True,
+    )
+    try:
+        report = json.loads(result.stdout)
+        if (not isinstance(report, dict) or report.get("verified") is not True
+                or type(report.get("count")) is not int or report["count"] != len(paths)):
+            raise ValueError
+    except (ValueError, TypeError):
+        raise PermissionError("Private ACL verification failed") from None
+
+
 def _windows_private(path: Path) -> None:
     """Replace *all* explicit grants, then verify the effective DACL from disk."""
     identity = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"],
@@ -120,9 +189,22 @@ def _private(path: Path) -> None:
 
 def _private_tree(directory: Path) -> None:
     """Re-secure pre-existing SQLite, profiles, rotated logs and files on reconfigure."""
-    _private(directory)
-    for path in directory.rglob("*"):
-        _private(path)
+    paths = []
+    pending = [directory]
+    while pending:
+        path = pending.pop()
+        # Preflight the entire tree before any ACL mutation, without descending
+        # into a link/junction. PowerShell rechecks each target before applying.
+        if path.is_symlink() or (os.name == "nt" and path.is_junction()):
+            raise ValueError("Private paths cannot be symlinks")
+        paths.append(path)
+        if path.is_dir():
+            pending.extend(path.iterdir())
+    if os.name == "nt":
+        _windows_private_tree(paths)
+    else:
+        for path in paths:
+            _private(path)
 
 
 def save_settings(root: Path, settings: Settings) -> None:

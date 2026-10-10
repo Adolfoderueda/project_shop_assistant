@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from functools import wraps
 from types import SimpleNamespace
 
-from telegram import Update
+from telegram import Message, Update
 
 from domain import Capabilities, PreparedCart, Quote, Reconciliation, Submission
 from offers import cart_fingerprint
@@ -102,6 +102,12 @@ class FakeBot:
 
     async def send_message(self, *, chat_id, text, **kwargs):
         self.sent.append((chat_id, text))
+        return Message.de_json({
+            "message_id": len(self.sent), "date": 1,
+            "chat": {"id": chat_id, "type": "private"},
+            "from": {"id": 99, "is_bot": True, "first_name": "Test bot"},
+            "text": text,
+        }, None)
 
 
 class FakeOpenAI:
