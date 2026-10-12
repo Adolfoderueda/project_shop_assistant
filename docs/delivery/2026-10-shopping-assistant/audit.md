@@ -77,21 +77,21 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | .superpowers/sdd/2026-09-29-gemma4-local-telegram/final-fix-report.md | Source read; historical offline result and live limits, independent QA pending |
 | .superpowers/sdd/2026-09-29-gemma4-local-telegram/task-1-report.md | Source read; historical Ollama adapter evidence, independent QA pending |
 | .superpowers/sdd/2026-09-29-gemma4-local-telegram/task-2-report.md | Source read; historical provider routing and lock evidence, independent QA pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-focused-final.txt | Pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-full.txt | Pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-green.txt | Pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-focused-final.txt | Source read; historical 176 focused passes, independent QA pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-full.txt | Source read; historical 1218 full-suite passes, independent QA pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-green.txt | Source read; historical 14 focused passes, independent QA pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-product-red-corrected.txt | Pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-real-exits.txt | Pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-real-exits.txt | Source read; both historical real probes exit 1, release gate retained |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-red-corrected.txt | Pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-report.md | Pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-ruff.txt | Pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-ruff.txt | Source read; historical Ruff success, independent QA pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-5-report.md | Pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-6-report.md | Pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-7-report.md | Pending |
 | .superpowers/sdd/2026-10-08-dialogo-natural-altas-incrementos/task-6-report.md | Pending |
-| .superpowers/sdd/2026-10-09-callback-cancel-reset/focused.txt | Pending |
-| .superpowers/sdd/2026-10-09-callback-cancel-reset/full.txt | Pending |
-| .superpowers/sdd/2026-10-09-callback-cancel-reset/green.txt | Pending |
+| .superpowers/sdd/2026-10-09-callback-cancel-reset/focused.txt | Source read; historical 137 focused passes, independent QA pending |
+| .superpowers/sdd/2026-10-09-callback-cancel-reset/full.txt | Source read; historical 1658 full-suite passes, independent QA pending |
+| .superpowers/sdd/2026-10-09-callback-cancel-reset/green.txt | Source read; historical 15 focused passes, independent QA pending |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/red.txt | Pending |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/report.md | Pending |
 | README.md | Source read; first-pass review, independent QA pending |
@@ -368,9 +368,11 @@ The first diagnostic candidate, `e64fca0`, reached [run 38272674378](https://git
 
 [Run 38273126818 at `24611ca`](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38273126818) completed with 29 failed, 1630 passed in 341.32s. Its sanitized scratch probe established the mismatch: `owner_matches=False` while the single allow rule had the correct user SID, full rights, inheritance and propagation. Both batch and single-path ACL verification failed for that reason. The candidate now sets the file/directory owner to the authenticated user SID before committing the DACL, then retains exact owner and rule readback. [Run 38275905585 at `efc4f03`](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38275905585) proved the repair on the CI runner: sanitized batch and single-path owner/rule readback passed, and 1660 tests passed. Its one failure was a new doctor test fixture that created a database after securing the private tree, so read-only doctor correctly refused its inherited CI ACL. The synthetic fixture now explicitly secures that file before the no-write assertion; focused ACL/doctor tests pass locally. Corrected-candidate CI at `43e58c1` passed 1661 offline tests, ACL diagnostic, Ruff, whitespace and installed-wheel smoke; see [verification.md](verification.md).
 
-### P0-08 — HIGH: doctor entered a filesystem ACL writer (repair pending CI)
+The subsequent documentation-head [CI run 38282736456, job 114923683151](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38282736456/job/114923683151) at `6aebec19e55c7da50105a02cd9ccab413cc7f8b3` also completed successfully: 1661 offline tests in 561.40s, Ruff, whitespace, synthetic ACL diagnostic and installed-wheel smoke. This closes the CI repair verification at that SHA; it does not close the manual audit or release gates.
 
-Static trace after the initial schema repair: `cli.py:101` called `load_settings(root)`; `config.py:244` invoked `_private_tree(root / "private")`, applying ACLs to every path. Synthetic RED tests caught that write path and a foreign ACL grant that doctor silently repaired before diagnosis. The candidate now calls `load_settings(read_only=True)`, which preflights links and reads effective owner-only ACLs without applying them. A foreign grant blocks the diagnostic and remains unchanged. These focused tests pass locally; full candidate CI and independent review remain pending.
+### P0-08 — HIGH: doctor entered a filesystem ACL writer (repair verified in CI)
+
+Static trace after the initial schema repair: `cli.py:101` called `load_settings(root)`; `config.py:244` invoked `_private_tree(root / "private")`, applying ACLs to every path. Synthetic RED tests caught that write path and a foreign ACL grant that doctor silently repaired before diagnosis. The candidate now calls `load_settings(read_only=True)`, which preflights links and reads effective owner-only ACLs without applying them. A foreign grant blocks the diagnostic and remains unchanged. Focused tests and full candidate CI passed; independent review remains pending.
 
 ### Seven-package native-agent reconciliation against the merged baseline
 
