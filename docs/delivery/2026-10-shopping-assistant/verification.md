@@ -92,3 +92,44 @@ Load the guided probe with `importlib`, narrow its existing literal matrix to `o
 ## CI boundary
 
 Workflow: `.github/workflows/offline.yml`, Windows / Python 3.12, full Git history, locked test dependencies, existing project offline suite and installed-wheel smoke. The dependency/browser setup can use network; the product tests use fixtures and no live model/Telegram/store credentials. [Initial actual run](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38262453310) was cancelled after 176 passes when concurrent staffing documentation commit `132e59c` superseded it. Run 38263025076 started for that commit; the latest candidate run remains pending. No branch protection or acceptance is implied.
+
+## CI follow-up: Windows shell boundary
+
+Run [38263654888](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38263654888) at `c4a2935259ecaa41dabeb754b26bd58259f30575` completed RED: **31 failed, 1627 passed in 440.93s**, with no skipped tests. Ruff and whitespace checks passed; wheel steps were not reached. All failures were in ACL-dependent runtime tests. Two negative ACL tests exposed `CouldNotAutoloadMatchingModule`: Windows PowerShell could not load `Microsoft.PowerShell.Security` for `Get-Acl`.
+
+The workflow used `pwsh`, while Python starts `powershell.exe`. The inherited PowerShell 7 module paths are incompatible with Windows PowerShell. This matches [Microsoft's documented intermediate-process case](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_psmodulepath?view=powershell-7.6). Change only the CI default shell to `powershell`, matching the application and existing local test host. Do not suppress ACL checks or change production permissions. Local focused validation in disposable synthetic scratch: `python -m pytest -q tests/test_private_acl.py`: **8 passed in 1.91s**; `git diff --check` passed. The actual updated workflow must pass before this finding is closed.
+
+Failed node IDs from the run:
+
+```texttests/test_agent_runtime.py::test_runtime_default_remains_legacy
+tests/test_agent_runtime.py::test_configuration_lock_and_secret_safety
+tests/test_agent_runtime.py::test_model_local_disable_from_agent_is_valid_and_revokes_permission
+tests/test_agent_runtime.py::test_failed_save_cannot_restore_permission
+tests/test_agent_runtime.py::test_runtime_constructs_only_selected_engine[legacy]
+tests/test_agent_runtime.py::test_runtime_constructs_only_selected_engine[skills_agent]
+tests/test_agent_runtime.py::test_agent_status_is_read_only_even_while_worker_locked
+tests/test_guided_runtime.py::test_guided_status_is_read_only_with_worker_lock
+tests/test_guided_runtime.py::test_enable_disable_revokes_before_save_and_schema10_rollback
+tests/test_guided_runtime.py::test_failed_settings_save_cannot_restore_guided_permission
+tests/test_guided_runtime.py::test_disabling_engine_forces_guided_off[agent_local]
+tests/test_guided_runtime.py::test_disabling_engine_forces_guided_off[model_local]
+tests/test_guided_runtime.py::test_enable_requires_selected_engine_and_model
+tests/test_guided_runtime.py::test_flag_off_retained_real_callback_and_v2_never_enter_legacy_reduction[legacy]
+tests/test_guided_runtime.py::test_flag_off_retained_real_callback_and_v2_never_enter_legacy_reduction[skills_agent]
+tests/test_private_acl.py::test_private_tree_secures_every_path_with_one_powershell_process
+tests/test_private_acl.py::test_private_tree_readback_detects_foreign_grant_when_mutation_does_not_apply
+tests/test_private_acl.py::test_private_tree_rejects_wrong_propagation_flags
+tests/test_runtime.py::test_legacy_openai_settings_select_openai_without_rewriting_file
+tests/test_runtime.py::test_model_local_enable_disable_preserves_private_state
+tests/test_runtime.py::test_model_local_enable_failure_and_busy_lock_never_rewrite_settings
+tests/test_runtime.py::test_model_local_cannot_change_nested_database_settings_while_runtime_holds_lock
+tests/test_runtime.py::test_model_local_rejects_database_path_changed_before_lock_acquisition
+tests/test_runtime.py::test_logs_redact_secrets
+tests/test_runtime.py::test_configuration_private_and_default_dry_run
+tests/test_runtime.py::test_reconfigure_preserves_offline_pending_offset
+tests/test_runtime.py::test_reconfigure_cannot_write_while_worker_holds_lock
+tests/test_runtime.py::test_first_configuration_does_not_overwrite_configuration_created_while_binding
+tests/test_runtime.py::test_reconfigure_rejects_different_bot_before_consuming_updates
+tests/test_runtime.py::test_windows_acl_removes_real_foreign_grant
+tests/test_runtime.py::test_rebinding_existing_owner_is_refused_before_writing
+```

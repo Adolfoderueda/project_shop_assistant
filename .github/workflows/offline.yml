@@ -23,7 +23,9 @@ jobs:
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
     defaults:
       run:
-        shell: pwsh
+        # Match the application's Windows PowerShell ACL subprocesses.
+        # pwsh -> Python -> powershell inherits incompatible PS7 module paths.
+        shell: powershell
     steps:
       - uses: actions/checkout@v6
         with:
