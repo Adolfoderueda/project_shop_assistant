@@ -1,6 +1,6 @@
 # Delivery inputs and specialist hire proposal
 
-Prepared October 12, 2026 for TAK-2. Status: complete drafts; no new agents or skill assignments activated. This addendum preserves accepted delivery plan revision 49708c36-dd46-4cf0-b496-4a49c14c7c55 and its final acceptance gates.
+Prepared October 12, 2026 for TAK-2. Status: three specialists created and assigned; first-run access and workspace checks remain pending. This addendum preserves accepted delivery plan revision 49708c36-dd46-4cf0-b496-4a49c14c7c55 and its final acceptance gates.
 
 ## Confirmed delivery inputs
 
@@ -14,11 +14,11 @@ Prepared October 12, 2026 for TAK-2. Status: complete drafts; no new agents or s
 | Agent | Model / reasoning | Responsibility |
 | --- | --- | --- |
 | Mushu, existing CEO | gpt-6-astra / high (existing, unchanged) | Scope, dependencies, review coordination and release recommendation |
-| Python Agent Engineer | gpt-6-astra / high | Confirmation contracts, persistence, named lists, Telegram and reminders; sole migration owner |
-| Store Integration Engineer | gpt-6-sol / high | Mercadona public prices, exact product matching and source evidence |
-| QA Release Engineer | gpt-6-astra / high | Independent review, adversarial checks, migration/rollback and pilot evidence |
+| Python Agent Engineer | gpt-6-sol / medium | Confirmation contracts, persistence, named lists, Telegram and reminders; sole migration owner |
+| Store Integration Engineer | gpt-6-sol / medium | Mercadona public prices, exact product matching and source evidence |
+| QA Release Engineer | gpt-6-sol / medium | Independent review, adversarial checks, migration/rollback and pilot evidence |
 
-These are my workload recommendations, not measured repository benchmarks. Astra is chosen for stateful integration and demanding independent review. Sol is sufficient as the initial choice for the narrower store package. Luna is a candidate for future bounded triage only; no fourth hire is proposed. [Official model guidance](https://learn.chatgpt.com/docs/models) and [selection guidance](https://developers.openai.com/api/docs/guides/model-selection) support matching capability to task complexity. Official guidance now describes GPT-6.1 Sol, but this Paperclip adapter currently lists gpt-6-sol, gpt-6-astra and gpt-6-luna; it does not list gpt-6.1-sol. Use the observed supported IDs. A catalog listing does not prove subscription entitlement.
+Takeshi reserves Astra for the CEO. All three specialists use GPT-6 Sol with medium effort. Model execution and subscription access remain to be checked on first assigned use.
 
 The Telegram product agent remains the accepted local Ollama/E4B design. These model choices apply to the development team, not a paid replacement for the product model.
 
@@ -30,19 +30,17 @@ Exact company skill keys are in each config below and were checked against the i
 
 ## Governance and handoff
 
-Only Mushu currently exists. canCreateAgents is true; company-wide agent-configuration listing was denied with agents:suggest-changes, while the own-agent config, installed skill library and adapter model list were readable. Recheck downstream authorization at hire time; an approval is not a permission bypass.
+Three specialists now exist: Python Agent Engineer, Store Integration Engineer and QA Release Engineer. Takeshi authorized their creation after the model correction. Existing review, spend and live-activation gates remain. Setup validation remains pending; no product release acceptance is implied.
 
-Company requireBoardApprovalForNewAgents is false. Therefore do not submit agent-hires before Takeshi reviews this concrete proposal: the previous staffing question explicitly preserved a hiring approval and the accepted plan requires an agreed cost ceiling. Request one board decision covering these three exact drafts and EUR 0 additional monthly spend. No repeated approval of the overall delivery plan is needed.
+All hires use codex_local, responsible-user OpenAI subscription, medium reasoning, Fast mode off, timer heartbeats off, one run per agent, managed AGENTS.md and separate worktrees. Sandbox bypass is false. No create-agent/create-skill privileges or arbitrary filesystem extensions are requested. Verify an isolated worktree exists before each first execution; use the adapter's default branch naming and record the linked GitHub issue number in the final work branch. Never fall back to shared writes.
 
-All hires use codex_local, responsible-user OpenAI subscription, high reasoning, Fast mode off, timer heartbeats off, one run per agent, managed AGENTS.md and separate worktrees. Sandbox bypass is false. No create-agent/create-skill privileges or arbitrary filesystem extensions are requested. Verify an isolated worktree exists before each first execution; use the adapter's default branch naming and record the linked GitHub issue number in the final work branch. Never fall back to shared writes.
-
-After approval, recheck permissions and existing agents, create only missing hires with desiredSkills, verify saved instructions/model/skill assignments and subscription/GitHub access, then assign existing linked tasks without clearing their blocker edges: Python owns TAK-4/TAK-5/TAK-7, Store owns TAK-6, QA owns TAK-8 and independent PR reviews. TAK-3 remains with the current audit run. Do not duplicate delivery issues. CEO asks for host and reminder days before the affected live scheduling/pilot step. Takeshi retains merge, private-data access, bot restart, live pilot and release activation decisions.
+The existing linked tasks are assigned without clearing their blocker edges: Python owns TAK-4/TAK-5/TAK-7, Store owns TAK-6, QA owns TAK-8 and independent PR reviews. TAK-3 remains with the current audit run. Do not duplicate delivery issues. CEO asks for host and reminder days before the affected live scheduling/pilot step. Takeshi retains merge, private-data access, bot restart, live pilot and release activation decisions.
 
 ## Draft quality review
 
 CEO self-review completed against the hiring checklist: consistent identities, role-specific charters, existing reporting line, installed skills, bounded scope, execution contract, isolated branches, evidence, reviewer routing, explicit spending/activation limits and no embedded secrets. Independent staffing review has not occurred. Coder templates were adapted for Python and store roles; QA was adapted for CLI/model/Telegram acceptance instead of browser-only validation. Nonexistent specialist roles were removed from handoffs.
 
-## Ready-to-submit configurations
+## Submitted configurations
 
 ### Python Agent Engineer
 
@@ -68,8 +66,8 @@ Instruction source: Adjacent Coder; narrowed to Python, agent contracts, storage
   "adapterType": "codex_local",
   "adapterConfig": {
     "cwd": "C:/Users/Takeshi/Documents/projects/project_shop_assistant",
-    "model": "gpt-6-astra",
-    "modelReasoningEffort": "high",
+    "model": "gpt-6-sol",
+    "modelReasoningEffort": "medium",
     "fastMode": false,
     "dangerouslyBypassApprovalsAndSandbox": false,
     "workspaceStrategy": {
@@ -123,7 +121,7 @@ Instruction source: Adjacent Coder; narrowed to public store adapters and factua
   "adapterConfig": {
     "cwd": "C:/Users/Takeshi/Documents/projects/project_shop_assistant",
     "model": "gpt-6-sol",
-    "modelReasoningEffort": "high",
+    "modelReasoningEffort": "medium",
     "fastMode": false,
     "dangerouslyBypassApprovalsAndSandbox": false,
     "workspaceStrategy": {
@@ -175,8 +173,8 @@ Instruction source: Adjacent QA; replaces browser-only workflow with Python, CLI
   "adapterType": "codex_local",
   "adapterConfig": {
     "cwd": "C:/Users/Takeshi/Documents/projects/project_shop_assistant",
-    "model": "gpt-6-astra",
-    "modelReasoningEffort": "high",
+    "model": "gpt-6-sol",
+    "modelReasoningEffort": "medium",
     "fastMode": false,
     "dangerouslyBypassApprovalsAndSandbox": false,
     "workspaceStrategy": {
