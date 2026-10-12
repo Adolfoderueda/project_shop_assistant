@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -103,6 +104,23 @@ def test_quote_refreshes_product_without_inventing_shipping():
     asyncio.run(with_page('nappy', check))
 
 
+def test_quote_rejects_changed_pack_on_same_product_url():
+    store = adapter('nappy', 'Nappy')
+    async def check(page):
+        old = await store.extract(page, 'diapers', store.product_urls[0])
+        node = page.locator('#product-details')
+        data = json.loads(await node.get_attribute('data-product'))
+        data['name'] = 'Pañales Dodot Sensitive Extra Talla 3 (7–11 kg) – 56 Uds'
+        await node.evaluate('(e,v)=>e.setAttribute("data-product",v)', json.dumps(data))
+        async def read(url, product_id):
+            return await store.extract(page, product_id, url)
+        store.read_product = read
+        with pytest.raises(ValueError, match='identity'):
+            await store.quote([QuotedLine(line_id='line', offer=old, packs=1)],
+                              Destination(postcode='28023', address='Synthetic address'))
+    asyncio.run(with_page('nappy', check))
+
+
 def test_explicit_registry_and_host_policy():
     from stores.connections import registrations
     entries = registrations()
@@ -110,3 +128,4 @@ def test_explicit_registry_and_host_policy():
     merc = next(e for e in entries if e.store_id == 'mercadona')
     assert 'tornillos.mercadona.es' in merc.resource_hosts
     assert 'tornillos.mercadona.es' not in merc.navigation_hosts
+
