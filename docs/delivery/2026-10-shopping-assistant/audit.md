@@ -353,3 +353,13 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 ## Added candidate paths
 
 The workflow, installed-wheel smoke script and archive attributes were read and tested as described above. Delivery documents are authored evidence. The concurrent `staffing.md` addition is preserved; its scope and approval remain owned by TAK-2. These additions are outside the fixed 278-path baseline ledger.
+
+## TAK-9 continuation, 2026-10-12
+
+### P0-06 — HIGH: doctor changed the database it was diagnosing
+
+`cli.doctor` called `Repository.migrate()`. A synthetic schema-9 database with a preserved product row, fake Telegram Bot and fake Playwright reproduced the contract breach: `doctor` returned `SQLite: OK` and advanced `PRAGMA user_version` to 10. The RED test is `tests/test_doctor_read_only.py::test_doctor_does_not_upgrade_existing_schema`. The candidate now opens the existing database in SQLite read-only mode, checks its version and reports `SQLite: blocked (schema update required)` without migrating or reseeding it. Focused GREEN and lint evidence is in [verification.md](verification.md). The test is a synthetic diagnostic; no private database was opened.
+
+### P0-07 — HIGH: actual CI ACL failure remains open
+
+[Run 38268644004, job 114877125611](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38268644004/job/114877125611) completed with 29 failed and 1629 passed tests. The failed nodes depend on Windows private-tree ACL verification; Ruff and diff checks passed, and wheel stages were skipped. The production code captures subprocess stderr, but `CalledProcessError` in the test log exposes only the command, so the exact CI readback mismatch is not established. The same private ACL test module passes locally (8 tests) and the exact PowerShell script verifies one and three synthetic scratch paths locally. Do not weaken ACL expectations or call CI green. Next: collect a sanitized CI readback reason for the specific mismatch, repair the cause, and rerun the full workflow at the resulting SHA.

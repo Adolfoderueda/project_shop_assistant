@@ -133,3 +133,18 @@ tests/test_runtime.py::test_reconfigure_rejects_different_bot_before_consuming_u
 tests/test_runtime.py::test_windows_acl_removes_real_foreign_grant
 tests/test_runtime.py::test_rebinding_existing_owner_is_refused_before_writing
 ```
+
+## TAK-9 focused evidence, 2026-10-12
+
+Candidate base: PR #11 head `27536aea3047da546ad1242c7dfef207f9011476`. Work is on the TAK-9 issue branch; the final candidate SHA and full suite remain pending.
+
+| Check | Exact command / result |
+| --- | --- |
+| Doctor RED | `python -m pytest -q tests/test_doctor_read_only.py` using the existing Python 3.12.10 environment: exit 1, one expected failure; synthetic schema 9 changed to 10. |
+| Doctor, migration, storage GREEN | `python -m pytest -q tests/test_doctor_read_only.py tests/test_migration_distribution.py tests/test_storage.py`: exit 0, 23 passed in 1.24s after the import-order correction. |
+| ACL local reproduction | `python -m pytest -q tests/test_private_acl.py`: exit 0, 8 passed in 1.88s. Exact `_PRIVATE_TREE_ACL` script against one synthetic directory and then a three-path synthetic tree: both exit 0 with verified counts 1 and 3. This does not establish the CI host result. |
+| Sanitized ACL diagnostic | `python scripts/ci_acl_probe.py`: exit 0 locally; `batch=ok`, readback fields all true, `single=ok`. The CI workflow now runs this synthetic probe before pytest so the host-specific mismatch can be classified without publishing SIDs, paths or ACL contents. Actual CI output is pending. |
+| Focused lint | `python -m ruff check cli.py storage.py tests/test_doctor_read_only.py`: exit 0, all checks passed after correcting one import-order finding. |
+| Diff check | `git -c core.autocrlf=true diff --check`: exit 0. Git reported only expected LF-to-CRLF checkout warnings. |
+
+The local Python executable was the existing project virtual environment at `C:/Users/Takeshi/Documents/projects/project_shop_assistant/.venv/Scripts/python.exe`; no dependency installation or live service call occurred. The combined focused command `python -m pytest -q tests/test_doctor_read_only.py tests/test_migration_distribution.py tests/test_storage.py tests/test_private_acl.py` exited 0 with 31 passed in 4.70s. Run 38268644004 is still RED (29 failed, 1629 passed, 434.62s). Its traceback does not include the captured PowerShell stderr or readback category. The new sanitized CI diagnostic has not run on GitHub yet; its result is required before changing private ACL enforcement. The installed-wheel stage was skipped by that run, so no candidate wheel claim follows from it.
