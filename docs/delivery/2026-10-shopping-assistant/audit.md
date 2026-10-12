@@ -98,7 +98,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | catalog.py | Source read; first-pass review, independent QA pending |
 | checkout.py | Source read; first-pass review, independent QA pending |
 | checkout_storage.py | Pending |
-| cli.py | Pending |
+| cli.py | Source read; doctor and local-switch boundaries first-pass review, independent QA pending |
 | config.py | Source read; first-pass review, independent QA pending |
 | conversation.py | Pending |
 | dialogue.py | Pending |
@@ -117,7 +117,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/evidence/2026-10-08-skills-agent/execution-status.md | Source read; first-pass review, independent QA pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-1.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-2.jsonl | Pending |
-| docs/superpowers/evidence/2026-10-08-skills-agent/final-review-summary.md | Pending |
+| docs/superpowers/evidence/2026-10-08-skills-agent/final-review-summary.md | Source read; confirms 50/53 real steps in each frozen run and three semantic failures; independent QA pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/fix-round-1.md | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/fix1-final-offline.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/fix1-final-real-1.jsonl | Pending |
@@ -193,12 +193,12 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/specs/2026-09-29-gemma4-local-telegram-design.md | Pending |
 | docs/superpowers/specs/2026-09-29-lista-fichas-gemma-design.md | Pending |
 | docs/superpowers/specs/2026-10-01-conversacion-contextual-gemma-design.md | Pending |
-| docs/superpowers/specs/2026-10-08-agente-skills-herramientas-design.md | Pending |
+| docs/superpowers/specs/2026-10-08-agente-skills-herramientas-design.md | Source read; confirmation, tool and acceptance contracts reconciled above; independent QA pending |
 | docs/superpowers/specs/2026-10-08-dialogo-natural-altas-incrementos-design.md | Pending |
 | docs/superpowers/specs/2026-10-08-respuestas-naturales-gemma-design.md | Pending |
 | docs/superpowers/specs/2026-10-09-preguntas-guiadas-telegram-design.md | Pending |
 | docs/superpowers/task-8-report.md | Pending |
-| domain.py | Pending |
+| domain.py | Source read; strict shared event/list/reply contracts first-pass review, independent QA pending |
 | interpreter.py | Pending |
 | migrations/001.sql | Source read; first-pass review, independent QA pending |
 | migrations/002.sql | Source read; first-pass review, independent QA pending |
@@ -238,17 +238,17 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | shop_assistant/__init__.py | Source read; first-pass review, independent QA pending |
 | shop_assistant/__main__.py | Source read; first-pass review, independent QA pending |
 | shopping_agent/__init__.py | Source read; first-pass review, independent QA pending |
-| shopping_agent/contracts.py | Relevant sections inspected; full source review pending |
+| shopping_agent/contracts.py | Source read; strict proposal and model boundary first-pass review, independent QA pending |
 | shopping_agent/conversation.py | Source read; first-pass review, independent QA pending |
-| shopping_agent/guided_contracts.py | Pending |
+| shopping_agent/guided_contracts.py | Source read; guided ownership, provenance and witness models first-pass review, independent QA pending |
 | shopping_agent/guided_controller.py | Pending |
-| shopping_agent/guided_conversation.py | Pending |
+| shopping_agent/guided_conversation.py | Source read; event routing and callback boundary first-pass review, independent QA pending |
 | shopping_agent/guided_ollama.py | Pending |
-| shopping_agent/guided_replies.py | Pending |
+| shopping_agent/guided_replies.py | Source read; application-owned review rendering first-pass review, independent QA pending |
 | shopping_agent/guided_storage.py | Pending |
 | shopping_agent/ollama.py | Source read; first-pass review, independent QA pending |
-| shopping_agent/proposals.py | Pending |
-| shopping_agent/replies.py | Pending |
+| shopping_agent/proposals.py | Source read; control, expiry and revalidation first-pass review, independent QA pending |
+| shopping_agent/replies.py | Source read; deterministic full review text first-pass review, independent QA pending |
 | shopping_agent/skills.py | Source read; first-pass review, independent QA pending |
 | shopping_agent/skills/altas.md | Source read; first-pass review, independent QA pending |
 | shopping_agent/skills/cambios.md | Source read; first-pass review, independent QA pending |
@@ -256,7 +256,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | shopping_agent/skills/propuestas.md | Source read; first-pass review, independent QA pending |
 | shopping_agent/storage.py | Source read; first-pass review, independent QA pending |
 | shopping_agent/tools.py | Source read; first-pass review, independent QA pending |
-| storage.py | Pending |
+| storage.py | Source read; schema/owner/inbox/outbox and legacy mutation first-pass review, independent QA pending |
 | stores/__init__.py | Source read; first-pass review, independent QA pending |
 | stores/amascotados.py | Source read; first-pass review, independent QA pending |
 | stores/base.py | Source read; first-pass review, independent QA pending |
@@ -362,9 +362,15 @@ The workflow, installed-wheel smoke script and archive attributes were read and 
 
 ### P0-07 — HIGH: actual CI ACL failure remains open
 
-[Run 38268644004, job 114877125611](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38268644004/job/114877125611) completed with 29 failed and 1629 passed tests. The failed nodes depend on Windows private-tree ACL verification; Ruff and diff checks passed, and wheel stages were skipped. The production code captures subprocess stderr, but `CalledProcessError` in the test log exposes only the command, so the exact CI readback mismatch is not established. The same private ACL test module passes locally (8 tests) and the exact PowerShell script verifies one and three synthetic scratch paths locally. Do not weaken ACL expectations or call CI green. Next: collect a sanitized CI readback reason for the specific mismatch, repair the cause, and rerun the full workflow at the resulting SHA.
+[Run 38268644004, job 114877125611](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38268644004/job/114877125611) completed with 29 failed and 1629 passed tests. The failed nodes depend on Windows private-tree ACL verification; Ruff and diff checks passed, and wheel stages were skipped. A local synthetic scratch run passed, so the mismatch required runner evidence. Do not weaken ACL expectations or call CI green.
 
 The first diagnostic candidate, `e64fca0`, reached [run 38272674378](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38272674378) but stopped before pytest: direct `scripts/ci_acl_probe.py` execution lacked the repository import path on that host. The workflow now invokes the probe as a module; this is an entry-point correction, not an ACL repair.
+
+[Run 38273126818 at `24611ca`](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38273126818) completed with 29 failed, 1630 passed in 341.32s. Its sanitized scratch probe established the mismatch: `owner_matches=False` while the single allow rule had the correct user SID, full rights, inheritance and propagation. Both batch and single-path ACL verification failed for that reason. The candidate now sets the file/directory owner to the authenticated user SID before committing the DACL, then retains exact owner and rule readback. Local focused runtime/ACL checks pass; actual CI at this new candidate is pending.
+
+### P0-08 — HIGH: doctor entered a filesystem ACL writer (repair pending CI)
+
+Static trace after the initial schema repair: `cli.py:101` called `load_settings(root)`; `config.py:244` invoked `_private_tree(root / "private")`, applying ACLs to every path. Synthetic RED tests caught that write path and a foreign ACL grant that doctor silently repaired before diagnosis. The candidate now calls `load_settings(read_only=True)`, which preflights links and reads effective owner-only ACLs without applying them. A foreign grant blocks the diagnostic and remains unchanged. These focused tests pass locally; full candidate CI and independent review remain pending.
 
 ### Seven-package native-agent reconciliation against the merged baseline
 
@@ -377,5 +383,5 @@ The October 8 implementation plan, spec, merged commit history and named test fi
 | 3. Atomic persistence and provenance | `shopping_agent/storage.py`, existing `migrations/009.sql`, repository mixin; `5cc7107` plus provenance fixes | `test_agent_storage.py`, `test_agent_recovery.py`, `test_command_query_provenance.py` | Full audit of stale/foreign/expired and recovery paths pending; no migration reuse. |
 | 4. Seven controlled tools | `shopping_agent/tools.py`; `75dd652` | `test_agent_tools.py` | Real E4B can choose a valid but wrong tool; historical quality gate remains. |
 | 5. Bounded local E4B loop | `shopping_agent/ollama.py`; `6f7b681` | `test_agent_ollama.py` | No new real-model run is authorized in this audit. |
-| 6. Opt-in routing and rollback | `shopping_agent/conversation.py`, `runtime.py`, `cli.py`, `dialogue_storage.py`; `55d8997` and later fixes | `test_agent_conversation.py`, `test_agent_runtime.py`, `test_agent_route_notices.py` | Actual CI runtime tests fail through ACL setup; new diagnostic is pending. |
+| 6. Opt-in routing and rollback | `shopping_agent/conversation.py`, `runtime.py`, `cli.py`, `dialogue_storage.py`; `55d8997` and later fixes | `test_agent_conversation.py`, `test_agent_runtime.py`, `test_agent_route_notices.py` | Actual CI runtime tests fail through the diagnosed owner mismatch; ACL repair CI is pending. |
 | 7. Offline and real acceptance | `scripts/probe_skills_agent.py`, end-to-end/probe tests and archived JSONL; `2df0d08` | `test_agent_end_to_end.py`, `test_agent_probe.py` | Two frozen real runs each passed 50/53 steps; saved-list query and internal-duplicate completion failed. Guided v5 quality also remains failing. No Telegram acceptance. |

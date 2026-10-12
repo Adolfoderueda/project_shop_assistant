@@ -98,8 +98,8 @@ async def configure(root: Path) -> None:
 
 async def doctor(root: Path) -> bool:
     try:
-        settings = load_settings(root)
-    except ValueError as error:
+        settings = load_settings(root, read_only=True)
+    except (ValueError, PermissionError) as error:
         print(str(error))
         return False
     from playwright.async_api import async_playwright
