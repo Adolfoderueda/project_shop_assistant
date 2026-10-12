@@ -47,7 +47,7 @@ jobs:
       - name: Whitespace check
         run: git diff --check HEAD^ HEAD
       - name: Synthetic Windows ACL diagnostic
-        run: python scripts/ci_acl_probe.py
+        run: python -m scripts.ci_acl_probe
       - name: Full offline test suite
         run: python -m pytest -q
       - name: Build wheel offline

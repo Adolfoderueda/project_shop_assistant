@@ -363,3 +363,19 @@ The workflow, installed-wheel smoke script and archive attributes were read and 
 ### P0-07 — HIGH: actual CI ACL failure remains open
 
 [Run 38268644004, job 114877125611](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38268644004/job/114877125611) completed with 29 failed and 1629 passed tests. The failed nodes depend on Windows private-tree ACL verification; Ruff and diff checks passed, and wheel stages were skipped. The production code captures subprocess stderr, but `CalledProcessError` in the test log exposes only the command, so the exact CI readback mismatch is not established. The same private ACL test module passes locally (8 tests) and the exact PowerShell script verifies one and three synthetic scratch paths locally. Do not weaken ACL expectations or call CI green. Next: collect a sanitized CI readback reason for the specific mismatch, repair the cause, and rerun the full workflow at the resulting SHA.
+
+The first diagnostic candidate, `e64fca0`, reached [run 38272674378](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38272674378) but stopped before pytest: direct `scripts/ci_acl_probe.py` execution lacked the repository import path on that host. The workflow now invokes the probe as a module; this is an entry-point correction, not an ACL repair.
+
+### Seven-package native-agent reconciliation against the merged baseline
+
+The October 8 implementation plan, spec, merged commit history and named test files show these packages are present. Presence and test execution do not close the remaining manual owned-path audit or the real-model release gate. Existing interfaces are retained; migration 009 is already merged and remains untouched.
+
+| Package | Merged implementation / origin | Relevant tests | Remaining evidence |
+| --- | --- | --- | --- |
+| 1. Contracts and fixed skills | `shopping_agent/contracts.py`, `skills.py`, four packaged skills and MIT notice; `edf1d2b` | `test_agent_contracts.py`, `test_agent_skills.py` | Independent detailed source review pending. |
+| 2. Pure proposals and replies | `shopping_agent/proposals.py`, `replies.py`; `4bbe76e` | `test_agent_proposals.py`, `test_agent_replies.py` | Real semantic selection and duplicate interpretation still fail historically. |
+| 3. Atomic persistence and provenance | `shopping_agent/storage.py`, existing `migrations/009.sql`, repository mixin; `5cc7107` plus provenance fixes | `test_agent_storage.py`, `test_agent_recovery.py`, `test_command_query_provenance.py` | Full audit of stale/foreign/expired and recovery paths pending; no migration reuse. |
+| 4. Seven controlled tools | `shopping_agent/tools.py`; `75dd652` | `test_agent_tools.py` | Real E4B can choose a valid but wrong tool; historical quality gate remains. |
+| 5. Bounded local E4B loop | `shopping_agent/ollama.py`; `6f7b681` | `test_agent_ollama.py` | No new real-model run is authorized in this audit. |
+| 6. Opt-in routing and rollback | `shopping_agent/conversation.py`, `runtime.py`, `cli.py`, `dialogue_storage.py`; `55d8997` and later fixes | `test_agent_conversation.py`, `test_agent_runtime.py`, `test_agent_route_notices.py` | Actual CI runtime tests fail through ACL setup; new diagnostic is pending. |
+| 7. Offline and real acceptance | `scripts/probe_skills_agent.py`, end-to-end/probe tests and archived JSONL; `2df0d08` | `test_agent_end_to_end.py`, `test_agent_probe.py` | Two frozen real runs each passed 50/53 steps; saved-list query and internal-duplicate completion failed. Guided v5 quality also remains failing. No Telegram acceptance. |
