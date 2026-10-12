@@ -1,0 +1,5 @@
+# Frozen archive hashes describe CRLF execution bytes; Git blobs remain LF.
+offline-v2.jsonl text eol=crlf
+real-v2.jsonl text eol=crlf
+offline-v3.jsonl text eol=crlf
+real-v3.jsonl text eol=crlf
