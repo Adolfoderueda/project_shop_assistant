@@ -60,6 +60,9 @@ def test_doctor_does_not_resecure_private_tree(tmp_path, monkeypatch):
     config.save_settings(tmp_path, settings)
     repo = Repository(tmp_path / settings.database_path)
     repo.migrate()
+    # The fixture creates a new database after save_settings secured the tree.
+    # Secure that synthetic file before testing that doctor leaves it untouched.
+    config._private_tree(tmp_path / "private")
 
     class FakeBot:
         def __init__(self, _token):

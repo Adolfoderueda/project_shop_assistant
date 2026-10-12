@@ -73,10 +73,10 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | Path | Review status |
 | --- | --- |
 | .gitignore | Source read; first-pass review, independent QA pending |
-| .superpowers/sdd/2026-09-27-asistente-compras/final-fix-report.md | Pending |
-| .superpowers/sdd/2026-09-29-gemma4-local-telegram/final-fix-report.md | Pending |
-| .superpowers/sdd/2026-09-29-gemma4-local-telegram/task-1-report.md | Pending |
-| .superpowers/sdd/2026-09-29-gemma4-local-telegram/task-2-report.md | Pending |
+| .superpowers/sdd/2026-09-27-asistente-compras/final-fix-report.md | Source read; historical offline result and live limits, independent QA pending |
+| .superpowers/sdd/2026-09-29-gemma4-local-telegram/final-fix-report.md | Source read; historical offline result and live limits, independent QA pending |
+| .superpowers/sdd/2026-09-29-gemma4-local-telegram/task-1-report.md | Source read; historical Ollama adapter evidence, independent QA pending |
+| .superpowers/sdd/2026-09-29-gemma4-local-telegram/task-2-report.md | Source read; historical provider routing and lock evidence, independent QA pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-focused-final.txt | Pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-full.txt | Pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-green.txt | Pending |
@@ -97,17 +97,17 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | README.md | Source read; first-pass review, independent QA pending |
 | catalog.py | Source read; first-pass review, independent QA pending |
 | checkout.py | Source read; first-pass review, independent QA pending |
-| checkout_storage.py | Pending |
+| checkout_storage.py | Source read; reservation, attempt and reconciliation boundaries first-pass review, independent QA pending |
 | cli.py | Source read; doctor and local-switch boundaries first-pass review, independent QA pending |
 | config.py | Source read; first-pass review, independent QA pending |
-| conversation.py | Pending |
-| dialogue.py | Pending |
-| dialogue_additions.py | Pending |
-| dialogue_controller.py | Pending |
-| dialogue_increments.py | Pending |
-| dialogue_replies.py | Pending |
-| dialogue_requests.py | Pending |
-| dialogue_storage.py | Pending |
+| conversation.py | Source read; legacy inbox recovery and model boundary first-pass review, independent QA pending |
+| dialogue.py | Source read; bounded state, TTL and closed answer grammar first-pass review, independent QA pending |
+| dialogue_additions.py | Source read; duplicate and missing-quantity transition first-pass review, independent QA pending |
+| dialogue_controller.py | Source read; stale/reserved reference and confirmation reducer first-pass review, independent QA pending |
+| dialogue_increments.py | Source read; selected increment references and confirmation first-pass review, independent QA pending |
+| dialogue_replies.py | Source read; persisted-result reply first-pass review, independent QA pending |
+| dialogue_requests.py | Source read; whole-message grammar and proposal guard first-pass review, independent QA pending |
+| dialogue_storage.py | Source read; transactional reducer, target revisions and dialogue provenance first-pass review, independent QA pending |
 | docs/setup.md | Relevant sections inspected; full source review pending |
 | docs/store-capabilities.md | Source read; first-pass review, independent QA pending |
 | docs/superpowers/continuacion-gemma-2026-10-01.md | Pending |
@@ -199,7 +199,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/specs/2026-10-09-preguntas-guiadas-telegram-design.md | Pending |
 | docs/superpowers/task-8-report.md | Pending |
 | domain.py | Source read; strict shared event/list/reply contracts first-pass review, independent QA pending |
-| interpreter.py | Pending |
+| interpreter.py | Source read; command authorization and untrusted interpreter boundary first-pass review, independent QA pending |
 | migrations/001.sql | Source read; first-pass review, independent QA pending |
 | migrations/002.sql | Source read; first-pass review, independent QA pending |
 | migrations/003.sql | Source read; first-pass review, independent QA pending |
@@ -212,13 +212,13 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | migrations/010.sql | Source read; first-pass review, independent QA pending |
 | migrations/__init__.py | Source read; first-pass review, independent QA pending |
 | offers.py | Source read; first-pass review, independent QA pending |
-| ollama_interpreter.py | Pending |
-| ollama_replies.py | Pending |
-| presentation.py | Pending |
-| presentation_phrases.py | Pending |
-| presentation_replies.py | Pending |
-| presentation_storage.py | Pending |
-| presentation_validation.py | Pending |
+| ollama_interpreter.py | Source read; local endpoint, bounded schema and source validation first-pass review, independent QA pending |
+| ollama_replies.py | Source read; closed draft schema and deterministic validation first-pass review, independent QA pending |
+| presentation.py | Source read; versioned snapshot/public context first-pass review, independent QA pending |
+| presentation_phrases.py | Source read; closed phrase composition first-pass review, independent QA pending |
+| presentation_replies.py | Source read; facts, pending questions and historical-price wording first-pass review, independent QA pending |
+| presentation_storage.py | Source read; presentation job and outbox transaction first-pass review, independent QA pending |
+| presentation_validation.py | Source read; token coverage and application-owned fact substitution first-pass review, independent QA pending |
 | product_memory.py | Source read; first-pass review, independent QA pending |
 | pyproject.toml | Source read; first-pass review, independent QA pending |
 | recovery.py | Source read; first-pass review, independent QA pending |
@@ -241,11 +241,11 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | shopping_agent/contracts.py | Source read; strict proposal and model boundary first-pass review, independent QA pending |
 | shopping_agent/conversation.py | Source read; first-pass review, independent QA pending |
 | shopping_agent/guided_contracts.py | Source read; guided ownership, provenance and witness models first-pass review, independent QA pending |
-| shopping_agent/guided_controller.py | Pending |
+| shopping_agent/guided_controller.py | Source read; question identity, delivered review witness and guarded confirmation first-pass review, independent QA pending |
 | shopping_agent/guided_conversation.py | Source read; event routing and callback boundary first-pass review, independent QA pending |
-| shopping_agent/guided_ollama.py | Pending |
+| shopping_agent/guided_ollama.py | Source read; bounded one-call native candidate and untrusted history first-pass review, independent QA pending |
 | shopping_agent/guided_replies.py | Source read; application-owned review rendering first-pass review, independent QA pending |
-| shopping_agent/guided_storage.py | Pending |
+| shopping_agent/guided_storage.py | Source read; choice receipts, delivered-review witness and atomic guarded writes first-pass review, independent QA pending |
 | shopping_agent/ollama.py | Source read; first-pass review, independent QA pending |
 | shopping_agent/proposals.py | Source read; control, expiry and revalidation first-pass review, independent QA pending |
 | shopping_agent/replies.py | Source read; deterministic full review text first-pass review, independent QA pending |
@@ -338,7 +338,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | tests/test_presentation_replies.py | Full suite executed; source review pending |
 | tests/test_presentation_storage.py | Full suite executed; source review pending |
 | tests/test_presentation_validation.py | Full suite executed; source review pending |
-| tests/test_private_acl.py | Full suite executed; source review pending |
+| tests/test_private_acl.py | Source read and focused/full suite executed; Windows owner and exact ACL assertions reviewed, independent QA pending |
 | tests/test_product_memory.py | Full suite executed; source review pending |
 | tests/test_product_queries.py | Full suite executed; source review pending |
 | tests/test_recovery.py | Full suite executed; source review pending |
@@ -366,7 +366,7 @@ The workflow, installed-wheel smoke script and archive attributes were read and 
 
 The first diagnostic candidate, `e64fca0`, reached [run 38272674378](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38272674378) but stopped before pytest: direct `scripts/ci_acl_probe.py` execution lacked the repository import path on that host. The workflow now invokes the probe as a module; this is an entry-point correction, not an ACL repair.
 
-[Run 38273126818 at `24611ca`](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38273126818) completed with 29 failed, 1630 passed in 341.32s. Its sanitized scratch probe established the mismatch: `owner_matches=False` while the single allow rule had the correct user SID, full rights, inheritance and propagation. Both batch and single-path ACL verification failed for that reason. The candidate now sets the file/directory owner to the authenticated user SID before committing the DACL, then retains exact owner and rule readback. Local focused runtime/ACL checks pass; actual CI at this new candidate is pending.
+[Run 38273126818 at `24611ca`](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38273126818) completed with 29 failed, 1630 passed in 341.32s. Its sanitized scratch probe established the mismatch: `owner_matches=False` while the single allow rule had the correct user SID, full rights, inheritance and propagation. Both batch and single-path ACL verification failed for that reason. The candidate now sets the file/directory owner to the authenticated user SID before committing the DACL, then retains exact owner and rule readback. [Run 38275905585 at `efc4f03`](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38275905585) proved the repair on the CI runner: sanitized batch and single-path owner/rule readback passed, and 1660 tests passed. Its one failure was a new doctor test fixture that created a database after securing the private tree, so read-only doctor correctly refused its inherited CI ACL. The synthetic fixture now explicitly secures that file before the no-write assertion; focused ACL/doctor tests pass locally. Fresh CI and wheel smoke remain pending.
 
 ### P0-08 — HIGH: doctor entered a filesystem ACL writer (repair pending CI)
 
