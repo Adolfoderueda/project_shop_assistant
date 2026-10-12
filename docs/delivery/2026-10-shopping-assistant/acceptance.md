@@ -4,7 +4,7 @@ Source: approved TAK-2 plan revision 2, 49708c36-dd46-4cf0-b496-4a49c14c7c55. Ac
 
 | Package | Paperclip | GitHub | Test evidence / PR | Independent reviewer and verdict | Takeshi acceptance |
 | --- | --- | --- | --- | --- | --- |
-| P0 | [TAK-3](/TAK/issues/TAK-3), core [TAK-9](/TAK/issues/TAK-9) | [#5](https://github.com/Adolfoderueda/project_shop_assistant/issues/5), core [#13](https://github.com/Adolfoderueda/project_shop_assistant/issues/13) | [PR #11](https://github.com/Adolfoderueda/project_shop_assistant/pull/11), [audit](audit.md), [verification](verification.md); owned-path audit incomplete, CI succeeded at `de897e5a540819e447ca6cf457f59c3b2b17fef5`, newer documentation-head CI pending | QA Release Engineer [TAK-11](/TAK/issues/TAK-11) / [#15](https://github.com/Adolfoderueda/project_shop_assistant/issues/15), verdict pending | Pending |
+| P0 | [TAK-3](/TAK/issues/TAK-3), core [TAK-9](/TAK/issues/TAK-9) | [#5](https://github.com/Adolfoderueda/project_shop_assistant/issues/5), core [#13](https://github.com/Adolfoderueda/project_shop_assistant/issues/13) | [PR #11](https://github.com/Adolfoderueda/project_shop_assistant/pull/11), [audit](audit.md), [verification](verification.md); owned-path audit incomplete, CI succeeded at `de897e5a540819e447ca6cf457f59c3b2b17fef5`; documentation SHA `3104459b30c0c5639239f41209a15298a293ef8a` failed whitespace check before tests; correction pending | QA Release Engineer [TAK-11](/TAK/issues/TAK-11) / [#15](https://github.com/Adolfoderueda/project_shop_assistant/issues/15), verdict pending | Pending |
 | P1 | [TAK-4](/TAK/issues/TAK-4) | [#6](https://github.com/Adolfoderueda/project_shop_assistant/issues/6) | Pending | Pending staffing | Pending |
 | P2 | [TAK-5](/TAK/issues/TAK-5) | [#7](https://github.com/Adolfoderueda/project_shop_assistant/issues/7) | Pending | Pending staffing | Pending |
 | P3 | [TAK-6](/TAK/issues/TAK-6) | [#8](https://github.com/Adolfoderueda/project_shop_assistant/issues/8) | Pending | Pending staffing | Pending |
@@ -23,4 +23,3 @@ Mushu owns coordination. GitHub account assignment is administrative, not eviden
 - P5: independent SHA-specific review, integrated tests, rollback rehearsal, authorized Telegram pilot and 48-hour observation, then Takeshi acceptance.
 
 Each candidate must link its exact SHA, PR, commands, exit codes, dated sanitized evidence, reviewer findings and resolutions. Later changes invalidate the prior review. Unavailable checks remain pending. Takeshi retains merge and activation authority.
-
