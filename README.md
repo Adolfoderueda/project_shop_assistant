@@ -108,3 +108,11 @@ ni restauración de backup sin autorización. No se ejecutaron esos comandos aqu
 Una futura prueba Telegram exige autorización separada, base vacía independiente,
 perfiles de tiendas sin abrir, bloqueo explícito buy/resume/checkout y un único worker;
 `dry_run` por sí solo no basta. La aceptación anterior del agente sigue abierta.
+
+## Auditoría de entrega de octubre (en curso)
+
+La [auditoría P0](docs/delivery/2026-10-shopping-assistant/audit.md) registra las
+comprobaciones actuales: defecto del wheel reproducido y corregido en PR #11,
+comprobación del wheel instalado correcta y CI completa todavía pendiente.
+La revisión de todas las rutas y la revisión independiente siguen abiertas.
+No cambia la aceptación del modelo ni autoriza activar o reiniciar Telegram.

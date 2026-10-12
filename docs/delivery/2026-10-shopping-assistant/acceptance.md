@@ -4,7 +4,7 @@ Source: approved TAK-2 plan revision 2, 49708c36-dd46-4cf0-b496-4a49c14c7c55. Ac
 
 | Package | Paperclip | GitHub | Test evidence / PR | Independent reviewer and verdict | Takeshi acceptance |
 | --- | --- | --- | --- | --- | --- |
-| P0 | [TAK-3](/TAK/issues/TAK-3) | [#5](https://github.com/Adolfoderueda/project_shop_assistant/issues/5) | Pending | Pending staffing | Pending |
+| P0 | [TAK-3](/TAK/issues/TAK-3) | [#5](https://github.com/Adolfoderueda/project_shop_assistant/issues/5) | [PR #11](https://github.com/Adolfoderueda/project_shop_assistant/pull/11), [audit](audit.md), [verification](verification.md); incomplete | Pending staffing | Pending |
 | P1 | [TAK-4](/TAK/issues/TAK-4) | [#6](https://github.com/Adolfoderueda/project_shop_assistant/issues/6) | Pending | Pending staffing | Pending |
 | P2 | [TAK-5](/TAK/issues/TAK-5) | [#7](https://github.com/Adolfoderueda/project_shop_assistant/issues/7) | Pending | Pending staffing | Pending |
 | P3 | [TAK-6](/TAK/issues/TAK-6) | [#8](https://github.com/Adolfoderueda/project_shop_assistant/issues/8) | Pending | Pending staffing | Pending |
