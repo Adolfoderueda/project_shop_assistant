@@ -68,6 +68,8 @@ Mushu continues on TAK-3: finish every pending path, complete the seven-package 
 
 This pass read 57 baseline paths in full and inspected selected sections of others. It did **not** complete the every-path audit. Automated test execution never counts as manual source review. Keep P0 open and P1's audit gate intact. Follow the task's scheduled CI monitor for the next execution window.
 
+The 2026-10-12 continuation read three more owned historical paths in full: the command-provenance RED log, callback-reset RED log, and original native acceptance README. These are historical failures/evidence; they do not count as current test or model runs. The [documentation-head run 38296701619](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38296701619) at `3104459b30c0c5639239f41209a15298a293ef8a` failed its whitespace check before ACL, pytest or wheel. The exact commit diff added a stray carriage-return-only line to `acceptance.md`; PR-branch correction `a0954476e346ae9d1743dc4d9cf55278134d55c9` removes it. Fresh CI remains pending. Manual owned-path audit remains open.
+
 ## Path coverage
 
 This inventory is a coverage ledger, not a claim that all paths were read. Review each pending path and record finding/test evidence before completing P0.
@@ -82,7 +84,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-focused-final.txt | Source read; historical 176 focused passes, independent QA pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-full.txt | Source read; historical 1218 full-suite passes, independent QA pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-green.txt | Source read; historical 14 focused passes, independent QA pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-product-red-corrected.txt | Pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-product-red-corrected.txt | Source read; historical 1 failed/1 passed command provenance RED, expired permission failed closed on restart |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-real-exits.txt | Source read; both historical real probes exit 1, release gate retained |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-red-corrected.txt | Pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-report.md | Source read; retained command provenance repair and repeated 50/53 real semantic failures, independent QA pending |
@@ -94,7 +96,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/focused.txt | Source read; historical 137 focused passes, independent QA pending |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/full.txt | Source read; historical 1658 full-suite passes, independent QA pending |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/green.txt | Source read; historical 15 focused passes, independent QA pending |
-| .superpowers/sdd/2026-10-09-callback-cancel-reset/red.txt | Pending |
+| .superpowers/sdd/2026-10-09-callback-cancel-reset/red.txt | Source read; historical 4 failed/11 passed callback reset RED, stale cancelled context leaked into replay/history |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/report.md | Source read; callback reset provenance and historical 1658 offline passes, independent QA pending |
 | README.md | Source read; first-pass review, independent QA pending |
 | catalog.py | Source read; first-pass review, independent QA pending |
@@ -115,7 +117,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/continuacion-gemma-2026-10-01.md | Source read; historical quality and ACL work, private Telegram gate remains |
 | docs/superpowers/continuacion-gemma-lista-2026-09-30.md | Source read; historical list/card implementation and quality limits, independent QA pending |
 | docs/superpowers/continuacion-telegram-2026-09-28.md | Source read; historical user-reported Telegram activity, no current pilot or restart evidence |
-| docs/superpowers/evidence/2026-10-08-skills-agent/README.md | Pending |
+| docs/superpowers/evidence/2026-10-08-skills-agent/README.md | Source read; historical original real 31/53 in both frozen passes, fix-round real 50/53 with three failures; no new real acceptance |
 | docs/superpowers/evidence/2026-10-08-skills-agent/execution-status.md | Source read; first-pass review, independent QA pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-1.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-2.jsonl | Pending |
