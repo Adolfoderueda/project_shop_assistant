@@ -1,4 +1,4 @@
-# Baseline audit â€” execution and first-pass findings; incomplete
+# Baseline audit — execution and first-pass findings; incomplete
 
 Observed 2026-10-12. Owner/author: Mushu. Independent reviewer: pending staffing on [TAK-2](/TAK/issues/TAK-2). Work: [GitHub #5](https://github.com/Adolfoderueda/project_shop_assistant/issues/5) / [TAK-3](/TAK/issues/TAK-3). Tracking: #4. Draft [PR #11](https://github.com/Adolfoderueda/project_shop_assistant/pull/11).
 
@@ -28,27 +28,27 @@ Both full baseline runs executed all 1658 tests. Passing a focused rerun does no
 
 ## Reproducible findings
 
-### P0-01 â€” HIGH: installed distribution cannot import storage (repair submitted)
+### P0-01 — HIGH: installed distribution cannot import storage (repair submitted)
 
 `pyproject.toml` omits `product_memory` from explicit flat modules. `storage.py` and `dialogue_requests.py` depend on it. Build with `python -m pip wheel . --no-deps --no-build-isolation --no-index`; install into an empty target; outside the repository set `PYTHONPATH` to that target and run `python -P -c "import storage"`. Baseline raises `ModuleNotFoundError: No module named 'product_memory'`. Editable/source tests mask the defect.
 
 Repair in `1c63ec1`: include that module and run `scripts/check_installed_wheel.py` against the installed target. RED then GREEN observed. No schema or product behavior changed. Independent review and final full candidate check remain pending. Tracked in #5 / PR #11.
 
-### P0-02 â€” MEDIUM: frozen archive checks depend on local Git line endings (repair submitted)
+### P0-02 — MEDIUM: frozen archive checks depend on local Git line endings (repair submitted)
 
 Failures: `tests/test_guided_acceptance.py::test_archive_integrity_distinguishes_recorded_probe_from_current_verifier` and `::test_v3_exact_runtime_is_independently_archivable_without_hash_exemption`.
 
 The four v2/v3 offline/real JSONL Git blobs contain LF, while immutable execution hashes describe CRLF. `verify_integrity` rejects the clean LF checkout as changed raw evidence. For all four, reconstructing CRLF matches the pre-existing expected SHA-256. The new local `.gitattributes` pins `text eol=crlf` for exactly those files; Git blobs, recorded hashes, matrices and expectations are unchanged. After materializing the declared checkout bytes, both tests pass. Existing objects for the pinned archive commits must be available, so CI fetches full Git history. Tracked in #5 / PR #11.
 
-### P0-03 â€” MEDIUM: guided probe assumes Takeshi's Windows temporary path (repair submitted)
+### P0-03 — MEDIUM: guided probe assumes Takeshi's Windows temporary path (repair submitted)
 
 `scripts/probe_guided_questions.py` hardcoded `C:/Users/Takeshi/AppData/Local/Temp/opencode`. A host with another user cannot run synthetic acceptance reliably; it also ignores the run's temporary-directory boundary. An audit hook rejected actual `tempfile.mkdtemp` outside the platform temp root. Replacing the constant with `Path(tempfile.gettempdir())` passed the same synthetic one-each probe and cleanup check. Historical artifacts were not regenerated. The legacy PowerShell probes additionally require an existing `%LOCALAPPDATA%/Temp/opencode`; CI explicitly prepares that synthetic directory. Tracked in #5 / PR #11.
 
-### P0-04 â€” HIGH release gate: native quality remains below documented acceptance
+### P0-04 — HIGH release gate: native quality remains below documented acceptance
 
 Historical native and guided evidence records semantic failures, not merely unavailable services. Native-agent execution status reports 50/53 steps on each of two runs, with saved-list query and internal-duplicate failures. Guided v5 reports 42/102 bounded, 6/39 security and 0/24 free conversations; many later steps were not reached. The subsequent callback-boundary fix has offline evidence but no new native acceptance. These are historical observations, not rerun results. Retain the no-activation gate and resolve quality under P1 with a reviewed interface/design before changing the native contract. No speculative prompt or model changes were made here.
 
-### P0-05 â€” governance: CI and independent review still pending
+### P0-05 — governance: CI and independent review still pending
 
 Baseline has no workflows. Proposed Windows workflow now runs full offline tests, Ruff, diff and installed-wheel smoke without production credentials or model services. Setup follows [GitHub's Python workflow guidance](https://docs.github.com/en/actions/tutorials/build-and-test-code/python). A completed actual run is required before calling CI established. Previous access checks reported unprotected default branch and 403 for protection/rulesets on this private account tier. No subscription/visibility change; manual independent-review and Takeshi merge gates remain.
 
@@ -56,7 +56,7 @@ Baseline has no workflows. Proposed Windows workflow now runs full offline tests
 
 - Agent tools have no purchase/confirm tool, validate an entire native batch, permit one final mutator, and bind operations to a durable inbox snapshot. Agent storage atomically revalidates rows/reservations and commits list changes with the reply. Guided provenance/reducer/storage still needs the remaining detailed review.
 - Telegram accepts authorized private sender/chat events, rejects forwarded/quoted provenance, stores inbox offsets durably and records delivered notices. Its documented at-least-once notices can duplicate after ambiguous send responses; do not promise exactly-once external delivery.
-- SQL migrations 1â€“10 are versioned resources. They preserve immutable order snapshots and quarantine old checkout permissions; none creates named lists or reminders. Do not downgrade a schema-10 database to old code.
+- SQL migrations 1–10 are versioned resources. They preserve immutable order snapshots and quarantine old checkout permissions; none creates named lists or reminders. Do not downgrade a schema-10 database to old code.
 - All four public store adapters retain prepare/submit/reconcile/live_verified disabled. Product observations and incomplete shipping totals remain distinct from executable quotes. No current public-site price evidence was collected.
 - Startup and task scripts require local configuration/consent. Runtime opens dedicated store profiles before recovery. Any future Telegram pilot must explicitly block checkout/recovery paths; dry_run is insufficient as a no-store-access policy.
 
@@ -143,27 +143,27 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/evidence/2026-10-08-skills-agent/offline.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/real-pass-1.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/schema-diagnostic.jsonl | Pending |
-| docs/superpowers/evidence/2026-10-08-skills-agent/skill_micro_probe.py | Pending |
-| docs/superpowers/evidence/2026-10-08-skills-agent/verification.txt | Pending |
-| docs/superpowers/evidence/2026-10-09-e4b-native-quality/.gitattributes | Pending |
+| docs/superpowers/evidence/2026-10-08-skills-agent/skill_micro_probe.py | Source read; five fresh real local-model contexts per case after simulated setup, no current execution or broad acceptance |
+| docs/superpowers/evidence/2026-10-08-skills-agent/verification.txt | Source read; original 1195-test offline pass and repeat 31/53 real failures are historical, no current quality acceptance |
+| docs/superpowers/evidence/2026-10-09-e4b-native-quality/.gitattributes | Source read; two archived quality files retain CR-aware whitespace attributes, no evidence bytes changed |
 | docs/superpowers/evidence/2026-10-09-e4b-native-quality/preregistration.json | Pending |
 | docs/superpowers/evidence/2026-10-09-e4b-native-quality/results.md | Source read; first-pass review, independent QA pending |
 | docs/superpowers/evidence/2026-10-09-e4b-native-quality/trials.jsonl | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/acceptance-v3-freeze.json | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/acceptance-v4-freeze.json | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/acceptance-v5-freeze.json | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/archive-v2.json | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/archive-v3.json | Pending |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/acceptance-v3-freeze.json | Source read; historical v3 freeze records bounded native evaluation inputs and activation gate, not a current pass. |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/acceptance-v4-freeze.json | Source read; historical v4 freeze adds reset and expiry cases; later evidence invalidates its unchanged-input comparison. |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/acceptance-v5-freeze.json | Source read; historical v5 freeze records explicit UTF-8 correction and independently compared case values. |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/archive-v2.json | Source read; historical v2 byte reconstruction and hash inventory only, not current-source acceptance. |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/archive-v3.json | Source read; historical v3 byte reconstruction and hash inventory only, not current-source acceptance. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/execution-status.md | Source read; first-pass review, independent QA pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v3.md | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v4.md | Pending |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v4.md | Source read; reports callback replay and expiry bypass fixes with focused 263-pass evidence, but declares v4 native comparison invalid due to Windows encoding and activation blocked. Historical claims unrerun. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v5.md | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/handoff.md | Initial inspection; full audit pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v3.json | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v4.json | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v5.json | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix.json | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v1-source.txt | Pending |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v1-source.txt | Source read; frozen synthetic-input A/B script varied tool descriptions and captured raw local model calls; no current probe run |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v1.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v2.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/offline-v2.jsonl | Pending |
@@ -175,7 +175,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v4.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v5.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/results.md | Pending |
-| docs/superpowers/gemma4-12b-local-2026-10-10.md | Pending |
+| docs/superpowers/gemma4-12b-local-2026-10-10.md | Source read; model download and 12B comparison paused by user, no model-access claim |
 | docs/superpowers/natural-dialogue-real-2026-10-08-run1.jsonl | Pending |
 | docs/superpowers/natural-dialogue-real-2026-10-08-run2.jsonl | Pending |
 | docs/superpowers/natural-dialogue-real-2026-10-08-run3.jsonl | Pending |
@@ -189,9 +189,9 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/plans/2026-10-09-preguntas-guiadas-telegram.md | Pending |
 | docs/superpowers/progress.md | Pending |
 | docs/superpowers/prueba-dialogo-contextual-2026-10-01.md | Pending |
-| docs/superpowers/prueba-dialogo-natural-2026-10-08-run3.md | Pending |
+| docs/superpowers/prueba-dialogo-natural-2026-10-08-run3.md | Source read; historical natural-dialogue 34/34 real steps, distinct from native-agent quality and Telegram acceptance |
 | docs/superpowers/prueba-dialogo-natural-2026-10-08.md | Pending |
-| docs/superpowers/prueba-gemma-2026-10-01.md | Pending |
+| docs/superpowers/prueba-gemma-2026-10-01.md | Source read; historical ten-message Gemma probe found product-query and offer-intent quality failures, no current model test |
 | docs/superpowers/prueba-respuestas-gemma-2026-10-08.md | Pending |
 | docs/superpowers/specs/2026-09-27-asistente-compras-design.md | Pending |
 | docs/superpowers/specs/2026-09-29-gemma4-local-telegram-design.md | Pending |
@@ -201,7 +201,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/specs/2026-10-08-dialogo-natural-altas-incrementos-design.md | Pending |
 | docs/superpowers/specs/2026-10-08-respuestas-naturales-gemma-design.md | Pending |
 | docs/superpowers/specs/2026-10-09-preguntas-guiadas-telegram-design.md | Pending |
-| docs/superpowers/task-8-report.md | Pending |
+| docs/superpowers/task-8-report.md | Source read; historical checkout crash-recovery fake confirms one submit, private Telegram and live purchase gates remain closed |
 | domain.py | Source read; strict shared event/list/reply contracts first-pass review, independent QA pending |
 | interpreter.py | Source read; command authorization and untrusted interpreter boundary first-pass review, independent QA pending |
 | migrations/001.sql | Source read; first-pass review, independent QA pending |
@@ -226,17 +226,17 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | product_memory.py | Source read; first-pass review, independent QA pending |
 | pyproject.toml | Source read; first-pass review, independent QA pending |
 | recovery.py | Source read; first-pass review, independent QA pending |
-| requirements.lock | Pending |
+| requirements.lock | Source read; 27 pinned runtime/test dependencies, existing lock retained |
 | restrictions.py | Source read; first-pass review, independent QA pending |
 | runtime.py | Source read; first-pass review, independent QA pending |
 | scripts/Install-ShopAssistant.ps1 | Source read; first-pass review, independent QA pending |
-| scripts/Probe-Dialogue.ps1 | Pending |
+| scripts/Probe-Dialogue.ps1 | Source read; synthetic legacy dialogue matrix, optional loopback Ollama and approved temp-base requirement; not run in this audit |
 | scripts/Probe-NaturalDialogue.ps1 | Pending |
 | scripts/Probe-Replies.ps1 | Pending |
 | scripts/Start-ShopAssistant.ps1 | Source read; first-pass review, independent QA pending |
 | scripts/Stop-ShopAssistant.ps1 | Source read; first-pass review, independent QA pending |
 | scripts/Uninstall-ShopAssistant.ps1 | Source read; first-pass review, independent QA pending |
-| scripts/diagnose_guided_native_v2.py | Pending |
+| scripts/diagnose_guided_native_v2.py | Source read; diagnostic contrasts guided prompt with existing skills using three synthetic inputs and local Ollama; not executed in this audit |
 | scripts/probe_guided_questions.py | Relevant sections inspected; full source review pending |
 | scripts/probe_skills_agent.py | Relevant sections inspected; full source review pending |
 | shop_assistant/__init__.py | Source read; first-pass review, independent QA pending |
@@ -291,19 +291,19 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | tests/stores/test_mercadona.py | Full suite executed; source review pending |
 | tests/stores/test_nappy.py | Full suite executed; source review pending |
 | tests/stores/test_public_adapters.py | Full suite executed; source review pending |
-| tests/test_agent_contracts.py | Relevant sections inspected; full source review pending |
-| tests/test_agent_conversation.py | Full suite executed; source review pending |
-| tests/test_agent_end_to_end.py | Full suite executed; source review pending |
-| tests/test_agent_ollama.py | Full suite executed; source review pending |
-| tests/test_agent_probe.py | Full suite executed; source review pending |
-| tests/test_agent_proposals.py | Full suite executed; source review pending |
-| tests/test_agent_recovery.py | Full suite executed; source review pending |
-| tests/test_agent_replies.py | Full suite executed; source review pending |
-| tests/test_agent_route_notices.py | Full suite executed; source review pending |
-| tests/test_agent_runtime.py | Full suite executed; source review pending |
-| tests/test_agent_skills.py | Full suite executed; source review pending |
-| tests/test_agent_storage.py | Full suite executed; source review pending |
-| tests/test_agent_tools.py | Full suite executed; source review pending |
+| tests/test_agent_contracts.py | Source read; strict quantities, authority-free model args, bounded items, complete review and proposal lifetime cases |
+| tests/test_agent_conversation.py | Source read; command-route precedence, durable replay, greeting preservation, rollback and model-prose discard cases |
+| tests/test_agent_end_to_end.py | Source read; HTTP-simulated end-to-end boundaries, explicit confirmation and conflict cases; no real-model quality claim |
+| tests/test_agent_ollama.py | Source read; bounded E4B calls, strict envelopes, fail-closed model errors, fact preservation, context limits and cancellation cases |
+| tests/test_agent_probe.py | Source read; private-path isolation, unavailable versus pass, honest action/reply oracles and expiry edge cases |
+| tests/test_agent_proposals.py | Source read; pure reducer guards for ambiguity, quantity arithmetic, revision/owner changes, expiry and duplicate conflicts |
+| tests/test_agent_recovery.py | Source read; restart replay, v8-to-v10 preservation, outbox rollback, legacy-job priority and post-commit ambiguity cases |
+| tests/test_agent_replies.py | Source read; full deterministic review, no pre-commit success, oversize refusal and application-fact rendering cases |
+| tests/test_agent_route_notices.py | Source read; opt-in rollback notice persistence, transaction rollback, private recipient and replay cases |
+| tests/test_agent_runtime.py | Source read; opt-in engine construction, worker lock, disable revocation and synthetic settings-read cases |
+| tests/test_agent_skills.py | Source read; fixed packaged skills and MIT attribution assertions; no live model coverage |
+| tests/test_agent_storage.py | Source read; atomic batch rollback, durable review witness, stale/foreign/expired refusal, replay and command provenance cases |
+| tests/test_agent_tools.py | Source read; seven strict tools, whole-batch validation, message binding, stale read and untrusted product-title cases |
 | tests/test_checkout.py | Full suite executed; source review pending |
 | tests/test_command_query_provenance.py | Full suite executed; source review pending |
 | tests/test_conversation.py | Full suite executed; source review pending |
@@ -360,11 +360,11 @@ The workflow, installed-wheel smoke script and archive attributes were read and 
 
 ## TAK-9 continuation, 2026-10-12
 
-### P0-06 â€” HIGH: doctor changed the database it was diagnosing
+### P0-06 — HIGH: doctor changed the database it was diagnosing
 
 `cli.doctor` called `Repository.migrate()`. A synthetic schema-9 database with a preserved product row, fake Telegram Bot and fake Playwright reproduced the contract breach: `doctor` returned `SQLite: OK` and advanced `PRAGMA user_version` to 10. The RED test is `tests/test_doctor_read_only.py::test_doctor_does_not_upgrade_existing_schema`. The candidate now opens the existing database in SQLite read-only mode, checks its version and reports `SQLite: blocked (schema update required)` without migrating or reseeding it. Focused GREEN and lint evidence is in [verification.md](verification.md). The test is a synthetic diagnostic; no private database was opened.
 
-### P0-07 â€” HIGH: actual CI ACL failure remains open
+### P0-07 — HIGH: actual CI ACL failure remains open
 
 [Run 38268644004, job 114877125611](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38268644004/job/114877125611) completed with 29 failed and 1629 passed tests. The failed nodes depend on Windows private-tree ACL verification; Ruff and diff checks passed, and wheel stages were skipped. A local synthetic scratch run passed, so the mismatch required runner evidence. Do not weaken ACL expectations or call CI green.
 
@@ -374,7 +374,7 @@ The first diagnostic candidate, `e64fca0`, reached [run 38272674378](https://git
 
 The subsequent documentation-head [CI run 38282736456, job 114923683151](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38282736456/job/114923683151) at `6aebec19e55c7da50105a02cd9ccab413cc7f8b3` also completed successfully: 1661 offline tests in 561.40s, Ruff, whitespace, synthetic ACL diagnostic and installed-wheel smoke. This closes the CI repair verification at that SHA; it does not close the manual audit or release gates.
 
-### P0-08 â€” HIGH: doctor entered a filesystem ACL writer (repair verified in CI)
+### P0-08 — HIGH: doctor entered a filesystem ACL writer (repair verified in CI)
 
 Static trace after the initial schema repair: `cli.py:101` called `load_settings(root)`; `config.py:244` invoked `_private_tree(root / "private")`, applying ACLs to every path. Synthetic RED tests caught that write path and a foreign ACL grant that doctor silently repaired before diagnosis. The candidate now calls `load_settings(read_only=True)`, which preflights links and reads effective owner-only ACLs without applying them. A foreign grant blocks the diagnostic and remains unchanged. Focused tests and full candidate CI passed; independent review remains pending.
 
@@ -392,3 +392,4 @@ The October 8 implementation plan, spec, merged commit history and named test fi
 | 6. Opt-in routing and rollback | `shopping_agent/conversation.py`, `runtime.py`, `cli.py`, `dialogue_storage.py`; `55d8997` and later fixes | `test_agent_conversation.py`, `test_agent_runtime.py`, `test_agent_route_notices.py` | The diagnosed ACL owner mismatch is repaired and actual CI passed at `43e58c1`; independent review remains pending. |
 | 7. Offline and real acceptance | `scripts/probe_skills_agent.py`, end-to-end/probe tests and archived JSONL; `2df0d08` | `test_agent_end_to_end.py`, `test_agent_probe.py` | Two frozen real runs each passed 50/53 steps; saved-list query and internal-duplicate completion failed. Guided v5 quality also remains failing. No Telegram acceptance. |
 
+Latest CI follow-up: [run 38298055578](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38298055578/job/114974162243) at `b87a4ef69171add0eaab21ea7a0930ed029d3b95` failed the whitespace step before tests. Both added documentation files ended with a carriage-return-only line, which Git reported as trailing whitespace. The local correction removes those lines; full offline CI and independent audit review remain outstanding for the resulting candidate.
