@@ -1,4 +1,4 @@
-# Baseline audit — execution and first-pass findings; incomplete
+# Baseline audit â€” execution and first-pass findings; incomplete
 
 Observed 2026-10-12. Owner/author: Mushu. Independent reviewer: pending staffing on [TAK-2](/TAK/issues/TAK-2). Work: [GitHub #5](https://github.com/Adolfoderueda/project_shop_assistant/issues/5) / [TAK-3](/TAK/issues/TAK-3). Tracking: #4. Draft [PR #11](https://github.com/Adolfoderueda/project_shop_assistant/pull/11).
 
@@ -28,27 +28,27 @@ Both full baseline runs executed all 1658 tests. Passing a focused rerun does no
 
 ## Reproducible findings
 
-### P0-01 — HIGH: installed distribution cannot import storage (repair submitted)
+### P0-01 â€” HIGH: installed distribution cannot import storage (repair submitted)
 
 `pyproject.toml` omits `product_memory` from explicit flat modules. `storage.py` and `dialogue_requests.py` depend on it. Build with `python -m pip wheel . --no-deps --no-build-isolation --no-index`; install into an empty target; outside the repository set `PYTHONPATH` to that target and run `python -P -c "import storage"`. Baseline raises `ModuleNotFoundError: No module named 'product_memory'`. Editable/source tests mask the defect.
 
 Repair in `1c63ec1`: include that module and run `scripts/check_installed_wheel.py` against the installed target. RED then GREEN observed. No schema or product behavior changed. Independent review and final full candidate check remain pending. Tracked in #5 / PR #11.
 
-### P0-02 — MEDIUM: frozen archive checks depend on local Git line endings (repair submitted)
+### P0-02 â€” MEDIUM: frozen archive checks depend on local Git line endings (repair submitted)
 
 Failures: `tests/test_guided_acceptance.py::test_archive_integrity_distinguishes_recorded_probe_from_current_verifier` and `::test_v3_exact_runtime_is_independently_archivable_without_hash_exemption`.
 
 The four v2/v3 offline/real JSONL Git blobs contain LF, while immutable execution hashes describe CRLF. `verify_integrity` rejects the clean LF checkout as changed raw evidence. For all four, reconstructing CRLF matches the pre-existing expected SHA-256. The new local `.gitattributes` pins `text eol=crlf` for exactly those files; Git blobs, recorded hashes, matrices and expectations are unchanged. After materializing the declared checkout bytes, both tests pass. Existing objects for the pinned archive commits must be available, so CI fetches full Git history. Tracked in #5 / PR #11.
 
-### P0-03 — MEDIUM: guided probe assumes Takeshi's Windows temporary path (repair submitted)
+### P0-03 â€” MEDIUM: guided probe assumes Takeshi's Windows temporary path (repair submitted)
 
 `scripts/probe_guided_questions.py` hardcoded `C:/Users/Takeshi/AppData/Local/Temp/opencode`. A host with another user cannot run synthetic acceptance reliably; it also ignores the run's temporary-directory boundary. An audit hook rejected actual `tempfile.mkdtemp` outside the platform temp root. Replacing the constant with `Path(tempfile.gettempdir())` passed the same synthetic one-each probe and cleanup check. Historical artifacts were not regenerated. The legacy PowerShell probes additionally require an existing `%LOCALAPPDATA%/Temp/opencode`; CI explicitly prepares that synthetic directory. Tracked in #5 / PR #11.
 
-### P0-04 — HIGH release gate: native quality remains below documented acceptance
+### P0-04 â€” HIGH release gate: native quality remains below documented acceptance
 
 Historical native and guided evidence records semantic failures, not merely unavailable services. Native-agent execution status reports 50/53 steps on each of two runs, with saved-list query and internal-duplicate failures. Guided v5 reports 42/102 bounded, 6/39 security and 0/24 free conversations; many later steps were not reached. The subsequent callback-boundary fix has offline evidence but no new native acceptance. These are historical observations, not rerun results. Retain the no-activation gate and resolve quality under P1 with a reviewed interface/design before changing the native contract. No speculative prompt or model changes were made here.
 
-### P0-05 — governance: CI and independent review still pending
+### P0-05 â€” governance: CI and independent review still pending
 
 Baseline has no workflows. Proposed Windows workflow now runs full offline tests, Ruff, diff and installed-wheel smoke without production credentials or model services. Setup follows [GitHub's Python workflow guidance](https://docs.github.com/en/actions/tutorials/build-and-test-code/python). A completed actual run is required before calling CI established. Previous access checks reported unprotected default branch and 403 for protection/rulesets on this private account tier. No subscription/visibility change; manual independent-review and Takeshi merge gates remain.
 
@@ -56,11 +56,13 @@ Baseline has no workflows. Proposed Windows workflow now runs full offline tests
 
 - Agent tools have no purchase/confirm tool, validate an entire native batch, permit one final mutator, and bind operations to a durable inbox snapshot. Agent storage atomically revalidates rows/reservations and commits list changes with the reply. Guided provenance/reducer/storage still needs the remaining detailed review.
 - Telegram accepts authorized private sender/chat events, rejects forwarded/quoted provenance, stores inbox offsets durably and records delivered notices. Its documented at-least-once notices can duplicate after ambiguous send responses; do not promise exactly-once external delivery.
-- SQL migrations 1–10 are versioned resources. They preserve immutable order snapshots and quarantine old checkout permissions; none creates named lists or reminders. Do not downgrade a schema-10 database to old code.
+- SQL migrations 1â€“10 are versioned resources. They preserve immutable order snapshots and quarantine old checkout permissions; none creates named lists or reminders. Do not downgrade a schema-10 database to old code.
 - All four public store adapters retain prepare/submit/reconcile/live_verified disabled. Product observations and incomplete shipping totals remain distinct from executable quotes. No current public-site price evidence was collected.
 - Startup and task scripts require local configuration/consent. Runtime opens dedicated store profiles before recovery. Any future Telegram pilot must explicitly block checkout/recovery paths; dry_run is insufficient as a no-store-access policy.
 
 ## Remaining execution and review
+
+Core-owner continuation on 2026-10-12: [CI run 38294353075](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38294353075/job/114961742907) completed successfully at PR head `de897e5a540819e447ca6cf457f59c3b2b17fef5`; see [verification.md](verification.md) for exact checks. Nine additional owned historical reports/continuation documents were read in full and their ledger entries updated. They preserve the earlier native 50/53 semantic failures and do not count as new model or Telegram verification. The remaining owned-path ledger, including large frozen JSONL evidence, remains incomplete; do not promote this PR to independent review yet.
 
 Mushu continues on TAK-3: finish every pending path, complete the seven-package P1 reconciliation, verify/fix final CI, resolve material findings, and arrange an independent SHA-specific review when staffing is authorized. A proposed same-owner child was rejected by Paperclip's delegation-cycle rule; GitHub continuation #12 was closed as consolidated into #5. It is not a completed audit task or a blocker. No independent verdict or Takeshi acceptance has occurred.
 
@@ -83,17 +85,17 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-product-red-corrected.txt | Pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-real-exits.txt | Source read; both historical real probes exit 1, release gate retained |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-red-corrected.txt | Pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-report.md | Pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-report.md | Source read; retained command provenance repair and repeated 50/53 real semantic failures, independent QA pending |
 | .superpowers/sdd/2026-10-08-agente-skills-herramientas/final-fix-ruff.txt | Source read; historical Ruff success, independent QA pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-5-report.md | Pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-6-report.md | Pending |
-| .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-7-report.md | Pending |
-| .superpowers/sdd/2026-10-08-dialogo-natural-altas-incrementos/task-6-report.md | Pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-5-report.md | Source read; bounded native loop and HTTP/tool validation claims are historical, independent QA pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-6-report.md | Source read; opt-in integration and durable discard notice history, independent QA pending |
+| .superpowers/sdd/2026-10-08-agente-skills-herramientas/task-7-report.md | Source read; 50/53 final real steps with saved-list and duplicate failures remain release gates |
+| .superpowers/sdd/2026-10-08-dialogo-natural-altas-incrementos/task-6-report.md | Source read; historical isolated real-model probe and Telegram limit, independent QA pending |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/focused.txt | Source read; historical 137 focused passes, independent QA pending |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/full.txt | Source read; historical 1658 full-suite passes, independent QA pending |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/green.txt | Source read; historical 15 focused passes, independent QA pending |
 | .superpowers/sdd/2026-10-09-callback-cancel-reset/red.txt | Pending |
-| .superpowers/sdd/2026-10-09-callback-cancel-reset/report.md | Pending |
+| .superpowers/sdd/2026-10-09-callback-cancel-reset/report.md | Source read; callback reset provenance and historical 1658 offline passes, independent QA pending |
 | README.md | Source read; first-pass review, independent QA pending |
 | catalog.py | Source read; first-pass review, independent QA pending |
 | checkout.py | Source read; first-pass review, independent QA pending |
@@ -110,9 +112,9 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | dialogue_storage.py | Source read; transactional reducer, target revisions and dialogue provenance first-pass review, independent QA pending |
 | docs/setup.md | Relevant sections inspected; full source review pending |
 | docs/store-capabilities.md | Source read; first-pass review, independent QA pending |
-| docs/superpowers/continuacion-gemma-2026-10-01.md | Pending |
-| docs/superpowers/continuacion-gemma-lista-2026-09-30.md | Pending |
-| docs/superpowers/continuacion-telegram-2026-09-28.md | Pending |
+| docs/superpowers/continuacion-gemma-2026-10-01.md | Source read; historical quality and ACL work, private Telegram gate remains |
+| docs/superpowers/continuacion-gemma-lista-2026-09-30.md | Source read; historical list/card implementation and quality limits, independent QA pending |
+| docs/superpowers/continuacion-telegram-2026-09-28.md | Source read; historical user-reported Telegram activity, no current pilot or restart evidence |
 | docs/superpowers/evidence/2026-10-08-skills-agent/README.md | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/execution-status.md | Source read; first-pass review, independent QA pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-1.jsonl | Pending |
@@ -356,11 +358,11 @@ The workflow, installed-wheel smoke script and archive attributes were read and 
 
 ## TAK-9 continuation, 2026-10-12
 
-### P0-06 — HIGH: doctor changed the database it was diagnosing
+### P0-06 â€” HIGH: doctor changed the database it was diagnosing
 
 `cli.doctor` called `Repository.migrate()`. A synthetic schema-9 database with a preserved product row, fake Telegram Bot and fake Playwright reproduced the contract breach: `doctor` returned `SQLite: OK` and advanced `PRAGMA user_version` to 10. The RED test is `tests/test_doctor_read_only.py::test_doctor_does_not_upgrade_existing_schema`. The candidate now opens the existing database in SQLite read-only mode, checks its version and reports `SQLite: blocked (schema update required)` without migrating or reseeding it. Focused GREEN and lint evidence is in [verification.md](verification.md). The test is a synthetic diagnostic; no private database was opened.
 
-### P0-07 — HIGH: actual CI ACL failure remains open
+### P0-07 â€” HIGH: actual CI ACL failure remains open
 
 [Run 38268644004, job 114877125611](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38268644004/job/114877125611) completed with 29 failed and 1629 passed tests. The failed nodes depend on Windows private-tree ACL verification; Ruff and diff checks passed, and wheel stages were skipped. A local synthetic scratch run passed, so the mismatch required runner evidence. Do not weaken ACL expectations or call CI green.
 
@@ -370,7 +372,7 @@ The first diagnostic candidate, `e64fca0`, reached [run 38272674378](https://git
 
 The subsequent documentation-head [CI run 38282736456, job 114923683151](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38282736456/job/114923683151) at `6aebec19e55c7da50105a02cd9ccab413cc7f8b3` also completed successfully: 1661 offline tests in 561.40s, Ruff, whitespace, synthetic ACL diagnostic and installed-wheel smoke. This closes the CI repair verification at that SHA; it does not close the manual audit or release gates.
 
-### P0-08 — HIGH: doctor entered a filesystem ACL writer (repair verified in CI)
+### P0-08 â€” HIGH: doctor entered a filesystem ACL writer (repair verified in CI)
 
 Static trace after the initial schema repair: `cli.py:101` called `load_settings(root)`; `config.py:244` invoked `_private_tree(root / "private")`, applying ACLs to every path. Synthetic RED tests caught that write path and a foreign ACL grant that doctor silently repaired before diagnosis. The candidate now calls `load_settings(read_only=True)`, which preflights links and reads effective owner-only ACLs without applying them. A foreign grant blocks the diagnostic and remains unchanged. Focused tests and full candidate CI passed; independent review remains pending.
 
@@ -387,3 +389,4 @@ The October 8 implementation plan, spec, merged commit history and named test fi
 | 5. Bounded local E4B loop | `shopping_agent/ollama.py`; `6f7b681` | `test_agent_ollama.py` | No new real-model run is authorized in this audit. |
 | 6. Opt-in routing and rollback | `shopping_agent/conversation.py`, `runtime.py`, `cli.py`, `dialogue_storage.py`; `55d8997` and later fixes | `test_agent_conversation.py`, `test_agent_runtime.py`, `test_agent_route_notices.py` | The diagnosed ACL owner mismatch is repaired and actual CI passed at `43e58c1`; independent review remains pending. |
 | 7. Offline and real acceptance | `scripts/probe_skills_agent.py`, end-to-end/probe tests and archived JSONL; `2df0d08` | `test_agent_end_to_end.py`, `test_agent_probe.py` | Two frozen real runs each passed 50/53 steps; saved-list query and internal-duplicate completion failed. Guided v5 quality also remains failing. No Telegram acceptance. |
+
