@@ -1,0 +1,90 @@
+# Shopping assistant: delivery proposal, October 12â€“26, 2026
+
+Status: revised proposal for Takeshi's acceptance; GitHub tracking and final review added. Author and self-reviewer: CEO. This is planning research, not the completed whole-code audit or a claim that the bot works in Telegram.
+
+## Outcome and scope
+
+By October 26, target a single-user Windows Telegram assistant that manages several named shopping lists, proposes natural-language edits for explicit confirmation, reviews saved items, refreshes supported public product prices, and sends opt-in shopping reminders. Keep application-owned facts and confirmations, durable SQLite state, and local Ollama. One product agent runs the conversation; the development team below is separate.
+
+Treat â€œcard/cartâ€ as the saved shopping list for this proposal. Website cart inspection or modification is not included without clarification. No automatic payments. Price checks must show source, timestamp, product/pack match and unknown delivery costs. Do not claim cheapest delivered basket from partial prices.
+
+Target is conditional on timely acceptance, access for a separate Telegram pilot, and release gates passing. If these fail, report the usable subset and revised date; do not label simulated tests a live release. Predictive replenishment is future work; simple scheduled reminders are in this proposal.
+
+## What the repository establishes
+
+Planning baseline: clean worktree, HEAD `0594bf0`; latest product merge `28af475`. Read README, progress, store-capability matrix, latest skills-agent specification and implementation plan, plus runtime, initial schema and store registration. Source inventory covers conversation, interpretation, presentation, persistence, checkout/recovery, Telegram, four store adapters, migrations, scripts and tests. A line-by-line review remains the first execution package.
+
+- `runtime.py` currently constructs the legacy Conversation and Ollama interpreter/writer. The planned `shopping_agent` package is absent. The October 8 skills-agent implementation is the documented next step, not a shipped feature.
+- `docs/superpowers/specs/2026-10-08-agente-skills-herramientas-design.md` specifies E4B native tools, application-controlled confirmation, atomic batches, 15-minute expiry, recovery and opt-in rollback. Its companion plan at `docs/superpowers/plans/2026-10-08-agente-skills-herramientas.md` supplies seven detailed packages and tests. Preserve those requirements; use Paperclip task ownership instead of its older subagent workflow instructions.
+- `docs/superpowers/progress.md` records 910 passing offline tests and real-model probe results on October 8, but still marks Telegram acceptance pending. Those are historical results; no tests or model probes were rerun in this planning turn.
+- Initial `list_lines` schema has no named-list relationship; migration search found no later list_id. Named lists need an explicit data-model change and migration review.
+- `stores/connections.py` registers Mercadona, Amascotados, Charro and Nappy. The capability report records public search/partial quote observations from September, with live preparation/payment/reconciliation disabled. Those observations are not current price evidence.
+- No reminder implementation was found in the searched runtime/domain/migrations. A persistent scheduler and delivery policy are new scope.
+- Packaging review should check `product_memory.py`: it exists but is absent from the explicit py-modules list in `pyproject.toml`. This is a candidate issue, not a reproduced defect.
+
+## Proposed team
+
+| Role | Responsibility | Review boundary |
+| --- | --- | --- |
+| CEO (existing) | Scope, decisions, task dependencies, daily evidence and release recommendation | Takeshi decides onboarding scope and live activation |
+| Python/agent engineer | E4B tools, proposals, persistence, named lists, Telegram integration | Does not self-approve release |
+| Store integration engineer | Product identity, public price refresh, adapter failures, dated evidence | Cannot enable purchases or invent shipping totals |
+| QA/release engineer | Independent review, adversarial tests, migration/rollback and Telegram pilot evidence | Can reject a release with failing gates |
+
+These are proposed roles, not agents already hired. First inspect available authorized agents and reuse suitable ones. Any new hire requires the applicable hiring gate and an agreed cost limit; acceptance of this plan alone does not hire agents. CEO owns routing until identities are confirmed. Use isolated workspaces; one owner controls schema/integration changes.
+
+## Epics and executable work packages
+
+The IDs below are planning references, not existing Paperclip or GitHub tasks. After acceptance, create epic/child issues with owners, this plan copied into their context, and first-class blocker edges. Keep detailed checkboxes in the source technical plan rather than creating a ticket per test.
+
+| Epic / package | Dates | Depends on | Deliverable and acceptance |
+| --- | --- | --- | --- |
+| E0 / P0 Baseline audit | Oct 12â€“13 | Acceptance | Review every tracked source, script, migration, test and document; record coverage, severity, reproducible defects and stale claims. Establish test baseline and data/activation boundaries. |
+| E1 / P1 Confirmed native agent | Oct 13â€“16 | P0 critical findings resolved | Implement the seven October 8 plan packages: contracts/skills, pure proposals/replies, atomic storage, seven tools, bounded E4B loop, opt-in integration and probes. Natural-language edits never write list rows until current explicit confirmation. |
+| E2 / P2 Named lists and item review | Oct 16â€“18 | P1 contracts/storage stable | Create/select/rename lists; show active list; scope additions, changes, proposals, queries and snapshots to a list. Migrate historical rows to a default list without data loss. Changed active list invalidates incompatible confirmation. No deletion in this MVP. |
+| E3 / P3 Current public prices | Oct 16â€“20 | P0; P2 before integration | Start with Mercadona 28023 as a documented default, subject to user location/store choice. Refresh exact supported products on request and show price, pack, availability, URL and observed time. Expand to other existing adapters only when evidence passes. Unknown match/delivery remains unknown. |
+| E4 / P4 Shopping reminders | Oct 20â€“22 | P2 | User-created one-time/recurring reminders with Europe/Madrid timezone, list binding, pause, cancel and snooze. Persist due occurrences and enqueue via outbox; quiet hours default 22:00â€“08:00, configurable. Restart does not silently drop due reminders; bounded catch-up avoids a notification burst. |
+| E5 / P5 Pilot and release | Oct 22â€“26 | P1â€“P4, QA verdict, live access/activation decision | Private Telegram pilot, migration/rollback rehearsal, start/restart checks, failure handling, then 48-hour observed use. Save evidence and operating guide. Takeshi confirms usefulness before release acceptance. |
+
+MVP checkpoints: October 16 confirmed natural-language list edits in isolated tests; October 18 named-list workflow; October 20 dated prices; October 22 reminders; October 26 live pilot acceptance. Keep P3 adapter work separate from schema work until integration. Reserve final days for defects, not extra features.
+
+## Implementation and verification contracts
+
+P0: audit code against the documented promises; run `.venv\Scripts\python.exe -m pytest -q` and `.venv\Scripts\python.exe -m ruff check .`, record exit codes, baseline revision and failures. Inspect packaging using an offline wheel in scratch if local build tools are available. No private configuration is needed for this baseline.
+
+P1: follow the existing plan's exact interfaces and RED/implementation/GREEN sequence. New package `shopping_agent/`, migration 009 and relevant integration tests are proposed files. Preserve command routes and old presentation jobs. Test stale/foreign/expired confirmation, duplicate delivery, two mutators, rollback, malicious model arguments, missing quantities, and atomic multi-item failure. Run real-model probes on synthetic databases twice; label unavailable as pending, never pass.
+
+P2: extend `domain.py`, `storage.py`, proposal contracts, a new sequential migration and conversation routing. First failing tests prove list isolation, no cross-list edits, default migration preservation, and changed-list confirmation rejection. Implement scoped repository queries and application-owned list selection. Green tests must cover old order snapshots, restart and migration idempotence. Agree exact schema after P0/P1 so parallel work does not collide on migration numbers.
+
+P3: use `stores/base.py`, `stores/public.py`, concrete adapters, `offers.py`, `product_memory.py` and a read-only application tool. First failing fixtures cover changed price, out-of-stock, wrong pack/variant, timeout and stale observation. Implement refresh and deterministic factual output, then pass focused store tests and an authorized current public-site smoke check. Store content is untrusted data. A cached observation must never be presented as a fresh check. This package extends the original seven-tool design and needs its interface reviewed before implementation.
+
+P4: add proposed `reminders.py`, persistent schedule/occurrence tables in the next migration, and integrate `runtime.py`/`telegram_io.py` outbox delivery. First failing clock-driven tests cover DST, quiet hours, snooze/cancel, restart and duplicate processing. Implement occurrence uniqueness and bounded catch-up; pass offline tests before opt-in Telegram delivery. Telegram send acknowledgement ambiguity can still duplicate a delivered notification; document that limit instead of promising exactly-once external delivery. No LLM decides when payment or list mutation is authorized.
+
+P5: independent QA records per-MVP verdicts; CEO checks requirements coverage. Use focused tests per change and full offline suite at integration/release, Ruff and `git diff --check`. Pilot checks two named lists, multi-product confirmations, stale confirmation refusal, model unavailable with commands working, real price-source timestamps, reminder pause/cancel and worker restart. Zero unintended list writes or orders; no unresolved critical/high defects. Record actual cold/warm latency rather than asserting a performance guarantee. Back up privately and demonstrate rollback preserving historical data before activation.
+
+## GitHub delivery and final review
+
+This revision incorporates Takeshi's October 12 request: all development work must be organized and traceable in the existing GitHub repository, with agents completing checks and reviews before Takeshi's final review. Verified local origin: https://github.com/Adolfoderueda/project_shop_assistant. GitHub connector access is awaiting the user setup card; repository permissions, existing issue structure, CI and branch rules have not yet been checked. No GitHub issues, branches or pull requests were created in this revision.
+
+GitHub is the durable engineering record. Paperclip remains the agent assignment, dependency and governance system. After plan acceptance, CEO owns the following process:
+
+1. Inspect existing GitHub issues, milestones, pull requests, workflows and repository instructions before adding records. Reuse relevant existing work. Create a delivery tracking issue for October 12â€“26, six epic issues E0â€“E5 and linked package/defect issues as needed. Use milestones for the five MVP checkpoints, labels for epic, work type, priority and review state, and an assigned owner plus a named reviewer on every work item. Do not create a ticket for each test.
+2. Every execution task, including audit, documentation and defects, must have a GitHub issue and a reciprocal Paperclip link before work starts. Each record includes scope, acceptance criteria, dependencies, milestone, responsible agent, review owner and evidence links. Preserve pending, blocked, in-progress, ready-for-review and accepted distinctions. CEO reconciles both records at handoff and daily; if access fails, record the sync failure and restore it before claiming the work is complete.
+3. Use an isolated branch/workspace per assigned package and a linked pull request for every code or document change. Inspect and follow existing branch conventions; otherwise use a name containing the GitHub issue number and short purpose. No direct pushes to the default branch, self-approval or bypass of repository checks. CEO coordinates integration and gives one engineer ownership of shared schema/migration changes.
+4. Each PR explains the problem, final behavior, linked acceptance criteria, test commands/results, relevant commit SHA, migration/rollback impact and known limits. Record the implementing agent and independent reviewing agent even if both use a shared GitHub service account. A shared account's GitHub approval is not evidence of independent review; preserve the reviewer's findings and identity in the linked records. Use native GitHub reviews where permissions permit.
+5. Independent QA/release review checks the actual diff and acceptance evidence, raises actionable findings, and records its verdict against the reviewed SHA. The author fixes findings and repeats affected checks. Any later code changes require renewed review and relevant tests. Required CI checks must pass; live Telegram and model probes unavailable in CI need dated, sanitized evidence linked to the exact build. Skipped or unavailable checks remain pending.
+6. CEO requests Takeshi's final GitHub review only when agent reviews pass, all required checks pass, material findings are closed and the relevant acceptance checklist is complete. Routine engineering feedback is resolved between agents. Takeshi retains final acceptance and merge/release authority; agents prepare review-ready PRs and do not merge or activate the release without that decision. If dependent packages need integration before acceptance, use an integration branch and test its combined candidate; keep changes traceable to their original PRs and retest the final candidate.
+
+After acceptance, the first tracking/documentation PR will copy this approved plan, its Paperclip revision identifier and link into the repository. Proposed new locations are docs/delivery/2026-10-shopping-assistant/plan.md, audit.md, acceptance.md and release.md; reuse an established equivalent if the repository already defines one. Keep existing technical specifications and docs/superpowers/progress.md aligned. The audit report records every reviewed path, findings and issue links. The acceptance matrix links each requirement to its issue, PR, test evidence, review verdict and final decision. The release record contains the candidate SHA, changelog, operating guide, known limits and rollback procedure. Store sanitized results in GitHub; keep credentials, private databases and personal Telegram content out of issues, commits and logs.
+
+P0 now includes this tracking setup, permission/branch-policy check and a CI baseline. Inspect existing workflows before proposing changes. Ensure PR automation runs the supported offline suite and Ruff with no production credentials; record git diff --check evidence. Test the actual workflow change and record its run before claiming CI is established. If required branch checks cannot be enforced with available permissions, report that limitation explicitly and preserve the manual gate; do not claim branch protection exists.
+
+Each P1â€“P4 milestone is ready for Takeshi only when its linked PRs have independent review and the package's tests are green. P5 additionally delivers the full requirements-to-evidence index in GitHub, the integrated release-candidate results, the authorized Telegram pilot evidence and the final acceptance checklist. No task is described as accepted merely because code was written or a PR opened. The October 26 target and existing pilot/activation gates remain; outstanding GitHub access, staffing or final review time must be reflected in the schedule.
+
+## Decisions and gates
+
+Accepting this revision authorizes creating linked Paperclip/GitHub delivery tasks, publishing the approved plan and delivery records to GitHub through PRs, and starting the code audit and isolated development within this scope. It is approval to begin the revised workflow, not final product acceptance. Takeshi reviews the finished, agent-tested work in GitHub; merges and release remain reserved for that decision. The current onboarding gate requires acceptance before execution tasks or hires. Existing documentation separately reserves bot activation, restart, private-data access and live Telegram testing; retain that gate and prepare a concrete pilot procedure for approval. Store purchases remain outside this release.
+
+Before the affected packages proceed, Takeshi must confirm whether â€œcartâ€ means the saved list or a website cart; the first store and delivery area (Mercadona 28023 is only a proposed default); and the host that can stay on plus preferred reminder schedule. Ask through a short task interaction after scope acceptance. Do not request tokens/passwords in chat. Agent staffing and any new operating spend also need an agreed ceiling before hiring/provisioning.
+
+CEO self-review of this revised proposal: the GitHub process now covers reciprocal task tracking, isolated branches, PR checks, independent agent review and Takeshi's final acceptance. The product scope and prior gates are retained. Proposal covers the requested full audit, documented next step, multiple lists, prices, reminders, staged tests and reusable development roles. No independent review has occurred. Main schedule risks are E4B interpretation, multi-list migration, website changes, Windows availability and live pilot access. If schedule compresses, ask Takeshi to choose scope/date; do not silently remove requested features.
