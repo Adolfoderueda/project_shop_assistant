@@ -27,6 +27,18 @@ def test_reply_covers_every_item_candidate_and_operand():
     assert "sin guardar" in text and "guardado" not in text
 
 
+def test_internal_only_duplicates_offer_only_separate_line_decisions():
+    pending = prepare_proposal(message(), ProposeAdds(items=(
+        ItemInput(description="arroz", quantity=2),
+        ItemInput(description="arroz", quantity=3))), snapshot(), now=NOW)
+
+    text = render_proposal(pending, snapshot()).text
+
+    assert "posición 1" in text and "posición 2" in text
+    assert "línea separada" in text
+    assert "cantidad total" not in text
+
+
 def test_review_ends_with_explicit_pending_confirmation_and_no_success():
     decision = prepare_proposal(message(), ProposeAdds(items=(
         ItemInput(description="arroz", quantity=2), ItemInput(description="carne", quantity=3))),
