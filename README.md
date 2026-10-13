@@ -108,3 +108,14 @@ ni restauración de backup sin autorización. No se ejecutaron esos comandos aqu
 Una futura prueba Telegram exige autorización separada, base vacía independiente,
 perfiles de tiendas sin abrir, bloqueo explícito buy/resume/checkout y un único worker;
 `dry_run` por sí solo no basta. La aceptación anterior del agente sigue abierta.
+
+## Auditoría de entrega de octubre (en curso)
+
+La [auditoría P0](docs/delivery/2026-10-shopping-assistant/audit.md) registra las
+comprobaciones actuales: defecto del wheel reproducido y corregido en PR #11,
+comprobación del wheel instalado correcta y 278/278 rutas base conciliadas.
+La CI de Windows pasó para la cabecera anterior `b2e99d3c` en la
+[ejecución 38440313449](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38440313449).
+La integración actual del resguardo de paquetes requiere su propia CI y revisión
+independiente; esos resultados se registran en TAK-42 y GitHub #13.
+No cambia la aceptación del modelo ni autoriza activar o reiniciar Telegram.

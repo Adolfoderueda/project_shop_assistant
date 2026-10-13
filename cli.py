@@ -98,21 +98,23 @@ async def configure(root: Path) -> None:
 
 async def doctor(root: Path) -> bool:
     try:
-        settings = load_settings(root)
-    except ValueError as error:
+        settings = load_settings(root, read_only=True)
+    except (ValueError, PermissionError) as error:
         print(str(error))
         return False
     from playwright.async_api import async_playwright
     from telegram import Bot
 
-    from storage import Repository
+    from storage import SCHEMA_VERSION, Repository
     from stores.connections import registrations
     from stores.registry import StoreRegistry
     results = []
     try:
         repo = Repository(settings.database_path)
-        repo.migrate()
-        results.append("SQLite: OK")
+        if repo.schema_version() == SCHEMA_VERSION:
+            results.append("SQLite: OK")
+        else:
+            results.append("SQLite: blocked (schema update required)")
     except Exception:  # noqa: BLE001 -- no raw SQLite details, paths may be private
         results.append("SQLite: blocked (check private directory permissions and migration)")
     try:

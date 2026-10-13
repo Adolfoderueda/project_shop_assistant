@@ -1,5 +1,18 @@
 # Progreso del asistente de compras
 
+## 2026-10-12 - P0 audit in progress, no activation
+
+The remote baseline already contains the native and guided agent implementation.
+[Current audit](../delivery/2026-10-shopping-assistant/audit.md) and
+[verification](../delivery/2026-10-shopping-assistant/verification.md) supersede
+historical packaging-pending statements: the installed baseline wheel reproduced
+a missing `product_memory` module, repaired and smoke-tested in draft PR #11.
+Full baseline execution: 1656 passed, 2 archived-byte failures; both failures pass
+after explicit CRLF checkout attributes. Full candidate CI and independent review
+remain pending. Every-path audit is incomplete. No native-quality or Telegram
+acceptance is implied; prior activation/restart/private-data gates remain.
+
+
 ## 2026-10-08 — Diálogo natural Task6 (REAL PASS; Telegram pendiente)
 
 - Probe opt-in con proveedores reales de interpretación y redacción, Conversation,

@@ -53,6 +53,7 @@ $ErrorActionPreference = 'Stop'
 $target = $env:SHOP_ASSISTANT_ACL_PATH
 $sid = New-Object System.Security.Principal.SecurityIdentifier($env:SHOP_ASSISTANT_ACL_SID)
 $acl = Get-Acl -LiteralPath $target
+$acl.SetOwner($sid)
 $acl.SetAccessRuleProtection($true, $false)
 foreach ($rule in @($acl.Access)) { $acl.PurgeAccessRules($rule.IdentityReference) }
 $inherit = [System.Security.AccessControl.InheritanceFlags]::None
@@ -110,17 +111,17 @@ foreach ($target in $targets) {
     }
     $env:SHOP_ASSISTANT_ACL_PATH = $target.path
     $env:SHOP_ASSISTANT_ACL_DIRECTORY = if ($target.directory) { '1' } else { '0' }
-    & $setPrivate
+    if ($env:SHOP_ASSISTANT_ACL_VERIFY_ONLY -ne '1') { & $setPrivate }
     $access = (& $readPrivate) | ConvertFrom-Json
     $rules = @($access.rules)
     $expectedInheritance = if ($target.directory) { 3 } else { 0 }
-    if ($access.protected -ne $true -or
-        $access.owner -ne $env:SHOP_ASSISTANT_ACL_SID -or $rules.Count -ne 1 -or
+    if ($access.owner -ne $env:SHOP_ASSISTANT_ACL_SID -or $rules.Count -ne 1 -or
         $rules[0].sid -ne $env:SHOP_ASSISTANT_ACL_SID -or
         $rules[0].allow -ne $true -or $rules[0].rights -ne 2032127 -or
-        $rules[0].inherited -ne $false -or
-        $rules[0].propagation -ne 0 -or
-        $rules[0].inheritance -ne $expectedInheritance) {
+        ($env:SHOP_ASSISTANT_ACL_VERIFY_ONLY -ne '1' -and (
+            $access.protected -ne $true -or $rules[0].inherited -ne $false -or
+            $rules[0].propagation -ne 0 -or
+            $rules[0].inheritance -ne $expectedInheritance))) {
         throw 'Private ACL verification failed'
     }
     $count++
@@ -129,14 +130,15 @@ foreach ($target in $targets) {
 """
 
 
-def _windows_private_tree(paths: list[Path]) -> None:
-    """Apply and read back every DACL in one process, never skip verification."""
+def _windows_private_tree(paths: list[Path], *, verify_only: bool = False) -> None:
+    """Verify every DACL in one process, applying it only when requested."""
     identity = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"],
                               capture_output=True, text=True, check=True).stdout
     sid = next(csv.reader(identity.splitlines()))[1]
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _PRIVATE_TREE_ACL],
-        env={**os.environ, "SHOP_ASSISTANT_ACL_SID": sid},
+        env={**os.environ, "SHOP_ASSISTANT_ACL_SID": sid,
+             "SHOP_ASSISTANT_ACL_VERIFY_ONLY": "1" if verify_only else "0"},
         input=json.dumps([{"path": str(path.absolute()), "directory": path.is_dir()}
                           for path in paths]),
         capture_output=True, text=True, check=True,
@@ -207,6 +209,26 @@ def _private_tree(directory: Path) -> None:
             _private(path)
 
 
+def _verify_private_tree(directory: Path) -> None:
+    """Inspect the private tree without changing ACLs or filesystem contents."""
+    paths = []
+    pending = [directory]
+    while pending:
+        path = pending.pop()
+        if path.is_symlink() or (os.name == "nt" and path.is_junction()):
+            raise ValueError("Private paths cannot be symlinks")
+        paths.append(path)
+        if path.is_dir():
+            pending.extend(path.iterdir())
+    if os.name == "nt":
+        try:
+            _windows_private_tree(paths, verify_only=True)
+        except subprocess.CalledProcessError:
+            raise PermissionError("Private ACL verification failed") from None
+    elif any(path.stat().st_mode & 0o077 for path in paths):
+        raise PermissionError("Private permissions are too broad")
+
+
 def save_settings(root: Path, settings: Settings) -> None:
     directory = root / "private"
     directory.mkdir(parents=True, exist_ok=True)
@@ -237,11 +259,14 @@ def save_settings(root: Path, settings: Settings) -> None:
             os.unlink(name)
 
 
-def load_settings(root: Path) -> Settings:
+def load_settings(root: Path, *, read_only: bool = False) -> Settings:
     target = root / "private" / "settings.json"
     if not target.is_file() or target.is_symlink():
         raise ValueError("Missing private configuration; run python -m shop_assistant configure locally")
-    _private_tree(root / "private")
+    if read_only:
+        _verify_private_tree(root / "private")
+    else:
+        _private_tree(root / "private")
     try:
         settings = Settings.model_validate_json(target.read_text(encoding="utf-8"))
         if (settings.authorized_user_id <= 0 or not settings.telegram_token.get_secret_value()

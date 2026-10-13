@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
@@ -51,10 +51,18 @@ OBSERVED_PRODUCTS = (
      "2026-09-28", 1695, None, "56 unidades; CP 28023"),
 )
 
+SCHEMA_VERSION = 10
+
 
 class Repository(CheckoutRepository, DialogueRepository, PresentationRepository, GuidedRepository, AgentRepository):
     def __init__(self, path: Path):
         self.path = Path(path)
+
+    def schema_version(self) -> int:
+        """Inspect an existing database without creating or upgrading it."""
+        with closing(sqlite3.connect(f"{self.path.resolve().as_uri()}?mode=ro", uri=True)) as db:
+            db.execute("PRAGMA query_only=ON")
+            return db.execute("PRAGMA user_version").fetchone()[0]
 
     @contextmanager
     def _connection(self, *, write=False):
@@ -78,12 +86,12 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
         with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 10:
+            if version > SCHEMA_VERSION:
                 raise ValueError("Database schema is newer than this application")
             # executescript commits a pending transaction first. Execute complete SQL
             # statements ourselves so DDL, data and user_version roll back together.
             db.execute("BEGIN IMMEDIATE")
-            for target in range(version + 1, 11):
+            for target in range(version + 1, SCHEMA_VERSION + 1):
                 script = files('migrations').joinpath(f'{target:03}.sql').read_text(encoding='utf-8')
                 statement = ''
                 for line in script.splitlines(keepends=True):

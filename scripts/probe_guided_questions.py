@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / 'docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix.json'
 ARCHIVE_DIRECTORY = MATRIX.parent
-TEMP = Path('C:/Users/Takeshi/AppData/Local/Temp/opencode')
+TEMP = Path(tempfile.gettempdir())
 VERIFIER_VERSION = 5
 ARCHIVE_COMMIT = '6bf409ceed110104f3aa1e1fb6e75ad311dd27ca'
 ARCHIVE_PROBE = '5496d090e75e06e4b524dced7866a1d27bfd146c432e887f6455ab9fd5683278'
