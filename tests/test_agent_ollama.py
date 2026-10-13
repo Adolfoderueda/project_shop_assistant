@@ -277,7 +277,7 @@ def test_overflow_after_successful_read_preserves_facts(context):
 
 def test_full_read_context_overflow_preserves_operational_reply_and_snapshot(context):
     repo, _, _ = context
-    message = IncomingMessage(update_id=2, user_id=7, chat_id=7, text='x' * 5500)
+    message = IncomingMessage(update_id=2, user_id=7, chat_id=7, text='x' * 4300)
     repo.ingest_batch([message], 3)
     tools = AgentTools(repo, message, now=NOW)
     before = tools.snapshot

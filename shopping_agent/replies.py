@@ -86,13 +86,24 @@ def proposal_text(proposal: AgentProposal, snapshot: AgentSnapshot, *, review: b
             elif item.duplicate_decision == "set_total":
                 parts.append("Decisión de duplicado: cambiar cantidad total de la línea seleccionada.")
             else:
-                parts.append("Duplicado: decide nueva línea separada o cambiar cantidad total de una línea "
-                             "(selecciona candidato); no se suman ni fusionan automáticamente."
-                             if item.kind == "add" else
-                             "Duplicado de destino: decide mantener una línea separada; no se fusionan.")
+                if item.kind == "add" and (item.target or item.candidates):
+                    parts.append("Duplicado: decide nueva línea separada o cambiar cantidad total de una línea "
+                                 "(selecciona candidato); no se suman ni fusionan automáticamente.")
+                elif item.kind == "add":
+                    parts.append("Duplicado dentro del lote: decide una línea separada; "
+                                 "no se suman ni fusionan automáticamente.")
+                else:
+                    parts.append("Duplicado de destino: decide mantener una línea separada; no se fusionan.")
         if item.internal_conflicts:
             parts.append("Duplicados dentro del lote con posiciones: "
                          + ", ".join(map(str, item.internal_conflicts)) + ".")
+    unresolved_duplicates = [item.position for item in proposal.items if (
+        item.kind == "add" and (item.candidates or item.internal_conflicts)
+        and item.duplicate_decision is None)]
+    if unresolved_duplicates:
+        positions = " y ".join(f"posición {position}" for position in unresolved_duplicates)
+        parts.append(f"Falta una decisión explícita de duplicado para {positions}; "
+                     "indica la opción ofrecida para cada una.")
     if proposal.condition:
         parts.append(f"Condición pendiente: {proposal.condition}. No verificada; retírala expresamente o aclara.")
     parts.append("Pendiente, sin guardar. ¿Confirmas?" if review else
