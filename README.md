@@ -113,6 +113,9 @@ perfiles de tiendas sin abrir, bloqueo explícito buy/resume/checkout y un únic
 
 La [auditoría P0](docs/delivery/2026-10-shopping-assistant/audit.md) registra las
 comprobaciones actuales: defecto del wheel reproducido y corregido en PR #11,
-comprobación del wheel instalado correcta y CI completa todavía pendiente.
-La revisión de todas las rutas y la revisión independiente siguen abiertas.
+comprobación del wheel instalado correcta y 278/278 rutas base conciliadas.
+La CI de Windows pasó para la cabecera anterior `b2e99d3c` en la
+[ejecución 38440313449](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38440313449).
+La integración actual del resguardo de paquetes requiere su propia CI y revisión
+independiente; esos resultados se registran en TAK-42 y GitHub #13.
 No cambia la aceptación del modelo ni autoriza activar o reiniciar Telegram.
