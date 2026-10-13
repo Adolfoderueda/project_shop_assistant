@@ -168,4 +168,3 @@ class PublicStore:
 
     async def reconcile(self, attempt_id, cart):
         return Reconciliation(status='unknown')
-

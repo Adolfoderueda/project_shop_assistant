@@ -128,4 +128,3 @@ def test_explicit_registry_and_host_policy():
     merc = next(e for e in entries if e.store_id == 'mercadona')
     assert 'tornillos.mercadona.es' in merc.resource_hosts
     assert 'tornillos.mercadona.es' not in merc.navigation_hosts
-

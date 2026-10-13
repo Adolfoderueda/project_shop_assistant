@@ -59,4 +59,3 @@ def test_timeout_does_not_return_cached_price():
                               Destination(postcode='28023', address='Synthetic address'))
 
     asyncio.run(with_page('mercadona', check))
-
