@@ -149,6 +149,30 @@ class DialogueRepository:
             if intent.action == "product_query" and len(intent.lines) == 1 and intent.lines[0].description:
                 observations = self._find_products(db, intent.lines[0].description)
         self._write_dialogue_state(db, decision.state, message.user_id, message.chat_id)
+        from interpreter import purchase_authorized
+        read_only = decision.legacy_intent is not None and decision.legacy_intent.action in {'list', 'product_query'}
+        agent_schema = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                  "AND name='conversation_routes'").fetchone() is not None
+        if not agent_schema:
+            # Pre-agent databases may still be preparing legacy work before
+            # their migration creates these tables.
+            pass
+        elif not read_only and (message.text.strip().startswith('/') or purchase_authorized(message.text)):
+            # A new explicit command replaces any old continuation/agent permission.
+            self._write_agent_proposal(db, source, None)
+            db.execute('UPDATE conversation_routes SET command_update_id=NULL WHERE user_id=? AND chat_id=?',
+                       (message.user_id, message.chat_id))
+            if self._command_context_reply(db, message, decision.state) is not None:
+                self._record_command_origin(db, source)
+        elif decision.state is None or decision.state.question is None:
+            # Read-only operations preserve live continuations/TTL, not links to
+            # continuations the reducer discarded (expired, stale or finished).
+            db.execute('UPDATE conversation_routes SET command_update_id=NULL WHERE user_id=? AND chat_id=?',
+                       (message.user_id, message.chat_id))
+        elif decision.state.focus is not None:
+            db.execute('UPDATE conversation_routes SET command_update_id=NULL '
+                       'WHERE user_id=? AND chat_id=? AND command_update_id<>?',
+                       (message.user_id, message.chat_id, decision.state.focus.source_update_id))
         lines = self._lines(db)
         reply = render_dialogue_result(decision, affected, lines, legacy_reply)
         return decision, affected, original, lines, legacy_reply, observations, reply

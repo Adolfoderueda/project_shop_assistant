@@ -37,7 +37,9 @@ def v5_repo(tmp_path):
 
 def snapshots(repo):
     with sqlite3.connect(repo.path) as db:
-        return {table: db.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
+        return {table: db.execute(
+            f"SELECT {'update_id,user_id,chat_id,text,completed,reply_json' if table == 'inbox' else '*'} "
+            f"FROM {table} ORDER BY rowid").fetchall()
                 for table in ("list_lines", "orders", "order_lines", "execution", "reservations",
                               "inbox", "outbox", "meta", "observed_products")}
 
@@ -55,7 +57,7 @@ def test_v5_upgrade_preserves_list_orders_offset_and_observations(tmp_path):
     assert repo.get_order(reply.order_id) == order
     assert repo.telegram_offset() == 42
     with sqlite3.connect(repo.path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 10
         assert db.execute("SELECT count(*) FROM observed_products").fetchone()[0] == 4
 
 
@@ -152,6 +154,6 @@ def test_write_clear_and_rollback_use_callers_transaction(repo, state):
 
 def test_future_schema_is_rejected(repo):
     with sqlite3.connect(repo.path) as db:
-        db.execute("PRAGMA user_version=9")
+        db.execute("PRAGMA user_version=11")
     with pytest.raises(ValueError, match="newer"):
         repo.migrate()

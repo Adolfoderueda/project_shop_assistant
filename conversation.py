@@ -18,11 +18,13 @@ class Conversation:
         self, repo: Repository, interpreter: Interpreter,
         *, clock: Callable[[], datetime] | None = None,
         reply_writer: ReplyWriter | None = None,
+        synchronize_route: bool = False,
     ):
         self.repo = repo
         self.interpreter = interpreter
         self.clock = clock or (lambda: datetime.now(UTC))
         self.reply_writer = reply_writer
+        self.synchronize_route = synchronize_route
 
     async def handle(self, message: IncomingMessage, mode: str) -> Reply:
         stored, reply = self.repo.message_result(message.update_id)
@@ -36,6 +38,8 @@ class Conversation:
         if prepared is not None:
             return await self._present(prepared)
         now = self.clock()
+        if self.synchronize_route:
+            self.repo.set_conversation_route(message.user_id, message.chat_id, 'legacy', now=now)
         priority = message.text.strip().startswith("/") or purchase_authorized(message.text)
         request = None if priority else classify_request(message.text)
         if request is not None and request.action == "greet":

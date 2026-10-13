@@ -40,10 +40,14 @@ def incremental_attempt(text: str) -> bool:
                     normalized(_shopping_text(text))) is not None
 
 
+def known_greeting(text: str) -> bool:
+    return normalized(text.strip()).strip("¿?¡!., ") in {
+        "hola", "hols", "buenas", "buenos dias", "hola que tal", "que tal"}
+
+
 def classify_request(text: str) -> SourceRequest | None:
     raw = text.strip()
-    clean = normalized(raw).strip("¿?¡!., ")
-    if clean in {"hola", "hols", "buenas", "buenos dias", "hola que tal", "que tal"}:
+    if known_greeting(text):
         return SourceRequest(action="greet")
     raw = _shopping_text(text)
     if raw.startswith("/"):

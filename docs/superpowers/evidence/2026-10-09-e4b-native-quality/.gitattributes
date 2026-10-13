@@ -1,0 +1,2 @@
+preregistration.json -text whitespace=cr-at-eol
+trials.jsonl -text whitespace=cr-at-eol

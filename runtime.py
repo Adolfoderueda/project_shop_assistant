@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -86,7 +87,7 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
     """
     from checkout import CheckoutService
     from conversation import Conversation
-    from domain import Destination
+    from domain import Destination, IncomingCallback, Reply
     from recovery import Recovery
     from storage import Repository
     from telegram_io import TelegramIO
@@ -117,7 +118,18 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
             if conversation is None:
                 interpreter = _CommandsOnly()
                 reply_writer = None
-                if settings.model_provider == "ollama":
+                if settings.conversation_engine == "skills_agent":
+                    if settings.guided_questions:
+                        from shopping_agent.guided_conversation import GuidedConversation
+                        from shopping_agent.guided_ollama import GuidedOllamaAgent
+                        conversation = GuidedConversation(
+                            repo, GuidedOllamaAgent(settings.agent_model), Conversation(repo, interpreter))
+                    else:
+                        from shopping_agent.conversation import AgentConversation
+                        from shopping_agent.ollama import OllamaShoppingAgent
+                        conversation = AgentConversation(
+                            repo, OllamaShoppingAgent(settings.agent_model), Conversation(repo, interpreter))
+                elif settings.model_provider == "ollama":
                     from ollama_interpreter import OllamaInterpreter
                     from ollama_replies import OllamaReplyWriter
                     interpreter = OllamaInterpreter(settings.ollama_model)
@@ -134,17 +146,31 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                     logger.warning("Model not configured: commands-only mode; use /lista or /anadir")
                 else:
                     logger.warning("OpenAI model incomplete: commands-only mode")
-                conversation = Conversation(repo, interpreter, reply_writer=reply_writer)
+                if conversation is None:
+                    conversation = Conversation(repo, interpreter, reply_writer=reply_writer,
+                                                synchronize_route=True)
             await recovery.recover()  # Abandoned attempts must be reconciled before new work.
             logger.info("Recovery finished; worker ready")
             retry_delay = 1
             while True:
                 repo.assert_authorized_owner(settings.authorized_user_id)
-                for message in repo.pending_messages():
-                    if (message.user_id != settings.authorized_user_id
-                            or message.chat_id != settings.authorized_user_id):
-                        raise PermissionError("Stored message belongs to another owner")
-                    await conversation.handle(message, settings.mode)
+                # Old injected message-only collaborators need no callback ack.
+                # Production TelegramIO always implements the durable ack API.
+                ack = getattr(transport, 'ack_callbacks', None)
+                if ack is not None:
+                    await ack()
+                pending = getattr(repo, 'pending_events', None) or repo.pending_messages
+                for event in pending():
+                    repo.assert_authorized_owner(settings.authorized_user_id)
+                    if (event.user_id != settings.authorized_user_id
+                            or event.chat_id != settings.authorized_user_id):
+                        raise PermissionError("Stored event belongs to another owner")
+                    if isinstance(event, IncomingCallback) and not settings.guided_questions:
+                        repo.complete_agent_reply(event.update_id, Reply(text='Preguntas guiadas inactivas. Usa la conversación actual.'))
+                    else:
+                        if not settings.guided_questions and hasattr(repo, 'revoke_guided'):
+                            repo.revoke_guided(event.user_id, now=datetime.now(UTC))
+                        await conversation.handle(event, settings.mode)
                 if repo.resumable_orders():
                     await recovery.recover()
                 for order_id in repo.pending_orders():

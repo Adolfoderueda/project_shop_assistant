@@ -1,0 +1,51 @@
+Environment: feat/skills-agent worktree, production baseline bd3b994.
+Python: C:/Users/Takeshi/Documents/projects/project_shop_assistant/.venv/Scripts/python.exe
+PYTHONPATH: explicit current worktree. No installation/build/model activation.
+
+TDD RED:
+python -m pytest tests/test_agent_end_to_end.py tests/test_agent_probe.py -q
+22 failed in 0.29s: missing scripts.probe_skills_agent (new harness not implemented).
+Initial GREEN: 22 passed in 27.23s.
+Expanded boundary GREEN: 28 passed in 35.27s.
+
+Reply-oracle regression RED:
+python -m pytest tests/test_agent_probe.py -q -k reply_oracle
+2 failed, 9 deselected in 0.49s: oracle incorrectly accepted false saved-success
+and invented saved-list facts. Fixed independent reply-fact/success checks.
+
+Final focused GREEN:
+python -m pytest tests/test_agent_end_to_end.py tests/test_agent_probe.py -q
+30 passed in 40.57s. Exit 0.
+python -m ruff check scripts/probe_skills_agent.py tests/test_agent_end_to_end.py tests/test_agent_probe.py
+All checks passed! Exit 0.
+
+Full suite (run once after final code changes, before commit):
+python -m pytest -q
+1195 passed in 351.49s (0:05:51). Exit 0. No warnings/failures reported.
+
+Global lint:
+python -m ruff check .
+Exit 1: seven pre-existing diagnostics, no tracked source changes:
+shopping_agent/tools.py:3 I001 import order
+tests/test_agent_conversation.py:7 F401 unused Reply import
+tests/test_agent_conversation.py:150 I001 import spacing
+tests/test_agent_runtime.py:1 I001 import spacing
+tests/test_agent_runtime.py:77 I001 import order
+tests/test_agent_runtime.py:95 RET501 return None
+tests/test_agent_runtime.py:95 PLR1711 unnecessary return
+git diff for those three existing files: empty; preserved baseline code/security
+expectations rather than modifying unrelated legacy files for global green.
+
+git diff --check: exit 0 (also repeated after staging new files).
+
+Final probes, foreground timeout=0, completed before reporting:
+python -P scripts/probe_skills_agent.py --offline --output docs/superpowers/evidence/2026-10-08-skills-agent/offline.jsonl
+Exit 0: 76/76 PASS; real_quality NOT_TESTED.
+python -P scripts/probe_skills_agent.py --output docs/superpowers/evidence/2026-10-08-skills-agent/frozen-real-pass-1.jsonl
+Exit 1: FAIL; real 31/53 passing, 22 failed; simulated boundaries 23/23 passing.
+python -P scripts/probe_skills_agent.py --output docs/superpowers/evidence/2026-10-08-skills-agent/frozen-real-pass-2.jsonl
+Exit 1: FAIL; identical failures, hashes and counts; safety 53/53 in each pass.
+
+Initial pre-freeze diagnostic full real run and isolated schema A/B are retained
+separately; neither supersedes final FAIL nor is advertised as acceptance PASS.
+No wheel/distribution verification: deferred, no setuptools or installs.
