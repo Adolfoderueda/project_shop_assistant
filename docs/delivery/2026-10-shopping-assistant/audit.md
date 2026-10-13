@@ -122,7 +122,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-1.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-2.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/final-review-summary.md | Source read; confirms 50/53 real steps in each frozen run and three semantic failures; independent QA pending |
-| docs/superpowers/evidence/2026-10-08-skills-agent/fix-round-1.md | Pending |
+| docs/superpowers/evidence/2026-10-08-skills-agent/fix-round-1.md | Source read; historical Task 7 fix round records two real 50/53 runs with saved-query and internal-duplicate failures; offline and focused tests do not close native quality. |
 | docs/superpowers/evidence/2026-10-08-skills-agent/fix1-final-offline.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/fix1-final-real-1.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-08-skills-agent/fix1-final-real-2.jsonl | Pending |
@@ -157,7 +157,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/execution-status.md | Source read; first-pass review, independent QA pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v3.md | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v4.md | Source read; reports callback replay and expiry bypass fixes with focused 263-pass evidence, but declares v4 native comparison invalid due to Windows encoding and activation blocked. Historical claims unrerun. |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v5.md | Pending |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v5.md | Source read; corrected UTF-8 v5 remains blocked: real 42/102 bounded, 6/39 security, 0/24 general; final review reports HIGH callback-cancellation history residual. Historical results, not rerun here. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/handoff.md | Initial inspection; full audit pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v3.json | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v4.json | Pending |
@@ -174,7 +174,7 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v3.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v4.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v5.jsonl | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/results.md | Pending |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/results.md | Source read; initial guided acceptance reports real 6/102 bounded, 6/27 security, 0/24 general and expired antecedent defect; archived verification cannot establish current acceptance. |
 | docs/superpowers/gemma4-12b-local-2026-10-10.md | Source read; model download and 12B comparison paused by user, no model-access claim |
 | docs/superpowers/natural-dialogue-real-2026-10-08-run1.jsonl | Pending |
 | docs/superpowers/natural-dialogue-real-2026-10-08-run2.jsonl | Pending |
@@ -188,18 +188,18 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/plans/2026-10-08-respuestas-naturales-gemma.md | Pending |
 | docs/superpowers/plans/2026-10-09-preguntas-guiadas-telegram.md | Pending |
 | docs/superpowers/progress.md | Pending |
-| docs/superpowers/prueba-dialogo-contextual-2026-10-01.md | Pending |
+| docs/superpowers/prueba-dialogo-contextual-2026-10-01.md | Source read; historical two corrected real probes each 25/25 after earlier 13/25 failures; synthetic DB and no Telegram acceptance or general reliability proof. |
 | docs/superpowers/prueba-dialogo-natural-2026-10-08-run3.md | Source read; historical natural-dialogue 34/34 real steps, distinct from native-agent quality and Telegram acceptance |
-| docs/superpowers/prueba-dialogo-natural-2026-10-08.md | Pending |
+| docs/superpowers/prueba-dialogo-natural-2026-10-08.md | Source read; historical two isolated real-model passes each 34/34 with six synthetic DBs and no private Telegram; narrow sample does not close current native-agent quality. |
 | docs/superpowers/prueba-gemma-2026-10-01.md | Source read; historical ten-message Gemma probe found product-query and offer-intent quality failures, no current model test |
 | docs/superpowers/prueba-respuestas-gemma-2026-10-08.md | Pending |
-| docs/superpowers/specs/2026-09-27-asistente-compras-design.md | Pending |
-| docs/superpowers/specs/2026-09-29-gemma4-local-telegram-design.md | Pending |
-| docs/superpowers/specs/2026-09-29-lista-fichas-gemma-design.md | Pending |
+| docs/superpowers/specs/2026-09-27-asistente-compras-design.md | Source read; older approved buying design requires exact restricted-product identity, durable order recovery, and separate real-purchase authorization. Current MVP plan excludes payments; no buy capability inferred. |
+| docs/superpowers/specs/2026-09-29-gemma4-local-telegram-design.md | Source read; approved local-model design preserves command priority, loopback-only Ollama, deterministic mutation and separate live Telegram acceptance. Historical provider options are not current spend authorization. |
+| docs/superpowers/specs/2026-09-29-lista-fichas-gemma-design.md | Source read; approved list/product-card design keeps SQLite facts and dated public observations, idempotent research backlog, no model authority for purchase or SQL, and real-model/live acceptance gate. |
 | docs/superpowers/specs/2026-10-01-conversacion-contextual-gemma-design.md | Pending |
 | docs/superpowers/specs/2026-10-08-agente-skills-herramientas-design.md | Source read; confirmation, tool and acceptance contracts reconciled above; independent QA pending |
 | docs/superpowers/specs/2026-10-08-dialogo-natural-altas-incrementos-design.md | Pending |
-| docs/superpowers/specs/2026-10-08-respuestas-naturales-gemma-design.md | Pending |
+| docs/superpowers/specs/2026-10-08-respuestas-naturales-gemma-design.md | Source read; approved writer design requires application-owned immutable facts, durable prepared/final reply, replay without duplicate mutations, and safe fallback; design approval alone did not authorize activation. |
 | docs/superpowers/specs/2026-10-09-preguntas-guiadas-telegram-design.md | Pending |
 | docs/superpowers/task-8-report.md | Source read; historical checkout crash-recovery fake confirms one submit, private Telegram and live purchase gates remain closed |
 | domain.py | Source read; strict shared event/list/reply contracts first-pass review, independent QA pending |
@@ -393,3 +393,5 @@ The October 8 implementation plan, spec, merged commit history and named test fi
 | 7. Offline and real acceptance | `scripts/probe_skills_agent.py`, end-to-end/probe tests and archived JSONL; `2df0d08` | `test_agent_end_to_end.py`, `test_agent_probe.py` | Two frozen real runs each passed 50/53 steps; saved-list query and internal-duplicate completion failed. Guided v5 quality also remains failing. No Telegram acceptance. |
 
 Latest CI follow-up: [run 38298055578](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38298055578/job/114974162243) at `b87a4ef69171add0eaab21ea7a0930ed029d3b95` failed the whitespace step before tests. Both added documentation files ended with a carriage-return-only line, which Git reported as trailing whitespace. The local correction removes those lines; full offline CI and independent audit review remain outstanding for the resulting candidate.
+
+2026-10-13 continuation: Puente integrated Alpha source `361a0ef732493483ffdc406eec3e2ca0bf4a7fac` into PR #11 head `1f65868fba456c05db71cb67ccdc09e91d20d05d`. Managed GitHub PR/check reads confirm [Windows job 115009527242](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38308893952/job/115009527242) completed successfully at that remote SHA; Puente records 1661 offline tests passed and the Ruff, whitespace, ACL and installed-wheel stages successful. This repairs the prior whitespace failure at the integrated SHA. Nine more owned historical documents were fully reviewed in this local continuation, as marked above. Remaining Pending rows and source-review gaps are not closed; no independent QA, real-model quality or live Telegram acceptance is claimed.
