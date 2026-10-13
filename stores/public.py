@@ -148,9 +148,15 @@ class PublicStore:
     async def quote(self, items, destination):
         if not items or any(i.offer.store_id != self.store_id for i in items):
             raise ValueError('Wrong or empty store basket')
-        fresh = [QuotedLine(line_id=i.line_id, packs=i.packs,
-                            offer=await self.read_product(i.offer.url, i.offer.product_id))
-                 for i in items]
+        identity_fields = ('store_id', 'product_id', 'url', 'gtin', 'brand', 'variant',
+                           'stage', 'size', 'grams', 'units_per_pack')
+        fresh = []
+        for item in items:
+            offer = await self.read_product(item.offer.url, item.offer.product_id)
+            if any(getattr(offer, field) != getattr(item.offer, field)
+                   for field in identity_fields):
+                raise ValueError('Product identity or pack changed during quote')
+            fresh.append(QuotedLine(line_id=item.line_id, packs=item.packs, offer=offer))
         return Quote(store_id=self.store_id, items=fresh, observed_at=datetime.now(UTC))
 
     async def prepare(self, quote):
