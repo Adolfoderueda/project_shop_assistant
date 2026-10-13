@@ -1,0 +1,1637 @@
+{
+  "schema": 1,
+  "observed_date": "2026-10-13",
+  "baseline_commit": "b9a29049160cc53737d1cb64a8138385aa2fedd2",
+  "source_commit_before_manifest": "fb200914ef1b13247e5cc7ca4741fbbf980930bf",
+  "method": "Stream every JSONL record from the current Windows checkout, parse JSON, count outcomes by case/path/repetition and hash exact checkout bytes. Checkout CRLF may differ from Git blobs. Historical traces are not current execution or acceptance.",
+  "artifacts": [
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-1.jsonl",
+      "bytes": 856431,
+      "sha256_checkout": "f25635c46a2ad79cb2425df03302a30220c145418d03986dcd4bc79bf71d2d20",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 73,
+        "False": 3
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 73,
+        "failure_count": 3
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/final-review-real-2.jsonl",
+      "bytes": 856415,
+      "sha256_checkout": "85cae1467b4b3762ec2954b49a91f01b98ce2d0f6c50e2a06ace7d2f9bd87c25",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 73,
+        "False": 3
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 73,
+        "failure_count": 3
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-final-offline.jsonl",
+      "bytes": 835224,
+      "sha256_checkout": "e8887d959fcb432848160ddcb7eeac646bcf84b6e8b9d02d42ae6d4ea803b7b1",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "offline_http_simulated": 76
+      },
+      "statuses": {
+        "PASS": 1
+      },
+      "step_pass": {
+        "True": 76
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "PASS",
+        "real_quality": "NOT_TESTED",
+        "steps": 76,
+        "passed": 76,
+        "failure_count": 0
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-final-real-1.jsonl",
+      "bytes": 856328,
+      "sha256_checkout": "5d0a9a37c9cc6d2667258c624ebbdfc356c6c9df1a77e09d0606df8a730b0448",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 73,
+        "False": 3
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 73,
+        "failure_count": 3
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-final-real-2.jsonl",
+      "bytes": 856316,
+      "sha256_checkout": "6b74933f4be5aa2ef827196b56788f2be4db8acb472ea99e0b9e63c8ca384373",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 73,
+        "False": 3
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 73,
+        "failure_count": 3
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h1-control.jsonl",
+      "bytes": 994614,
+      "sha256_checkout": "226e09fa62fc74fbc18bb016c6dc3a2e9ee877cbb1b2bb385eb50bbebb30d71c",
+      "records": 66,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 65
+      },
+      "modes": {
+        "offline_http_simulated": 35,
+        "real_e4b": 30
+      },
+      "statuses": {},
+      "step_pass": {
+        "True": 35,
+        "False": 30
+      },
+      "cases": [
+        "edit",
+        "existing_duplicate",
+        "internal_duplicate",
+        "saved_list",
+        "selection_edit",
+        "weekly"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h1-recipe.jsonl",
+      "bytes": 1096793,
+      "sha256_checkout": "770493923dd447d8d284d98133a1c508708813dfc6e4aa9e7569213eb72b1694",
+      "records": 66,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 65
+      },
+      "modes": {
+        "offline_http_simulated": 35,
+        "real_e4b": 30
+      },
+      "statuses": {},
+      "step_pass": {
+        "True": 55,
+        "False": 10
+      },
+      "cases": [
+        "edit",
+        "existing_duplicate",
+        "internal_duplicate",
+        "saved_list",
+        "selection_edit",
+        "weekly"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h2-control.jsonl",
+      "bytes": 248924,
+      "sha256_checkout": "6a4e59089e5d45966903ea54469fe4c5d98e9b88eafa441c26965c2552a6ce04",
+      "records": 16,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 15
+      },
+      "modes": {
+        "real_e4b": 15
+      },
+      "statuses": {},
+      "step_pass": {
+        "False": 15
+      },
+      "cases": [
+        "replace",
+        "selection_start",
+        "unknown_base"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h2-full-real.jsonl",
+      "bytes": 855657,
+      "sha256_checkout": "9be80a46255765629fd225c523cc14481d3dcf7e0ca8b37851ff10b33c58a1ba",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 73,
+        "False": 3
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 73,
+        "failure_count": 3
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h2-recipe.jsonl",
+      "bytes": 262179,
+      "sha256_checkout": "a69410d67c5a7bc54bd6cb2bd96357f9a24fe3f8098688a0888fc9b732bb7d51",
+      "records": 16,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 15
+      },
+      "modes": {
+        "real_e4b": 15
+      },
+      "statuses": {},
+      "step_pass": {
+        "True": 15
+      },
+      "cases": [
+        "replace",
+        "selection_start",
+        "unknown_base"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h3-contract.jsonl",
+      "bytes": 1177825,
+      "sha256_checkout": "315a0f6160648c2aeb6adef027208f39a2544d0199392cd5a6f10f9ff06c27ce",
+      "records": 66,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 65
+      },
+      "modes": {
+        "offline_http_simulated": 35,
+        "real_e4b": 30
+      },
+      "statuses": {},
+      "step_pass": {
+        "True": 60,
+        "False": 5
+      },
+      "cases": [
+        "edit",
+        "existing_duplicate",
+        "internal_duplicate",
+        "saved_list",
+        "selection_edit",
+        "weekly"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h3-control.jsonl",
+      "bytes": 1156222,
+      "sha256_checkout": "463b5ada7e501be227408ce1496e1b5f31402fef7dbe23e48e2764ad08d3ec2c",
+      "records": 66,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 65
+      },
+      "modes": {
+        "offline_http_simulated": 35,
+        "real_e4b": 30
+      },
+      "statuses": {},
+      "step_pass": {
+        "True": 55,
+        "False": 10
+      },
+      "cases": [
+        "edit",
+        "existing_duplicate",
+        "internal_duplicate",
+        "saved_list",
+        "selection_edit",
+        "weekly"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h3-realistic-contract.jsonl",
+      "bytes": 1250379,
+      "sha256_checkout": "381eb716d911db0aed2551d72a2d6a0a38a51e50c5bfa378e50dc0240ae5f778",
+      "records": 76,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 75
+      },
+      "modes": {
+        "offline_http_simulated": 45,
+        "real_e4b": 30
+      },
+      "statuses": {},
+      "step_pass": {
+        "True": 65,
+        "False": 10
+      },
+      "cases": [
+        "edit",
+        "existing_duplicate",
+        "internal_duplicate",
+        "saved_list",
+        "selection_edit",
+        "weekly"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h3-realistic-control.jsonl",
+      "bytes": 1225955,
+      "sha256_checkout": "b62c574002f89a776a941737132155df6cb86aaf5f97439175103b519f5cfda5",
+      "records": 76,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 75
+      },
+      "modes": {
+        "offline_http_simulated": 45,
+        "real_e4b": 30
+      },
+      "statuses": {},
+      "step_pass": {
+        "True": 65,
+        "False": 10
+      },
+      "cases": [
+        "edit",
+        "existing_duplicate",
+        "internal_duplicate",
+        "saved_list",
+        "selection_edit",
+        "weekly"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h4-full-real.jsonl",
+      "bytes": 904402,
+      "sha256_checkout": "3560c70cbe2f42968eb085cb2191cfba7eae7e75421d40f681dd9def5c150efe",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 70,
+        "False": 6
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 70,
+        "failure_count": 6
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-h4-scope.jsonl",
+      "bytes": 1313561,
+      "sha256_checkout": "50782689d8ab12fd1d0d8c0ee0b194f7171319376bdda0c36ae6547061ddba74",
+      "records": 66,
+      "json_errors": 0,
+      "types": {
+        "micro_metadata": 1,
+        "step": 65
+      },
+      "modes": {
+        "offline_http_simulated": 35,
+        "real_e4b": 30
+      },
+      "statuses": {},
+      "step_pass": {
+        "True": 60,
+        "False": 5
+      },
+      "cases": [
+        "edit",
+        "existing_duplicate",
+        "internal_duplicate",
+        "saved_list",
+        "selection_edit",
+        "weekly"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/fix1-schema-only-real.jsonl",
+      "bytes": 754140,
+      "sha256_checkout": "983b61e080fee7b228160547c634c90b220ca2806ef5477bb5aff228ac1ca508",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 63,
+        "False": 13
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 63,
+        "failure_count": 13
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/frozen-real-pass-1.jsonl",
+      "bytes": 698109,
+      "sha256_checkout": "33a3763b3fb7703653612e60ff0688d5889ab3ad0165c48b51b719bbf7885d78",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 54,
+        "False": 22
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 54,
+        "failure_count": 22
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/frozen-real-pass-2.jsonl",
+      "bytes": 698137,
+      "sha256_checkout": "25934fc54f04aaa58da74e2c4afd918ddd90766eac2b6ee37acfba5938a7e173",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 23
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 54,
+        "False": 22
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 76,
+        "passed": 54,
+        "failure_count": 22
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/offline.jsonl",
+      "bytes": 725057,
+      "sha256_checkout": "6418f9995a97e94454f7605c9176f42b641f635abbf88e9fc5eb2ef6e534035b",
+      "records": 78,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 76,
+        "summary": 1
+      },
+      "modes": {
+        "offline_http_simulated": 76
+      },
+      "statuses": {
+        "PASS": 1
+      },
+      "step_pass": {
+        "True": 76
+      },
+      "cases": [
+        "atomic",
+        "batch_changed",
+        "batch_deleted",
+        "batch_reserved",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "PASS",
+        "real_quality": "NOT_TESTED",
+        "steps": 76,
+        "passed": 76,
+        "failure_count": 0
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/real-pass-1.jsonl",
+      "bytes": 586972,
+      "sha256_checkout": "5f916f20b7b4ea1d6790d1d25190b6d83d23024b588d92e7d74991a0930d82f4",
+      "records": 69,
+      "json_errors": 0,
+      "types": {
+        "metadata": 1,
+        "step": 67,
+        "summary": 1
+      },
+      "modes": {
+        "real_e4b": 53,
+        "offline_http_simulated": 14
+      },
+      "statuses": {
+        "FAIL": 1
+      },
+      "step_pass": {
+        "True": 41,
+        "False": 26
+      },
+      "cases": [
+        "atomic",
+        "changed",
+        "conditional",
+        "deleted",
+        "edit",
+        "existing_duplicate",
+        "explicit",
+        "greeting_query",
+        "injection",
+        "internal_duplicate",
+        "known_increment",
+        "malicious",
+        "negative",
+        "old_jobs",
+        "owner",
+        "replace",
+        "reserved",
+        "restart_replay",
+        "selection",
+        "ttl",
+        "unknown_base",
+        "variants",
+        "weekly"
+      ],
+      "summary": {
+        "status": "FAIL",
+        "real_quality": "FAIL",
+        "steps": 67,
+        "passed": 41,
+        "failure_count": 26
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-08-skills-agent/schema-diagnostic.jsonl",
+      "bytes": 110066,
+      "sha256_checkout": "9599b5038628424a8d8ba7c30904b588a7af4276606bfb42cd76624c12dab9c0",
+      "records": 10,
+      "json_errors": 0,
+      "types": {
+        "diagnostic_metadata": 2,
+        "step": 8
+      },
+      "modes": {
+        "real_e4b": 8
+      },
+      "statuses": {},
+      "step_pass": {
+        "False": 4,
+        "True": 4
+      },
+      "cases": [
+        "weekly"
+      ]
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-e4b-native-quality/trials.jsonl",
+      "bytes": 577210,
+      "sha256_checkout": "7165fb42b53842f64872a9bb34c5d9242c2b2e8cd4d0fbfb9e970da3f01f349b",
+      "records": 18,
+      "json_errors": 0,
+      "types": {
+        "none": 18
+      },
+      "modes": {},
+      "statuses": {
+        "200": 18
+      },
+      "step_pass": {},
+      "cases": [
+        "duplicate",
+        "increment-control",
+        "mixed",
+        "reordered",
+        "saved-read",
+        "single",
+        "unknown-focus"
+      ],
+      "trial_summary": {
+        "strict_native_valid": 8,
+        "semantic_correct": 5,
+        "safe_fallback": 10
+      }
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v1.jsonl",
+      "bytes": 172864,
+      "sha256_checkout": "068a9524a2df6d23190321e12be91620d86d04f49a10a3fdc9fc1c0b64087b7c",
+      "records": 11,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "tags": 1,
+        "call": 9
+      },
+      "modes": {},
+      "statuses": {
+        "200": 9
+      },
+      "step_pass": {},
+      "cases": []
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v2.jsonl",
+      "bytes": 130816,
+      "sha256_checkout": "d171bf2c477e8a955a07958396ea318b485ea51fb60cb5dcfa616d4d2fc007ed",
+      "records": 8,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "tags": 1,
+        "call": 6
+      },
+      "modes": {},
+      "statuses": {
+        "200": 6
+      },
+      "step_pass": {},
+      "cases": []
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/offline-v2.jsonl",
+      "bytes": 10708636,
+      "sha256_checkout": "e5f7d2bdfef5dc64502da5436b61db7b7f7b7e09258107f13b4e36de17d1f185",
+      "records": 673,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "none": 672
+      },
+      "modes": {
+        "none": 672
+      },
+      "statuses": {
+        "executed": 669,
+        "unexecuted": 3
+      },
+      "step_pass": {},
+      "cases": [
+        "Los-3-es-uno",
+        "Uno-de-cada-uno",
+        "ambiguous-selection",
+        "cancel",
+        "condition-unit",
+        "correction-mixed-final",
+        "delivery-unknown",
+        "different-partial",
+        "dos-carne-resto",
+        "expired-guided",
+        "increment",
+        "internal-duplicates",
+        "legacy-expired",
+        "one-each",
+        "partial-reordered",
+        "query-plus-answer",
+        "query-then-answer",
+        "reordered-answer",
+        "replacement",
+        "reservation",
+        "saved-query-duplicate",
+        "second-topic",
+        "shared",
+        "topic-no-then-append",
+        "unknown-base",
+        "unknown-unit"
+      ],
+      "conversation_groups": {
+        "bounded": {
+          "passed": 102,
+          "total": 102
+        },
+        "security": {
+          "passed": 24,
+          "total": 27
+        },
+        "general-free": {
+          "passed": 24,
+          "total": 24
+        }
+      },
+      "recorded_matrix_sha256": "f21df63882f2269e7bd38cfa25eed21f4822e21b67f686d5f5deb224cff6c53e",
+      "matrix_lf_matches_recorded": true
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/offline-v3.jsonl",
+      "bytes": 18137888,
+      "sha256_checkout": "be8716967aeb709c2c716522ab80dda9be39ad6dc072e9345c8431bfeafe8637",
+      "records": 733,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "none": 732
+      },
+      "modes": {
+        "none": 732
+      },
+      "statuses": {
+        "executed": 723,
+        "unexecuted": 9
+      },
+      "step_pass": {},
+      "cases": [
+        "Los-3-es-uno",
+        "Uno-de-cada-uno",
+        "ambiguous-selection",
+        "cancel",
+        "condition-unit",
+        "correction-mixed-final",
+        "delivery-unknown",
+        "different-partial",
+        "dos-carne-resto",
+        "expired-guided",
+        "explicit-reset-guided",
+        "explicit-reset-legacy",
+        "increment",
+        "internal-duplicates",
+        "legacy-expired",
+        "one-each",
+        "partial-reordered",
+        "query-plus-answer",
+        "query-then-answer",
+        "reordered-answer",
+        "replacement",
+        "reservation",
+        "saved-query-duplicate",
+        "second-topic",
+        "shared",
+        "topic-no-then-append",
+        "unknown-base",
+        "unknown-unit"
+      ],
+      "conversation_groups": {
+        "bounded": {
+          "passed": 102,
+          "total": 102
+        },
+        "security": {
+          "passed": 30,
+          "total": 39
+        },
+        "general-free": {
+          "passed": 24,
+          "total": 24
+        }
+      },
+      "recorded_matrix_sha256": "14c70781ef6caa9aa3a0995d41319d4fd0332aa47085cee02cbf6eeebaabf94c",
+      "matrix_lf_matches_recorded": true
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/offline-v4.jsonl",
+      "bytes": 19041235,
+      "sha256_checkout": "6fa255c0f3669170cbf931f17ac7723deeba93f987e99c87d4e3a48e7c1fe704",
+      "records": 733,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "none": 732
+      },
+      "modes": {
+        "none": 732
+      },
+      "statuses": {
+        "executed": 555,
+        "failed": 63,
+        "unexecuted": 114
+      },
+      "step_pass": {},
+      "cases": [
+        "Los-3-es-uno",
+        "Uno-de-cada-uno",
+        "ambiguous-selection",
+        "cancel",
+        "condition-unit",
+        "correction-mixed-final",
+        "delivery-unknown",
+        "different-partial",
+        "dos-carne-resto",
+        "expired-guided",
+        "explicit-reset-guided",
+        "explicit-reset-legacy",
+        "increment",
+        "internal-duplicates",
+        "legacy-expired",
+        "one-each",
+        "partial-reordered",
+        "query-plus-answer",
+        "query-then-answer",
+        "reordered-answer",
+        "replacement",
+        "reservation",
+        "saved-query-duplicate",
+        "second-topic",
+        "shared",
+        "topic-no-then-append",
+        "unknown-base",
+        "unknown-unit"
+      ],
+      "conversation_groups": {
+        "bounded": {
+          "passed": 48,
+          "total": 102
+        },
+        "security": {
+          "passed": 6,
+          "total": 39
+        },
+        "general-free": {
+          "passed": 12,
+          "total": 24
+        }
+      },
+      "recorded_matrix_sha256": "f0e34e29a1bd47fc5b760035d5d106fd62278e4bb07225980eb1ea997fdc1a63",
+      "matrix_lf_matches_recorded": true
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/offline-v5.jsonl",
+      "bytes": 18137969,
+      "sha256_checkout": "ce9e9333062b2f046b97a74653ff0865a6e610356bdde45c456db6c78f66d92a",
+      "records": 733,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "none": 732
+      },
+      "modes": {
+        "none": 732
+      },
+      "statuses": {
+        "executed": 723,
+        "unexecuted": 9
+      },
+      "step_pass": {},
+      "cases": [
+        "Los-3-es-uno",
+        "Uno-de-cada-uno",
+        "ambiguous-selection",
+        "cancel",
+        "condition-unit",
+        "correction-mixed-final",
+        "delivery-unknown",
+        "different-partial",
+        "dos-carne-resto",
+        "expired-guided",
+        "explicit-reset-guided",
+        "explicit-reset-legacy",
+        "increment",
+        "internal-duplicates",
+        "legacy-expired",
+        "one-each",
+        "partial-reordered",
+        "query-plus-answer",
+        "query-then-answer",
+        "reordered-answer",
+        "replacement",
+        "reservation",
+        "saved-query-duplicate",
+        "second-topic",
+        "shared",
+        "topic-no-then-append",
+        "unknown-base",
+        "unknown-unit"
+      ],
+      "conversation_groups": {
+        "bounded": {
+          "passed": 102,
+          "total": 102
+        },
+        "security": {
+          "passed": 30,
+          "total": 39
+        },
+        "general-free": {
+          "passed": 24,
+          "total": 24
+        }
+      },
+      "recorded_matrix_sha256": "affb3024d6f51f05a866f03a484974e1ff12f7208b35b9e14c4a754246d7b6ae",
+      "matrix_lf_matches_recorded": true
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v2.jsonl",
+      "bytes": 2748888,
+      "sha256_checkout": "78242888039e8ae5e743793da407b26e6391a3c9ed073f9d466da20f3b249f8f",
+      "records": 673,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "none": 672
+      },
+      "modes": {
+        "none": 672
+      },
+      "statuses": {
+        "executed": 186,
+        "unexecuted": 486
+      },
+      "step_pass": {},
+      "cases": [
+        "Los-3-es-uno",
+        "Uno-de-cada-uno",
+        "ambiguous-selection",
+        "cancel",
+        "condition-unit",
+        "correction-mixed-final",
+        "delivery-unknown",
+        "different-partial",
+        "dos-carne-resto",
+        "expired-guided",
+        "increment",
+        "internal-duplicates",
+        "legacy-expired",
+        "one-each",
+        "partial-reordered",
+        "query-plus-answer",
+        "query-then-answer",
+        "reordered-answer",
+        "replacement",
+        "reservation",
+        "saved-query-duplicate",
+        "second-topic",
+        "shared",
+        "topic-no-then-append",
+        "unknown-base",
+        "unknown-unit"
+      ],
+      "conversation_groups": {
+        "bounded": {
+          "passed": 6,
+          "total": 102
+        },
+        "security": {
+          "passed": 6,
+          "total": 27
+        },
+        "general-free": {
+          "passed": 0,
+          "total": 24
+        }
+      },
+      "recorded_matrix_sha256": "f21df63882f2269e7bd38cfa25eed21f4822e21b67f686d5f5deb224cff6c53e",
+      "matrix_lf_matches_recorded": true
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v3.jsonl",
+      "bytes": 9880770,
+      "sha256_checkout": "261b84b63ebfc2fc21f325625dd6a485f92f941e65d5cc09edb9dc23acb9c254",
+      "records": 733,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "none": 732
+      },
+      "modes": {
+        "none": 732
+      },
+      "statuses": {
+        "executed": 348,
+        "unexecuted": 384
+      },
+      "step_pass": {},
+      "cases": [
+        "Los-3-es-uno",
+        "Uno-de-cada-uno",
+        "ambiguous-selection",
+        "cancel",
+        "condition-unit",
+        "correction-mixed-final",
+        "delivery-unknown",
+        "different-partial",
+        "dos-carne-resto",
+        "expired-guided",
+        "explicit-reset-guided",
+        "explicit-reset-legacy",
+        "increment",
+        "internal-duplicates",
+        "legacy-expired",
+        "one-each",
+        "partial-reordered",
+        "query-plus-answer",
+        "query-then-answer",
+        "reordered-answer",
+        "replacement",
+        "reservation",
+        "saved-query-duplicate",
+        "second-topic",
+        "shared",
+        "topic-no-then-append",
+        "unknown-base",
+        "unknown-unit"
+      ],
+      "conversation_groups": {
+        "bounded": {
+          "passed": 41,
+          "total": 102
+        },
+        "security": {
+          "passed": 6,
+          "total": 39
+        },
+        "general-free": {
+          "passed": 0,
+          "total": 24
+        }
+      },
+      "recorded_matrix_sha256": "14c70781ef6caa9aa3a0995d41319d4fd0332aa47085cee02cbf6eeebaabf94c",
+      "matrix_lf_matches_recorded": true
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v4.jsonl",
+      "bytes": 10801061,
+      "sha256_checkout": "89285d3acc0630a201879c4c4b67fca2e9cf0be4d89b6d11f830788e4566c820",
+      "records": 733,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "none": 732
+      },
+      "modes": {
+        "none": 732
+      },
+      "statuses": {
+        "executed": 333,
+        "unexecuted": 399
+      },
+      "step_pass": {},
+      "cases": [
+        "Los-3-es-uno",
+        "Uno-de-cada-uno",
+        "ambiguous-selection",
+        "cancel",
+        "condition-unit",
+        "correction-mixed-final",
+        "delivery-unknown",
+        "different-partial",
+        "dos-carne-resto",
+        "expired-guided",
+        "explicit-reset-guided",
+        "explicit-reset-legacy",
+        "increment",
+        "internal-duplicates",
+        "legacy-expired",
+        "one-each",
+        "partial-reordered",
+        "query-plus-answer",
+        "query-then-answer",
+        "reordered-answer",
+        "replacement",
+        "reservation",
+        "saved-query-duplicate",
+        "second-topic",
+        "shared",
+        "topic-no-then-append",
+        "unknown-base",
+        "unknown-unit"
+      ],
+      "conversation_groups": {
+        "bounded": {
+          "passed": 20,
+          "total": 102
+        },
+        "security": {
+          "passed": 3,
+          "total": 39
+        },
+        "general-free": {
+          "passed": 0,
+          "total": 24
+        }
+      },
+      "recorded_matrix_sha256": "f0e34e29a1bd47fc5b760035d5d106fd62278e4bb07225980eb1ea997fdc1a63",
+      "matrix_lf_matches_recorded": true
+    },
+    {
+      "path": "docs/superpowers/evidence/2026-10-09-preguntas-guiadas/real-v5.jsonl",
+      "bytes": 9909971,
+      "sha256_checkout": "57ed044a54bf53c28ff55af7467d33e16191dab81679f64aa0b18270eff2e938",
+      "records": 733,
+      "json_errors": 0,
+      "types": {
+        "manifest": 1,
+        "none": 732
+      },
+      "modes": {
+        "none": 732
+      },
+      "statuses": {
+        "executed": 351,
+        "unexecuted": 381
+      },
+      "step_pass": {},
+      "cases": [
+        "Los-3-es-uno",
+        "Uno-de-cada-uno",
+        "ambiguous-selection",
+        "cancel",
+        "condition-unit",
+        "correction-mixed-final",
+        "delivery-unknown",
+        "different-partial",
+        "dos-carne-resto",
+        "expired-guided",
+        "explicit-reset-guided",
+        "explicit-reset-legacy",
+        "increment",
+        "internal-duplicates",
+        "legacy-expired",
+        "one-each",
+        "partial-reordered",
+        "query-plus-answer",
+        "query-then-answer",
+        "reordered-answer",
+        "replacement",
+        "reservation",
+        "saved-query-duplicate",
+        "second-topic",
+        "shared",
+        "topic-no-then-append",
+        "unknown-base",
+        "unknown-unit"
+      ],
+      "conversation_groups": {
+        "bounded": {
+          "passed": 42,
+          "total": 102
+        },
+        "security": {
+          "passed": 6,
+          "total": 39
+        },
+        "general-free": {
+          "passed": 0,
+          "total": 24
+        }
+      },
+      "recorded_matrix_sha256": "affb3024d6f51f05a866f03a484974e1ff12f7208b35b9e14c4a754246d7b6ae",
+      "matrix_lf_matches_recorded": true
+    },
+    {
+      "path": "docs/superpowers/natural-dialogue-real-2026-10-08-run1.jsonl",
+      "bytes": 112245,
+      "sha256_checkout": "2c9bf83681234e478afc4584f429a71f4f9aecdea332596a58d38ca87bfbb93d",
+      "records": 39,
+      "json_errors": 0,
+      "types": {
+        "none": 39
+      },
+      "modes": {
+        "none": 34
+      },
+      "statuses": {
+        "PASS": 1
+      },
+      "step_pass": {},
+      "cases": [
+        "A",
+        "B",
+        "C",
+        "changed_revision",
+        "expiry",
+        "reserved"
+      ],
+      "summary": {
+        "status": "PASS",
+        "mode": "REAL",
+        "temporary_removed": true,
+        "failure_count": 0
+      }
+    },
+    {
+      "path": "docs/superpowers/natural-dialogue-real-2026-10-08-run2.jsonl",
+      "bytes": 115657,
+      "sha256_checkout": "ee836f2eb1526e957758ca9f1af80b3d78c4bf3174d1573d2586814a2c01d8e1",
+      "records": 39,
+      "json_errors": 0,
+      "types": {
+        "none": 39
+      },
+      "modes": {
+        "none": 34
+      },
+      "statuses": {
+        "PASS": 1
+      },
+      "step_pass": {},
+      "cases": [
+        "A",
+        "B",
+        "C",
+        "changed_revision",
+        "expiry",
+        "reserved"
+      ],
+      "summary": {
+        "status": "PASS",
+        "mode": "REAL",
+        "temporary_removed": true,
+        "failure_count": 0
+      }
+    },
+    {
+      "path": "docs/superpowers/natural-dialogue-real-2026-10-08-run3.jsonl",
+      "bytes": 115055,
+      "sha256_checkout": "71d38af1ff5de356e6df5501a0e41bd29d5a0af3bade0d705cc9a9a36e45ddf3",
+      "records": 39,
+      "json_errors": 0,
+      "types": {
+        "none": 39
+      },
+      "modes": {
+        "none": 34
+      },
+      "statuses": {
+        "PASS": 1
+      },
+      "step_pass": {},
+      "cases": [
+        "A",
+        "B",
+        "C",
+        "changed_revision",
+        "expiry",
+        "reserved"
+      ],
+      "summary": {
+        "status": "PASS",
+        "mode": "REAL",
+        "temporary_removed": true,
+        "failure_count": 0
+      }
+    }
+  ]
+}
