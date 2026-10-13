@@ -82,4 +82,3 @@ asyncio.run(run())
 ```
 
 Full offline suite and PR CI remain parent/integration gates. Current public-site smoke check is pending specific P3 authorization. QA should review the TAK-10 PR diff and focused evidence at its exact SHA; Mushu should route the P3 interface and shared ownership findings. Takeshi retains final acceptance and merge.
-
