@@ -168,3 +168,7 @@ Puente integrated Alpha's local audit source `361a0ef732493483ffdc406eec3e2ca0bf
 ## Latest Windows CI diagnosis
 
 At PR #11 head `b87a4ef69171add0eaab21ea7a0930ed029d3b95`, [run 38298055578, job 114974162243](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38298055578/job/114974162243) completed with failure. Ruff succeeded. `git diff --check HEAD^ HEAD` exited 1 and reported `audit.md:394: trailing whitespace` and `verification.md:163: trailing whitespace`. The full offline suite, ACL diagnostic, and wheel stages were skipped. Managed GitHub file reads at that exact SHA found a carriage-return-only line after the final content line in each file. Removing those lines from the local worktree leaves `git diff --check` at exit 0. A new exact-SHA CI run is required; earlier green runs do not verify this documentation head.
+
+## Subsequent integrated audit head, 2026-10-13
+
+Puente integrated Alpha's local audit source `b4506cff0a7740f4013d346498000952a9208bbc` into draft PR #11 at remote SHA `c90e852714a05d0c58b59f724a040ef08932786e`. Managed GitHub `pull_request_read/get` confirms that exact PR head, and `pull_request_read/get_check_runs` confirms its Windows job completed `success` in [run 38356256108, job 115159738937](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38356256108/job/115159738937). The six-file audit-ledger continuation committed after `b4506cf` is not covered by that check. Manual owned-path audit, independent QA, real-model quality and live Telegram acceptance remain open.

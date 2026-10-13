@@ -155,14 +155,14 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/archive-v2.json | Source read; historical v2 byte reconstruction and hash inventory only, not current-source acceptance. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/archive-v3.json | Source read; historical v3 byte reconstruction and hash inventory only, not current-source acceptance. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/execution-status.md | Source read; first-pass review, independent QA pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v3.md | Pending |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v3.md | Source read; historical v3 offline 102/102 bounded, but real-model 41/102 bounded, 6/39 security and 0/24 general; the record also reports model/backend errors and a later callback-replay regression. Activation remained blocked; no result rerun here. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v4.md | Source read; reports callback replay and expiry bypass fixes with focused 263-pass evidence, but declares v4 native comparison invalid due to Windows encoding and activation blocked. Historical claims unrerun. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/final-fixes-v5.md | Source read; corrected UTF-8 v5 remains blocked: real 42/102 bounded, 6/39 security, 0/24 general; final review reports HIGH callback-cancellation history residual. Historical results, not rerun here. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/handoff.md | Initial inspection; full audit pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v3.json | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v4.json | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix-v5.json | Pending |
-| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix.json | Pending |
+| docs/superpowers/evidence/2026-10-09-preguntas-guiadas/matrix.json | Source read; frozen v2 input matrix defines 26 cases with three repetitions covering button/text routes, duplicate and mixed edits, expiry, replay, reservation, unknown base and queries. Inputs and expected state are not execution results. |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v1-source.txt | Source read; frozen synthetic-input A/B script varied tool descriptions and captured raw local model calls; no current probe run |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v1.jsonl | Pending |
 | docs/superpowers/evidence/2026-10-09-preguntas-guiadas/native-diagnosis-v2.jsonl | Pending |
@@ -179,11 +179,11 @@ This inventory is a coverage ledger, not a claim that all paths were read. Revie
 | docs/superpowers/natural-dialogue-real-2026-10-08-run1.jsonl | Pending |
 | docs/superpowers/natural-dialogue-real-2026-10-08-run2.jsonl | Pending |
 | docs/superpowers/natural-dialogue-real-2026-10-08-run3.jsonl | Pending |
-| docs/superpowers/plans/2026-09-27-asistente-compras.md | Pending |
-| docs/superpowers/plans/2026-09-29-gemma4-local-telegram.md | Pending |
-| docs/superpowers/plans/2026-09-29-lista-fichas-gemma.md | Pending |
+| docs/superpowers/plans/2026-09-27-asistente-compras.md | Source read; older broad shopping plan documents durable inbox/outbox and checkout controls. Its paid-model and purchase scope is historical and does not authorize either under the approved P0 plan. |
+| docs/superpowers/plans/2026-09-29-gemma4-local-telegram.md | Source read; older local-model route gives commands priority and keeps Ollama on loopback; private Telegram activation remains a separate gate. |
+| docs/superpowers/plans/2026-09-29-lista-fichas-gemma.md | Source read; older product-memory plan separates dated observations and idempotent research backlog from live prices or store purchases. |
 | docs/superpowers/plans/2026-10-01-conversacion-contextual-gemma.md | Pending |
-| docs/superpowers/plans/2026-10-08-agente-skills-herramientas.md | Pending |
+| docs/superpowers/plans/2026-10-08-agente-skills-herramientas.md | Source read; seven-package contract specifies fixed seven tools, application-owned confirmation and 15-minute expiry, atomic SQLite writes, bounded local E4B loop, opt-in routing and synthetic/real probes. Its historical subagent workflow is superseded by Paperclip ownership; source and live-quality review remain open. |
 | docs/superpowers/plans/2026-10-08-dialogo-natural-altas-incrementos.md | Pending |
 | docs/superpowers/plans/2026-10-08-respuestas-naturales-gemma.md | Pending |
 | docs/superpowers/plans/2026-10-09-preguntas-guiadas-telegram.md | Pending |
@@ -395,3 +395,5 @@ The October 8 implementation plan, spec, merged commit history and named test fi
 Latest CI follow-up: [run 38298055578](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38298055578/job/114974162243) at `b87a4ef69171add0eaab21ea7a0930ed029d3b95` failed the whitespace step before tests. Both added documentation files ended with a carriage-return-only line, which Git reported as trailing whitespace. The local correction removes those lines; full offline CI and independent audit review remain outstanding for the resulting candidate.
 
 2026-10-13 continuation: Puente integrated Alpha source `361a0ef732493483ffdc406eec3e2ca0bf4a7fac` into PR #11 head `1f65868fba456c05db71cb67ccdc09e91d20d05d`. Managed GitHub PR/check reads confirm [Windows job 115009527242](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38308893952/job/115009527242) completed successfully at that remote SHA; Puente records 1661 offline tests passed and the Ruff, whitespace, ACL and installed-wheel stages successful. This repairs the prior whitespace failure at the integrated SHA. Nine more owned historical documents were fully reviewed in this local continuation, as marked above. Remaining Pending rows and source-review gaps are not closed; no independent QA, real-model quality or live Telegram acceptance is claimed.
+
+2026-10-13 later continuation: Puente integrated local audit source `b4506cff0a7740f4013d346498000952a9208bbc` into PR #11 head `c90e852714a05d0c58b59f724a040ef08932786e`. Managed GitHub PR/check reads confirm [Windows job 115159738937](https://github.com/Adolfoderueda/project_shop_assistant/actions/runs/38356256108/job/115159738937) completed successfully at that exact remote SHA. Six additional owned historical source documents were read and classified above. This new local ledger update is not in that PR head; its CI status is therefore pending. Manual coverage, independent QA, real-model quality and Telegram acceptance remain open.
