@@ -103,6 +103,24 @@ def test_quote_refreshes_product_without_inventing_shipping():
     asyncio.run(with_page('nappy', check))
 
 
+def test_quote_rejects_changed_pack_identity():
+    store = adapter('mercadona', 'Mercadona')
+
+    async def check(page):
+        old = await store.extract(page, 'diapers', store.product_urls[0])
+        changed_pack = old.model_copy(update={'units_per_pack': 40, 'price_cents': 1295})
+
+        async def read(url, product_id):
+            return changed_pack
+
+        store.read_product = read
+        with pytest.raises(ValueError, match='identity'):
+            await store.quote([QuotedLine(line_id='line', offer=old, packs=1)],
+                              Destination(postcode='28023', address='Synthetic address'))
+
+    asyncio.run(with_page('mercadona', check))
+
+
 def test_explicit_registry_and_host_policy():
     from stores.connections import registrations
     entries = registrations()
@@ -110,3 +128,4 @@ def test_explicit_registry_and_host_policy():
     merc = next(e for e in entries if e.store_id == 'mercadona')
     assert 'tornillos.mercadona.es' in merc.resource_hosts
     assert 'tornillos.mercadona.es' not in merc.navigation_hosts
+
