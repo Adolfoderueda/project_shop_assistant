@@ -26,12 +26,15 @@ READ_CONTRACTS = {
 }
 CONTRACTS = {**READ_CONTRACTS, **OPERATION_CONTRACTS}
 DESCRIPTIONS = {
-    'consultar_lista': 'Consultar todas las líneas guardadas y sus reservas.',
+    'consultar_lista': 'Leer solo líneas ya guardadas, incluso con borrador pendiente; '
+                       'para preguntas sobre lo ya apuntado o guardado.',
     'consultar_ficha': 'Consultar observaciones históricas, no disponibilidad actual.',
-    'consultar_propuesta': 'Consultar el borrador y todos sus candidatos pendientes.',
+    'consultar_propuesta': 'Leer solo el borrador pendiente y sus candidatos; '
+                          'no responde qué hay ya guardado.',
     'proponer_altas': 'Proponer un lote de altas sin guardar líneas.',
     'proponer_cambio': 'Proponer incremento, cantidad total o sustitución sin guardar.',
-    'completar_propuesta': 'Completar posiciones e índices ofrecidos del borrador.',
+    'completar_propuesta': 'Completar posiciones e índices del borrador; decidir '
+                          'duplicados por cada posición explícitamente.',
     'cancelar_propuesta': 'Descartar el borrador sin cambiar líneas guardadas.',
 }
 

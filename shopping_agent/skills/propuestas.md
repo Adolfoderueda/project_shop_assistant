@@ -33,6 +33,15 @@ lleva `duplicate_decision:"separate"`; esa decisión requiere ejecutar la herram
 no responder solo con texto. Si pide lo que ya está apuntado/guardado, la operación
 es `consultar_lista`; si pide el borrador pendiente, es `consultar_propuesta`.
 
+Ejemplo: el borrador tiene arroz en posición 1 (2 envases) y arroz en posición 2
+(3 envases), ambos marcados como duplicados internos. El usuario dice «mantén
+cada entrada como una línea separada, no sumes las cantidades». Argumentos:
+```json
+{"patches":[{"position":1,"duplicate_decision":"separate"},{"position":2,"duplicate_decision":"separate"}]}
+```
+Las cantidades ya presentes se conservan. Un parche que solo repite cantidades
+deja ambas decisiones pendientes y no concede permiso de confirmar.
+
 Usa `consultar_propuesta` para conocer posiciones, candidatos y datos pendientes.
 Usa `completar_propuesta` con patches por posición (1..20) para incorporar
 cantidades/unidades o candidate_index (índice desde 1 de los candidatos ofrecidos).

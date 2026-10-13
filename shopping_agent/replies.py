@@ -93,6 +93,13 @@ def proposal_text(proposal: AgentProposal, snapshot: AgentSnapshot, *, review: b
         if item.internal_conflicts:
             parts.append("Duplicados dentro del lote con posiciones: "
                          + ", ".join(map(str, item.internal_conflicts)) + ".")
+    unresolved_duplicates = [item.position for item in proposal.items if (
+        item.kind == "add" and (item.candidates or item.internal_conflicts)
+        and item.duplicate_decision is None)]
+    if unresolved_duplicates:
+        positions = " y ".join(f"posición {position}" for position in unresolved_duplicates)
+        parts.append(f"Falta una decisión explícita de duplicado para {positions}; "
+                     "indica línea separada o cantidad total para cada una.")
     if proposal.condition:
         parts.append(f"Condición pendiente: {proposal.condition}. No verificada; retírala expresamente o aclara.")
     parts.append("Pendiente, sin guardar. ¿Confirmas?" if review else
