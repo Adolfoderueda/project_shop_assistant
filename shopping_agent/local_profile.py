@@ -10,6 +10,8 @@ def validate_endpoint(endpoint: str, *, model: str | None = None) -> str:
         raise ValueError("Only fixed local Ollama endpoints are permitted")
     if model == PROFILE_12B and endpoint != ENDPOINT_12B:
         raise ValueError("Gemma 12B requires its dedicated local endpoint")
+    if model is not None and model != PROFILE_12B and endpoint != DEFAULT_ENDPOINT:
+        raise ValueError("Gemma E4B requires its default local endpoint")
     return endpoint
 
 

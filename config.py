@@ -37,7 +37,7 @@ class Settings(Model):
 
     @model_validator(mode="after")
     def agent_provider(self):
-        from shopping_agent.local_profile import ENDPOINT_12B, PROFILE_12B
+        from shopping_agent.local_profile import DEFAULT_ENDPOINT, ENDPOINT_12B, PROFILE_12B
 
         if self.guided_questions and self.conversation_engine != 'skills_agent':
             raise ValueError('Guided questions require skills agent')
@@ -48,6 +48,8 @@ class Settings(Model):
         if (self.agent_model == PROFILE_12B
                 and (not self.experimental_no_purchases or self.agent_endpoint != ENDPOINT_12B)):
             raise ValueError("Gemma 12B requires purchase block and dedicated endpoint")
+        if self.agent_model != PROFILE_12B and self.agent_endpoint != DEFAULT_ENDPOINT:
+            raise ValueError("Gemma E4B requires its default local endpoint")
         return self
 
     @model_validator(mode="before")

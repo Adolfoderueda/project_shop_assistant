@@ -13,6 +13,8 @@ from storage import Repository
 
 MODEL = "gemma4-12b-shop:16k"
 ENDPOINT = "http://127.0.0.1:11435"
+E4B_MODEL = "gemma4:e4b-it-q4_K_M"
+E4B_ENDPOINT = "http://127.0.0.1:11434"
 
 
 def _settings(tmp_path, **changes):
@@ -41,6 +43,36 @@ def test_12b_requires_dedicated_endpoint_dry_run_and_purchase_block(tmp_path):
     ):
         with pytest.raises(ValueError):
             _settings(tmp_path, **changes)
+
+
+@pytest.mark.parametrize(
+    ("model", "endpoint", "valid"),
+    [
+        (E4B_MODEL, E4B_ENDPOINT, True),
+        (E4B_MODEL, ENDPOINT, False),
+        (MODEL, E4B_ENDPOINT, False),
+        (MODEL, ENDPOINT, True),
+    ],
+)
+def test_model_endpoint_pairs_match_in_settings_and_transports(tmp_path, model, endpoint, valid):
+    from shopping_agent.guided_ollama import GuidedOllamaAgent
+    from shopping_agent.ollama import OllamaShoppingAgent
+
+    settings = lambda: _settings(
+        tmp_path, agent_model=model, agent_endpoint=endpoint,
+        experimental_no_purchases=(model == MODEL),
+    )
+    if valid:
+        assert settings().agent_endpoint == endpoint
+    else:
+        with pytest.raises(ValueError):
+            settings()
+    for agent_type in (OllamaShoppingAgent, GuidedOllamaAgent):
+        if valid:
+            assert agent_type(model, endpoint=endpoint).endpoint == endpoint
+        else:
+            with pytest.raises(ValueError):
+                agent_type(model, endpoint=endpoint)
 
 
 @pytest.mark.parametrize("guided", [False, True])
