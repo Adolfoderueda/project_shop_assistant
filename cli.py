@@ -140,7 +140,9 @@ async def doctor(root: Path) -> bool:
                    f"{settings.agent_model if settings.conversation_engine == 'skills_agent' else settings.ollama_model}")
     if settings.model_provider == "ollama":
         model = settings.agent_model if settings.conversation_engine == 'skills_agent' else settings.ollama_model
-        results.append("Model: Ollama local available" if await ollama_available(model)
+        available = (await _agent_available(settings) if settings.conversation_engine == 'skills_agent'
+                     else await ollama_available(model))
+        results.append("Model: Ollama local available" if available
                        else "Model: Ollama local blocked; commands remain available")
     elif settings.model_provider == "commands_only":
         results.append("Model: not configured; commands-only mode (not a startup blocker)")
@@ -148,10 +150,13 @@ async def doctor(root: Path) -> bool:
     return all("blocked" not in result for result in results[:3])
 
 
-async def ollama_available(model: str, *, transport=None) -> bool:
+async def ollama_available(model: str, *, transport=None,
+                           endpoint="http://127.0.0.1:11434") -> bool:
     """Check a fixed loopback endpoint only; never trust proxy settings or redirects."""
     try:
-        async with httpx.AsyncClient(base_url="http://127.0.0.1:11434", trust_env=False,
+        from shopping_agent.local_profile import validate_endpoint
+
+        async with httpx.AsyncClient(base_url=validate_endpoint(endpoint, model=model), trust_env=False,
                                      follow_redirects=False, timeout=httpx.Timeout(5.0, connect=2.0),
                                      transport=transport) as client:
             response = await client.get("/api/tags", follow_redirects=False)
@@ -169,8 +174,16 @@ async def model_local(root: Path, action: str) -> bool:
     return await _local_engine(root, action, agent=False)
 
 
-async def agent_local(root: Path, action: str) -> bool:
-    return await _local_engine(root, action, agent=True)
+async def agent_local(root: Path, action: str, *, model=None,
+                      experimental_no_purchases=False) -> bool:
+    return await _local_engine(root, action, agent=True, model=model,
+                               experimental_no_purchases=experimental_no_purchases)
+
+
+async def _agent_available(settings):
+    if settings.agent_endpoint == "http://127.0.0.1:11434":
+        return await ollama_available(settings.agent_model)
+    return await ollama_available(settings.agent_model, endpoint=settings.agent_endpoint)
 
 
 async def guided_local(root: Path, action: str) -> bool:
@@ -196,8 +209,8 @@ async def guided_local(root: Path, action: str) -> bool:
             raise ValueError('Database lock target changed; configuration unchanged')
         if action == 'enable' and (
                 settings.conversation_engine != 'skills_agent' or settings.model_provider != 'ollama'
-                or not await ollama_available(settings.agent_model)):
-            print('Guided questions require skills_agent, Ollama and the available E4B model; configuration unchanged.')
+                or not await _agent_available(settings)):
+            print('Guided questions require skills_agent, Ollama and the selected local model; configuration unchanged.')
             return False
         updated = Settings.model_validate(settings.model_copy(update={
             'guided_questions': action == 'enable'}).model_dump())
@@ -215,18 +228,22 @@ async def guided_local(root: Path, action: str) -> bool:
         lock.__exit__(None, None, None)
 
 
-async def _local_engine(root: Path, action: str, *, agent: bool) -> bool:
+async def _local_engine(root: Path, action: str, *, agent: bool, model=None,
+                        experimental_no_purchases=False) -> bool:
     from runtime import ProcessLock
 
     if action not in {'status', 'enable', 'disable'}:
         raise ValueError('Invalid local action')
+    if (model is not None or experimental_no_purchases) and (not agent or action != 'enable'):
+        raise ValueError('Profile selection is only valid with agent-local enable')
     initial = load_settings(root)
     if action == 'status':
         print(f"Engine: {initial.conversation_engine}; provider: {initial.model_provider}")
         model = initial.agent_model if agent else initial.ollama_model
         print(f"Model: {model}")
         if initial.model_provider == 'ollama':
-            print('Ollama local: available' if await ollama_available(model)
+            available = await _agent_available(initial) if agent else await ollama_available(model)
+            print('Ollama local: available' if available
                   else 'Ollama local: unavailable; commands still work')
         return True
     try:
@@ -239,16 +256,33 @@ async def _local_engine(root: Path, action: str, *, agent: bool) -> bool:
         settings = load_settings(root)
         if settings.database_path != initial.database_path:
             raise ValueError("Database lock target changed; configuration unchanged")
+        profile_updates = {}
+        if model is not None:
+            from shopping_agent.local_profile import DEFAULT_ENDPOINT, ENDPOINT_12B, PROFILE_12B
+
+            profile_updates = {
+                'agent_model': model,
+                'agent_endpoint': ENDPOINT_12B if model == PROFILE_12B else DEFAULT_ENDPOINT,
+            }
+        if experimental_no_purchases:
+            profile_updates['experimental_no_purchases'] = True
+        selected = Settings.model_validate(settings.model_copy(update={
+            **profile_updates,
+            **({'conversation_engine': 'skills_agent', 'model_provider': 'ollama'}
+               if agent and action == 'enable' else {}),
+        }).model_dump())
         if action == "enable":
-            if not await ollama_available(settings.agent_model if agent else settings.ollama_model):
+            available = (await _agent_available(selected) if agent
+                         else await ollama_available(settings.ollama_model))
+            if not available:
                 print("Ollama local unavailable or model missing; configuration unchanged.")
                 return False
             provider = "ollama"
         else:
             provider = "commands_only"
-        updates = {'model_provider': provider}
+        updates = {**profile_updates, 'model_provider': provider}
         if agent:
-            updates = {'conversation_engine': 'skills_agent' if action == 'enable' else 'legacy'}
+            updates = {**profile_updates, 'conversation_engine': 'skills_agent' if action == 'enable' else 'legacy'}
             if action == 'enable':
                 updates['model_provider'] = 'ollama'
         elif action == 'disable':
@@ -326,6 +360,8 @@ def main(argv=None) -> int:
     local_parser.add_argument("action", choices=("enable", "disable", "status"))
     agent_parser = sub.add_parser('agent-local')
     agent_parser.add_argument('action', choices=('enable', 'disable', 'status'))
+    agent_parser.add_argument('--model', choices=('gemma4:e4b-it-q4_K_M', 'gemma4-12b-shop:16k'))
+    agent_parser.add_argument('--experimental-no-purchases', action='store_true')
     questions_parser = sub.add_parser('questions-local')
     questions_parser.add_argument('action', choices=('enable', 'disable', 'status'))
     args = parser.parse_args(argv)
@@ -345,7 +381,9 @@ def main(argv=None) -> int:
         elif args.command == "model-local":
             return 0 if asyncio.run(model_local(root, args.action)) else 1
         elif args.command == 'agent-local':
-            return 0 if asyncio.run(agent_local(root, args.action)) else 1
+            return 0 if asyncio.run(agent_local(
+                root, args.action, model=args.model,
+                experimental_no_purchases=args.experimental_no_purchases)) else 1
         elif args.command == 'questions-local':
             return 0 if asyncio.run(guided_local(root, args.action)) else 1
         else:

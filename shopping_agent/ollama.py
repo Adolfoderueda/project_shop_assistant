@@ -7,6 +7,7 @@ import httpx
 
 from domain import IncomingMessage, Reply
 from shopping_agent.contracts import AgentRunResult, ToolCall, ToolResult
+from shopping_agent.local_profile import DEFAULT_ENDPOINT, generation_profile, validate_endpoint
 from shopping_agent.replies import render_tool_results
 from shopping_agent.skills import load_skills
 from shopping_agent.tools import AgentTools, tool_definitions
@@ -82,9 +83,11 @@ def _assistant(payload: object) -> tuple[dict, tuple[ToolCall, ...]]:
 
 class OllamaShoppingAgent:
     def __init__(self, model: str = 'gemma4:e4b-it-q4_K_M', *,
-                 transport: httpx.AsyncBaseTransport | None = None):
+                 transport: httpx.AsyncBaseTransport | None = None,
+                 endpoint: str = DEFAULT_ENDPOINT):
         self.model = model
         self.transport = transport
+        self.endpoint = validate_endpoint(endpoint, model=model)
 
     async def run(self, message: IncomingMessage, tools: AgentTools) -> AgentRunResult:
         if message != tools.message:
@@ -109,7 +112,7 @@ class OllamaShoppingAgent:
         deadline = asyncio.timeout(RUN_TIMEOUT)
         try:
             async with deadline, httpx.AsyncClient(
-                base_url='http://127.0.0.1:11434', transport=self.transport,
+                base_url=self.endpoint, transport=self.transport,
                 trust_env=False, follow_redirects=False,
                 timeout=httpx.Timeout(RUN_TIMEOUT, connect=2),
             ) as client:
@@ -118,8 +121,8 @@ class OllamaShoppingAgent:
                     context = {'messages': messages, 'tools': definitions}
                     if len(_json(context).encode('utf-8')) > MAX_CONTEXT_BYTES:
                         return finish('context_overflow')
-                    payload = {**context, 'model': self.model, 'stream': False, 'think': False,
-                               'options': {'temperature': 0, 'num_ctx': 8192, 'num_predict': 512}}
+                    payload = {**context, 'model': self.model, 'stream': False,
+                               **generation_profile(self.model)}
                     model_calls += 1
                     try:
                         response = await client.post('/api/chat', content=_json(payload).encode('utf-8'),

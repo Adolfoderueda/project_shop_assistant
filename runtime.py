@@ -79,6 +79,27 @@ class _CommandsOnly:
         return clarify("Interpretación libre desactivada: configura el modelo o usa comandos explícitos.")
 
 
+class _PurchasesBlocked:
+    """Reject buys before routing without revoking list drafts."""
+
+    def __init__(self, repo, conversation):
+        self.repo = repo
+        self.conversation = conversation
+
+    async def handle(self, event, mode):
+        from domain import IncomingMessage
+        from interpreter import parse_command, purchase_authorized
+
+        if isinstance(event, IncomingMessage):
+            command = parse_command(event.text, [])
+            if purchase_authorized(event.text) or command and command.action in {"buy", "resume"}:
+                stored, _ = self.repo.message_result(event.update_id)
+                if stored != event:
+                    raise ValueError("Message does not match durable inbox")
+                return self.repo.complete_blocked_purchase(event.update_id)
+        return await self.conversation.handle(event, mode)
+
+
 async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
               transport=None, conversation=None, sleep=asyncio.sleep) -> None:
     """Recover first, then dispatch durable inbox/orders/outbox and poll continuously.
@@ -94,12 +115,14 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
 
     with ProcessLock(settings.database_path.parent / "worker.lock"):
         repo = repo or Repository(settings.database_path)
+        if settings.experimental_no_purchases:
+            repo.purchases_enabled = False
         repo.migrate()
         repo.assert_authorized_owner(settings.authorized_user_id)
         manager = None
         openai_client = None
         try:
-            if recovery is None or checkout is None:
+            if not settings.experimental_no_purchases and (recovery is None or checkout is None):
                 from stores.browser import BrowserManager
                 from stores.connections import registrations
                 from stores.registry import StoreRegistry
@@ -119,16 +142,20 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                 interpreter = _CommandsOnly()
                 reply_writer = None
                 if settings.conversation_engine == "skills_agent":
+                    agent_kwargs = ({} if settings.agent_endpoint == "http://127.0.0.1:11434"
+                                    else {"endpoint": settings.agent_endpoint})
                     if settings.guided_questions:
                         from shopping_agent.guided_conversation import GuidedConversation
                         from shopping_agent.guided_ollama import GuidedOllamaAgent
                         conversation = GuidedConversation(
-                            repo, GuidedOllamaAgent(settings.agent_model), Conversation(repo, interpreter))
+                            repo, GuidedOllamaAgent(settings.agent_model, **agent_kwargs),
+                            Conversation(repo, interpreter))
                     else:
                         from shopping_agent.conversation import AgentConversation
                         from shopping_agent.ollama import OllamaShoppingAgent
                         conversation = AgentConversation(
-                            repo, OllamaShoppingAgent(settings.agent_model), Conversation(repo, interpreter))
+                            repo, OllamaShoppingAgent(settings.agent_model, **agent_kwargs),
+                            Conversation(repo, interpreter))
                 elif settings.model_provider == "ollama":
                     from ollama_interpreter import OllamaInterpreter
                     from ollama_replies import OllamaReplyWriter
@@ -149,7 +176,11 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                 if conversation is None:
                     conversation = Conversation(repo, interpreter, reply_writer=reply_writer,
                                                 synchronize_route=True)
-            await recovery.recover()  # Abandoned attempts must be reconciled before new work.
+            if settings.experimental_no_purchases:
+                conversation = _PurchasesBlocked(repo, conversation)
+                logger.warning("Experimental worker: purchase execution disabled; orders retained")
+            else:
+                await recovery.recover()  # Abandoned attempts must be reconciled before new work.
             logger.info("Recovery finished; worker ready")
             retry_delay = 1
             while True:
@@ -168,13 +199,15 @@ async def run(settings: Settings, *, repo=None, recovery=None, checkout=None,
                     if isinstance(event, IncomingCallback) and not settings.guided_questions:
                         repo.complete_agent_reply(event.update_id, Reply(text='Preguntas guiadas inactivas. Usa la conversación actual.'))
                     else:
-                        if not settings.guided_questions and hasattr(repo, 'revoke_guided'):
+                        if (not settings.guided_questions and not settings.experimental_no_purchases
+                                and hasattr(repo, 'revoke_guided')):
                             repo.revoke_guided(event.user_id, now=datetime.now(UTC))
                         await conversation.handle(event, settings.mode)
-                if repo.resumable_orders():
+                if not settings.experimental_no_purchases and repo.resumable_orders():
                     await recovery.recover()
-                for order_id in repo.pending_orders():
-                    await checkout.run(order_id)
+                if not settings.experimental_no_purchases:
+                    for order_id in repo.pending_orders():
+                        await checkout.run(order_id)
                 try:
                     await transport.send_pending()
                     await transport.poll_once()

@@ -18,6 +18,7 @@ from shopping_agent.guided_contracts import (
     ReadCandidate,
     TopicCandidate,
 )
+from shopping_agent.local_profile import DEFAULT_ENDPOINT, generation_profile, validate_endpoint
 from shopping_agent.ollama import (
     MAX_CONTEXT_BYTES,
     MAX_MODEL_CALLS,
@@ -197,9 +198,11 @@ def _answer(name, arguments, event, state):
 
 class GuidedOllamaAgent:
     def __init__(self, model: str = 'gemma4:e4b-it-q4_K_M', *,
-                 transport: httpx.AsyncBaseTransport | None = None):
+                 transport: httpx.AsyncBaseTransport | None = None,
+                 endpoint: str = DEFAULT_ENDPOINT):
         self.model = model
         self.transport = transport
+        self.endpoint = validate_endpoint(endpoint, model=model)
 
     async def interpret(self, event: IncomingMessage, state: GuidedState,
                         history: tuple[dict, ...]) -> GuidedModelResult:
@@ -228,7 +231,7 @@ class GuidedOllamaAgent:
         deadline = asyncio.timeout(RUN_TIMEOUT)
         try:
             async with deadline, httpx.AsyncClient(
-                base_url='http://127.0.0.1:11434', transport=self.transport,
+                base_url=self.endpoint, transport=self.transport,
                 trust_env=False, follow_redirects=False,
                 timeout=httpx.Timeout(RUN_TIMEOUT, connect=2),
             ) as client:
@@ -236,8 +239,8 @@ class GuidedOllamaAgent:
                     return finish('limit')
                 model_calls += 1
                 response = await client.post('/api/chat', content=_json({
-                    **context, 'model': self.model, 'stream': False, 'think': False,
-                    'options': {'temperature': 0, 'num_ctx': 8192, 'num_predict': 512},
+                    **context, 'model': self.model, 'stream': False,
+                    **generation_profile(self.model),
                 }).encode('utf-8'), headers={'Content-Type': 'application/json'})
                 response.raise_for_status()
                 try:
