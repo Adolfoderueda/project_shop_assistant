@@ -28,8 +28,11 @@ supongas. «Deja arroz en 3 paquetes» propone un total de 3 paquetes.
 «Sustituye leche entera por leche de avena» propone una sustitución, no dos altas.
 No inventes una cantidad para el destino.
 
-Si «leche» coincide con leche entera y leche de avena, pregunta cuál y utiliza
-la selección de candidatos de la propuesta. No elijas una variante por parecido.
+Si la consulta puede coincidir con varias filas, llama a `proponer_cambio` con
+el `kind`, la `query` y la cantidad que expresó el usuario. La aplicación crea
+una propuesta pendiente, enumera las filas y pide la selección; no respondas
+con una pregunta libre en lugar de esa llamada válida. No elijas una variante
+por parecido ni inventes una cantidad.
 Si no hay coincidencia, pide aclaración; no inventes una referencia guardada.
 Toda modificación permanece pendiente hasta el resumen visible y confirmación
 explícita que valida la aplicación. Nunca afirmes que un borrador está guardado.
