@@ -27,16 +27,29 @@ class Settings(Model):
     ollama_model: Literal["gemma4:e2b"] = "gemma4:e2b"
     conversation_engine: Literal["legacy", "skills_agent"] = "legacy"
     guided_questions: bool = False
-    agent_model: Literal["gemma4:e4b-it-q4_K_M"] = "gemma4:e4b-it-q4_K_M"
+    agent_model: Literal["gemma4:e4b-it-q4_K_M", "gemma4-12b-shop:16k"] = "gemma4:e4b-it-q4_K_M"
+    agent_endpoint: Literal["http://127.0.0.1:11434", "http://127.0.0.1:11435"] = (
+        "http://127.0.0.1:11434"
+    )
+    experimental_no_purchases: bool = False
     profiles_path: Path = Path("private/profiles")
     logs_path: Path = Path("private/logs")
 
     @model_validator(mode="after")
     def agent_provider(self):
+        from shopping_agent.local_profile import DEFAULT_ENDPOINT, ENDPOINT_12B, PROFILE_12B
+
         if self.guided_questions and self.conversation_engine != 'skills_agent':
             raise ValueError('Guided questions require skills agent')
         if self.conversation_engine == "skills_agent" and self.model_provider != "ollama":
             raise ValueError("Skills agent requires Ollama")
+        if self.experimental_no_purchases and self.mode != "dry_run":
+            raise ValueError("Experimental purchase block requires dry_run")
+        if (self.agent_model == PROFILE_12B
+                and (not self.experimental_no_purchases or self.agent_endpoint != ENDPOINT_12B)):
+            raise ValueError("Gemma 12B requires purchase block and dedicated endpoint")
+        if self.agent_model != PROFILE_12B and self.agent_endpoint != DEFAULT_ENDPOINT:
+            raise ValueError("Gemma E4B requires its default local endpoint")
         return self
 
     @model_validator(mode="before")

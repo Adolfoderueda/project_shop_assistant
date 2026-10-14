@@ -55,8 +55,29 @@ SCHEMA_VERSION = 10
 
 
 class Repository(CheckoutRepository, DialogueRepository, PresentationRepository, GuidedRepository, AgentRepository):
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, purchases_enabled: bool = True):
         self.path = Path(path)
+        self.purchases_enabled = purchases_enabled
+
+    def complete_blocked_purchase(self, update_id: int) -> Reply:
+        """Complete a rejected buy idempotently without touching list proposals."""
+        from interpreter import parse_command, purchase_authorized
+
+        if self.purchases_enabled:
+            raise ValueError("Purchase blocking is not enabled")
+        with self._connection(write=True) as db:
+            source = self._agent_source(db, update_id)
+            if source["completed"]:
+                return Reply.model_validate_json(source["reply_json"])
+            message = self._agent_message(source)
+            command = parse_command(message.text, [])
+            if not (purchase_authorized(message.text)
+                    or command and command.action in {"buy", "resume"}):
+                raise ValueError("Not a purchase command")
+            return self._complete_reply(db, source, Reply(
+                text="Compras y continuación de pedidos bloqueadas en este despliegue experimental. "
+                     "La lista guardada y las propuestas de lista no han cambiado."
+            ))
 
     def schema_version(self) -> int:
         """Inspect an existing database without creating or upgrading it."""
@@ -310,6 +331,14 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
 
     def _apply_dialogue(self, db, source, proposal, mode, *, now):
         self._agent_message(source)
+        if not self.purchases_enabled:
+            from interpreter import parse_command, purchase_authorized
+
+            command = parse_command(source["text"], [])
+            if (purchase_authorized(source["text"])
+                    or command and command.action in {"buy", "resume"}
+                    or proposal and proposal.action in {"buy", "resume"}):
+                raise PermissionError("Purchases disabled in experimental deployment")
         return super()._apply_dialogue(db, source, proposal, mode, now=now)
 
     def ingest_events(self, events: list[IncomingEvent], next_offset: int) -> None:
@@ -530,6 +559,8 @@ class Repository(CheckoutRepository, DialogueRepository, PresentationRepository,
             return reply
 
     def _apply(self, db, update_id, intent, mode):
+        if not self.purchases_enabled and intent.action in {"buy", "resume"}:
+            raise PermissionError("Purchases disabled in experimental deployment")
         if intent.action == "product_query":
             if (len(intent.lines) != 1 or not intent.lines[0].description
                     or intent.lines[0].line_id is not None

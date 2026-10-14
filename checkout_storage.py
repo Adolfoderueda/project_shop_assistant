@@ -16,6 +16,10 @@ _lock = RLock()
 
 
 class CheckoutRepository:
+    def _require_purchase_execution(self):
+        if not getattr(self, "purchases_enabled", True):
+            raise PermissionError("Purchases disabled in experimental deployment")
+
     @staticmethod
     def _owns_reservations(db, order_id):
         execution = db.execute("SELECT legacy_quarantined FROM execution WHERE order_id=?",
@@ -77,6 +81,7 @@ class CheckoutRepository:
             return row[0]
 
     def claim_order(self, order_id: str) -> bool:
+        self._require_purchase_execution()
         with _lock, self._connection(write=True) as db:
             changed = db.execute("UPDATE execution SET claimed=1 WHERE order_id=? AND claimed=0",
                                  (order_id,)).rowcount
@@ -85,12 +90,14 @@ class CheckoutRepository:
             return bool(changed)
 
     def release_order(self, order_id: str) -> None:
+        self._require_purchase_execution()
         with _lock, self._connection(write=True) as db:
             db.execute("UPDATE execution SET claimed=0 WHERE order_id=?", (order_id,))
             _active.discard((str(self.path.resolve()), order_id))
 
     def reclaim_abandoned_orders(self) -> None:
         """Only safe under the runtime's exclusive OS process lock."""
+        self._require_purchase_execution()
         with _lock, self._connection(write=True) as db:
             for row in db.execute("SELECT order_id FROM execution WHERE claimed=1").fetchall():
                 if (str(self.path.resolve()), row[0]) not in _active:
@@ -104,12 +111,14 @@ class CheckoutRepository:
                    (str(uuid4()), chat, Reply(text=text, order_id=order_id).model_dump_json()))
 
     def set_order_state(self, order_id, state, text):
+        self._require_purchase_execution()
         with self._connection(write=True) as db:
             db.execute("UPDATE execution SET state=? WHERE order_id=?", (state, order_id))
             self._notice(db, order_id, text)
 
     def set_purchase_requests(self, order_id, requests: list[PurchaseRequest]):
         """Persist explicitly clarified quantity semantics before execution, never infer pieces."""
+        self._require_purchase_execution()
         order = self.get_order(order_id)
         if ({r.line_id: r.quantity for r in requests}
                 != {l.id: l.quantity for l in order.lines} or len(requests) != len(order.lines)):
@@ -133,6 +142,7 @@ class CheckoutRepository:
                     if row[0] else None)
 
     def save_assignment(self, order_id, quotes: list[Quote], *, simulated=False):
+        self._require_purchase_execution()
         with self._connection(write=True) as db:
             if not self._owns_reservations(db, order_id):
                 raise ValueError("Snapshot is not executable")
@@ -155,6 +165,7 @@ class CheckoutRepository:
                                               (order_id,))]
 
     def refresh_quote(self, order_id, quote):
+        self._require_purchase_execution()
         with self._connection(write=True) as db:
             changed = db.execute("UPDATE suborders SET quote_json=?,total_cents=? WHERE order_id=? "
                                  "AND store_id=? AND state='preparado' AND result IS NULL",
@@ -164,6 +175,7 @@ class CheckoutRepository:
             self._notice(db, order_id, f"Precio actualizado: {quote.total_cents} céntimos, entrega {quote.delivery}.")
 
     def save_attempt(self, order_id: str, store_id: str, cart: PreparedCart) -> str:
+        self._require_purchase_execution()
         with self._connection(write=True) as db:
             if not self._owns_reservations(db, order_id):
                 raise ValueError("Snapshot is not executable")
@@ -196,6 +208,7 @@ class CheckoutRepository:
                 "SELECT id,cart_json FROM attempts WHERE settled=0 AND cart_json IS NOT NULL ORDER BY rowid")]
 
     def record_submission(self, attempt_id: str, result: Submission) -> None:
+        self._require_purchase_execution()
         with self._connection(write=True) as db:
             row = db.execute("SELECT a.*,s.order_id FROM attempts a JOIN suborders s ON s.id=a.suborder_id "
                              "WHERE a.id=?", (attempt_id,)).fetchone()
@@ -237,6 +250,7 @@ class CheckoutRepository:
                           if state == "confirmado" else "No se repetirá la compra sin reconciliar."))
 
     def definitely_not_submitted(self, attempt_id):
+        self._require_purchase_execution()
         with self._connection(write=True) as db:
             row = db.execute("SELECT a.suborder_id,s.order_id FROM attempts a JOIN suborders s "
                              "ON s.id=a.suborder_id WHERE a.id=? AND a.settled=0", (attempt_id,)).fetchone()
@@ -247,6 +261,7 @@ class CheckoutRepository:
                 self._notice(db, row[1], "Verificado: no se envió la compra. Solicita reanudar para cotizar de nuevo.")
 
     def finish_resume(self, order_id):
+        self._require_purchase_execution()
         with self._connection(write=True) as db:
             pending = db.execute("SELECT 1 FROM attempts a JOIN suborders s ON s.id=a.suborder_id "
                                  "WHERE s.order_id=? AND a.settled=0", (order_id,)).fetchone()
