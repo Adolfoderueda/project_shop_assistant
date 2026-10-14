@@ -200,7 +200,8 @@ def _patch(item, patch, snapshot):
             elif item.target and item.base_quantity is None and patch.duplicate_decision == "set_total":
                 # The supplied quantity is explicitly a total, not the old delta.
                 changes.update(kind="set_quantity", quantity=patch.quantity,
-                               base_quantity=None, additional_quantity=None)
+                               base_quantity=None, additional_quantity=None,
+                               description=rows[item.target.id].description)
             else:
                 return None
         elif item.kind == "add" and patch.duplicate_decision == "set_total":
