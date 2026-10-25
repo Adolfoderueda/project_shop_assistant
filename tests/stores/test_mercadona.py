@@ -59,3 +59,29 @@ def test_timeout_does_not_return_cached_price():
                               Destination(postcode='28023', address='Synthetic address'))
 
     asyncio.run(with_page('mercadona', check))
+
+
+def test_quote_rejects_changed_product_title_with_same_pack_identity():
+    async def check(page):
+        from domain import Destination, QuotedLine
+
+        store = Mercadona()
+        original = await store.extract(page, 'diapers', store.product_urls[0])
+        await page.locator('h1').evaluate(
+            "(node) => { node.textContent = node.textContent.replace('Sensitive ', ''); }")
+
+        async def read_product(url, product_id):
+            return await store.extract(page, product_id, url)
+
+        store.read_product = read_product
+        changed = await read_product(store.product_urls[0], 'diapers')
+        assert changed.units_per_pack == original.units_per_pack == 56
+        assert changed.size == original.size == 3
+        assert changed.variant is original.variant is None
+        assert changed.title != original.title
+        with pytest.raises(ValueError, match='identity'):
+            await store.quote(
+                [QuotedLine(line_id='line', offer=original, packs=1)],
+                Destination(postcode='28023', address='Synthetic address'))
+
+    asyncio.run(with_page('mercadona', check))

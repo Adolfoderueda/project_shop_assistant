@@ -148,7 +148,7 @@ class PublicStore:
     async def quote(self, items, destination):
         if not items or any(i.offer.store_id != self.store_id for i in items):
             raise ValueError('Wrong or empty store basket')
-        identity_fields = ('store_id', 'product_id', 'url', 'gtin', 'brand', 'variant',
+        identity_fields = ('store_id', 'product_id', 'url', 'gtin', 'brand', 'title', 'variant',
                            'stage', 'size', 'grams', 'units_per_pack')
         fresh = []
         for item in items:
