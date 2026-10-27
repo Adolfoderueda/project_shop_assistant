@@ -61,6 +61,11 @@ jobs:
         run: python -m playwright install chromium
       - name: Prepare synthetic probe workspace
         run: New-Item -ItemType Directory -Force "$env:LOCALAPPDATA/Temp/opencode" | Out-Null
+      - name: Classify hosted Windows ACL behavior
+        working-directory: candidate
+        env:
+          PYTHONPATH: ${{ github.workspace }}/candidate
+        run: python "$env:GITHUB_WORKSPACE/.github/ci_acl_probe.py"
       - name: Ruff
         working-directory: candidate
         run: python -m ruff check .
