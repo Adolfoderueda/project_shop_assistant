@@ -22,6 +22,7 @@ jobs:
       PYTHONIOENCODING: utf-8
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       TESTED_SHA: 2b0c0a932291cb18bb7e7d57098d6191c6b8cbf8
+      WORKFLOW_SHA: ${{ github.workflow_sha }}
     defaults:
       run:
         shell: powershell
@@ -44,6 +45,7 @@ jobs:
       - name: Assert exact tested SHA
         run: |
           $actual = (git -C candidate rev-parse HEAD).Trim()
+          Write-Host "Workflow file SHA: $env:WORKFLOW_SHA"
           Write-Host "Workflow event SHA: $env:GITHUB_SHA"
           Write-Host "Tested candidate SHA: $actual"
           if ($actual -ne $env:TESTED_SHA) {
