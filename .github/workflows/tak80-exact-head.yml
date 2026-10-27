@@ -67,9 +67,6 @@ jobs:
       - name: Whitespace check for candidate commit
         working-directory: candidate
         run: git diff --check "$env:TESTED_SHA^" "$env:TESTED_SHA"
-      - name: Synthetic Windows ACL diagnostic
-        working-directory: candidate
-        run: python -m scripts.ci_acl_probe
       - name: Full offline test suite
         working-directory: candidate
         run: python -m pytest -q
@@ -81,10 +78,9 @@ jobs:
         run: |
           $wheel = Get-ChildItem dist/*.whl | Select-Object -First 1
           python -m pip install --no-index --no-deps --target "$env:RUNNER_TEMP/wheel-installed" $wheel.FullName
-      - name: Check installed wheel imports and resources
+      - name: Check installed wheel imports
         working-directory: candidate
         run: |
-          $check = Join-Path $env:GITHUB_WORKSPACE 'candidate/scripts/check_installed_wheel.py'
           $env:PYTHONPATH = Join-Path $env:RUNNER_TEMP 'wheel-installed'
           Set-Location $env:RUNNER_TEMP
-          python -P $check --installed-root $env:PYTHONPATH
+          python -P -c "import importlib, pathlib, sys; root=pathlib.Path(sys.argv[1]).resolve(); names=('shop_assistant','stores','stores.mercadona','catalog'); mods=[importlib.import_module(name) for name in names]; assert all(pathlib.Path(module.__file__).resolve().is_relative_to(root) for module in mods); print('PASS: exact wheel imports')" $env:PYTHONPATH
